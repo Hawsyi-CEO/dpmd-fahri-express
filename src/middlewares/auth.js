@@ -1,0 +1,118 @@
+const jwt = require('jsonwebtoken');
+const logger = require('../utils/logger');
+
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+
+// Express JWT Auth Middleware (Independent from Laravel)
+const auth = async (req, res, next) => {
+  try {
+    // Get token from header
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+
+    if (!token) {
+      logger.warn('No token provided');
+      return res.status(401).json({
+        success: false,
+        message: 'No authentication token provided'
+      });
+    }
+
+    // Verify Express JWT token
+    const decoded = jwt.verify(token, JWT_SECRET);
+    
+    // Attach user to request
+    req.user = {
+      id: decoded.id,
+      name: decoded.name,
+      email: decoded.email,
+      role: decoded.role,
+      desa_id: decoded.desa_id
+    };
+    
+    logger.info(`✅ Auth successful: User ${req.user.id} (${req.user.role})`);
+    
+    next();
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError') {
+      logger.warn('Invalid token format');
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid token'
+      });
+    }
+    
+    if (error.name === 'TokenExpiredError') {
+      logger.warn('Token expired');
+      return res.status(401).json({
+        success: false,
+        message: 'Token expired'
+      });
+    }
+    
+    logger.error('Authentication failed:', error.message);
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication failed'
+    });
+  }
+};
+
+// Role-based middleware
+const checkRole = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      logger.warn('❌ Role check failed: No user in request');
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized - No user found'
+      });
+    }
+
+    if (!req.user.role) {
+      logger.warn(`❌ Role check failed: User ${req.user.id} has no role defined`);
+      return res.status(403).json({
+        success: false,
+        message: 'Access forbidden - No role assigned'
+      });
+    }
+
+    // Normalize user role (trim whitespace, lowercase)
+    const userRole = String(req.user.role).trim().toLowerCase();
+    const allowedRoles = roles.map(r => String(r).trim().toLowerCase());
+
+    logger.info(`🔐 Role check - User: ${req.user.email} | User role: "${userRole}" | Allowed roles: [${allowedRoles.join(', ')}]`);
+
+    if (!allowedRoles.includes(userRole)) {
+      logger.warn(`❌ Access forbidden - User ${req.user.email} with role "${userRole}" not in [${allowedRoles.join(', ')}]`);
+      return res.status(403).json({
+        success: false,
+        message: `Access forbidden - Role "${req.user.role}" not authorized`,
+        debug: {
+          userRole: req.user.role,
+          allowedRoles: roles
+        }
+      });
+    }
+
+    logger.info(`✅ Role check passed - User ${req.user.email} (${userRole}) authorized`);
+    next();
+  };
+};
+
+// Generate JWT token
+const generateToken = (user) => {
+  return jwt.sign(
+    {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      desa_id: user.desa_id
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
+};
+
+module.exports = { auth, checkRole, generateToken };
