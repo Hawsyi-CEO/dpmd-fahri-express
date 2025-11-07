@@ -90,6 +90,7 @@ app.use('/api/bumdes', bumdesRoutes); // Admin routes
 app.use('/api/desa/musdesus', musdesusRoutes);
 app.use('/api/musdesus', musdesusRoutes); // Admin routes
 app.use('/api/perjalanan-dinas', perjalananDinasRoutes);
+app.use('/api/perjadin', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/kegiatan', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/hero-gallery', heroGalleryRoutes);
 

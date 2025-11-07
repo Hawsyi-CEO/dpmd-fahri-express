@@ -9,6 +9,10 @@ router.get('/statistics', auth, checkRole('desa', 'sarpras', 'admin', 'superadmi
 router.get('/dokumen-badan-hukum', auth, checkRole('desa', 'sarpras', 'admin', 'superadmin'), bumdesController.getDokumenBadanHukum);
 router.get('/laporan-keuangan', auth, checkRole('desa', 'sarpras', 'admin', 'superadmin'), bumdesController.getLaporanKeuangan);
 router.get('/produk-hukum', auth, checkRole('desa', 'sarpras', 'admin', 'superadmin'), bumdesController.getProdukHukum);
+router.get('/check-desa/:kode_desa', auth, checkRole('desa', 'sarpras', 'admin', 'superadmin'), bumdesController.checkDesaBumdes);
+
+// DELETE ROUTES
+router.delete('/delete-file', auth, checkRole('desa', 'sarpras', 'admin', 'superadmin'), bumdesController.deleteFile);
 
 // DESA-SPECIFIC ROUTES
 router.get('/produk-hukum-options', auth, checkRole('desa'), bumdesController.getProdukHukumForBumdes);

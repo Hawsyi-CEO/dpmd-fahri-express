@@ -40,26 +40,50 @@ class BumdesController {
   async storeDesaBumdes(req, res, next) {
     try {
       const userId = req.user.id;
+      const userRole = req.user.role;
       const desaId = req.user.desa_id;
 
-      if (!desaId) {
-        return res.status(403).json({
-          success: false,
-          message: 'User tidak memiliki desa_id'
-        });
-      }
-
       logger.info('BUMDES Store Request Received', {
+        user_id: userId,
+        user_role: userRole,
         desa_id: desaId,
         has_data: !!req.body
       });
 
       const data = req.body;
-      data.desa_id = desaId;
+      
+      // For role 'desa', use their desa_id
+      // For role 'sarpras' or 'admin', use desa_id from form data
+      let targetDesaId;
+      
+      if (userRole === 'desa') {
+        if (!desaId) {
+          return res.status(403).json({
+            success: false,
+            message: 'User desa tidak memiliki desa_id'
+          });
+        }
+        targetDesaId = desaId;
+        data.desa_id = desaId;
+      } else if (['sarpras', 'admin', 'superadmin'].includes(userRole)) {
+        // Sarpras/Admin must provide desa_id in the form data
+        if (!data.desa_id) {
+          return res.status(400).json({
+            success: false,
+            message: 'desa_id harus disertakan dalam data'
+          });
+        }
+        targetDesaId = data.desa_id;
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: 'Role tidak memiliki akses untuk menyimpan BUMDes'
+        });
+      }
 
-      // Check if BUMDES already exists
+      // Check if BUMDES already exists for this desa_id
       const existing = await Bumdes.findOne({
-        where: { desa_id: desaId }
+        where: { desa_id: targetDesaId }
       });
 
       let bumdes;
@@ -68,11 +92,11 @@ class BumdesController {
         // Update existing
         await existing.update(data);
         bumdes = existing;
-        logger.info(`BUMDES updated for desa_id: ${desaId}`);
+        logger.info(`BUMDES updated for desa_id: ${targetDesaId} by user ${userId} (${userRole})`);
       } else {
         // Create new
         bumdes = await Bumdes.create(data);
-        logger.info(`BUMDES created for desa_id: ${desaId}, id: ${bumdes.id}`);
+        logger.info(`BUMDES created for desa_id: ${targetDesaId}, id: ${bumdes.id} by user ${userId} (${userRole})`);
       }
 
       return res.json({
@@ -300,13 +324,22 @@ class BumdesController {
   // GET /api/bumdes/dokumen-badan-hukum - Get dokumen badan hukum files (OPTIMIZED - Lazy Load)
   async getDokumenBadanHukum(req, res, next) {
     try {
-      logger.info('Getting dokumen badan hukum files (optimized)');
+      const { bumdes_id } = req.query; // Optional: filter by specific BUMDes
+      
+      logger.info('Getting dokumen badan hukum files (optimized)', { bumdes_id });
 
       // Get base URL for file serving
       const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3001';
 
+      // Build where clause
+      const whereClause = {};
+      if (bumdes_id) {
+        whereClause.id = bumdes_id;
+      }
+
       // Get all BUMDES data once (cached in memory)
       const allBumdes = await Bumdes.findAll({
+        where: whereClause,
         attributes: ['id', 'namabumdesa', 'desa', 'kecamatan', 
                      'ProfilBUMDesa', 'BeritaAcara', 'AnggaranDasar', 
                      'AnggaranRumahTangga', 'ProgramKerja', 'Perdes', 'SK_BUM_Desa']
@@ -314,6 +347,7 @@ class BumdesController {
 
       // Build lightweight file list from database (no filesystem scan)
       const documents = [];
+      const seenFiles = new Set(); // Track seen files to prevent duplicates
       const fileFields = [
         { field: 'ProfilBUMDesa', label: 'Profil BUMDesa' },
         { field: 'BeritaAcara', label: 'Berita Acara' },
@@ -328,20 +362,28 @@ class BumdesController {
         for (const { field, label } of fileFields) {
           if (bumdes[field]) {
             const filename = bumdes[field].split('/').pop();
-            documents.push({
-              filename,
-              document_type: label,
-              original_path: `uploads/bumdes_dokumen_badanhukum/${filename}`,
-              url: `${baseUrl}/uploads/bumdes_dokumen_badanhukum/${filename}`,
-              download_url: `${baseUrl}/uploads/bumdes_dokumen_badanhukum/${filename}`,
-              file_exists: true, // File ada di database
-              status: 'available',
-              bumdes_name: bumdes.namabumdesa || 'Tidak Diketahui',
-              desa: bumdes.desa || '',
-              kecamatan: bumdes.kecamatan || '',
-              id: bumdes.id,
-              field: field
-            });
+            
+            // Create unique key: bumdes_id + filename + field to prevent duplicates
+            const uniqueKey = `${bumdes.id}_${filename}_${field}`;
+            
+            if (!seenFiles.has(uniqueKey)) {
+              seenFiles.add(uniqueKey);
+              
+              documents.push({
+                filename,
+                document_type: label,
+                original_path: `uploads/bumdes_dokumen_badanhukum/${filename}`,
+                url: `${baseUrl}/uploads/bumdes_dokumen_badanhukum/${filename}`,
+                download_url: `${baseUrl}/uploads/bumdes_dokumen_badanhukum/${filename}`,
+                file_exists: true, // File ada di database
+                status: 'available',
+                bumdes_name: bumdes.namabumdesa || 'Tidak Diketahui',
+                desa: bumdes.desa || '',
+                kecamatan: bumdes.kecamatan || '',
+                bumdes_id: bumdes.id, // Change from 'id' to 'bumdes_id' to be more explicit
+                field: field
+              });
+            }
           }
         }
       }
@@ -367,13 +409,22 @@ class BumdesController {
   // GET /api/bumdes/laporan-keuangan - Get laporan keuangan files (OPTIMIZED - Lazy Load)
   async getLaporanKeuangan(req, res, next) {
     try {
-      logger.info('Getting laporan keuangan files (optimized)');
+      const { bumdes_id } = req.query; // Optional: filter by specific BUMDes
+      
+      logger.info('Getting laporan keuangan files (optimized)', { bumdes_id });
 
       // Get base URL for file serving
       const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3001';
 
+      // Build where clause
+      const whereClause = {};
+      if (bumdes_id) {
+        whereClause.id = bumdes_id;
+      }
+
       // Get all BUMDES data once (cached in memory)
       const allBumdes = await Bumdes.findAll({
+        where: whereClause,
         attributes: ['id', 'namabumdesa', 'desa', 'kecamatan',
                      'LaporanKeuangan2021', 'LaporanKeuangan2022', 
                      'LaporanKeuangan2023', 'LaporanKeuangan2024']
@@ -381,6 +432,7 @@ class BumdesController {
 
       // Build lightweight file list from database (no filesystem scan)
       const documents = [];
+      const seenFiles = new Set(); // Track seen files to prevent duplicates
       const yearFields = [
         { field: 'LaporanKeuangan2021', year: '2021' },
         { field: 'LaporanKeuangan2022', year: '2022' },
@@ -392,21 +444,29 @@ class BumdesController {
         for (const { field, year } of yearFields) {
           if (bumdes[field]) {
             const filename = bumdes[field].split('/').pop();
-            documents.push({
-              filename,
-              document_type: `Laporan Keuangan ${year}`,
-              year: year,
-              original_path: `uploads/bumdes_laporan_keuangan/${filename}`,
-              url: `${baseUrl}/uploads/bumdes_laporan_keuangan/${filename}`,
-              download_url: `${baseUrl}/uploads/bumdes_laporan_keuangan/${filename}`,
-              file_exists: true, // File ada di database
-              status: 'available',
-              bumdes_name: bumdes.namabumdesa || 'Tidak Diketahui',
-              desa: bumdes.desa || '',
-              kecamatan: bumdes.kecamatan || '',
-              id: bumdes.id,
-              field: field
-            });
+            
+            // Create unique key: bumdes_id + filename + field to prevent duplicates
+            const uniqueKey = `${bumdes.id}_${filename}_${field}`;
+            
+            if (!seenFiles.has(uniqueKey)) {
+              seenFiles.add(uniqueKey);
+              
+              documents.push({
+                filename,
+                document_type: `Laporan Keuangan ${year}`,
+                year: year,
+                original_path: `uploads/bumdes_laporan_keuangan/${filename}`,
+                url: `${baseUrl}/uploads/bumdes_laporan_keuangan/${filename}`,
+                download_url: `${baseUrl}/uploads/bumdes_laporan_keuangan/${filename}`,
+                file_exists: true, // File ada di database
+                status: 'available',
+                bumdes_name: bumdes.namabumdesa || 'Tidak Diketahui',
+                desa: bumdes.desa || '',
+                kecamatan: bumdes.kecamatan || '',
+                bumdes_id: bumdes.id, // Change from 'id' to 'bumdes_id' to be more explicit
+                field: field
+              });
+            }
           }
         }
       }
@@ -690,6 +750,109 @@ class BumdesController {
 
     } catch (error) {
       logger.error('Error getting produk hukum for bumdes:', error);
+      next(error);
+    }
+  }
+
+  // GET /api/bumdes/check-desa/:kode_desa - Check if kode_desa already has BUMDes
+  async checkDesaBumdes(req, res, next) {
+    try {
+      const { kode_desa } = req.params;
+      
+      logger.info(`Checking if kode_desa ${kode_desa} has existing BUMDes`);
+
+      const bumdes = await Bumdes.findOne({
+        where: { kode_desa: kode_desa }
+      });
+
+      return res.json({
+        success: true,
+        exists: !!bumdes,
+        data: bumdes ? { 
+          id: bumdes.id, 
+          namabumdesa: bumdes.namabumdesa,
+          kode_desa: bumdes.kode_desa,
+          desa: bumdes.desa
+        } : null
+      });
+
+    } catch (error) {
+      logger.error('Error checking desa BUMDes:', error);
+      next(error);
+    }
+  }
+
+  // DELETE /api/bumdes/delete-file - Delete a file and update database
+  async deleteFile(req, res, next) {
+    try {
+      const { filename, document_type, bumdes_id } = req.body;
+      
+      if (!filename || !document_type) {
+        return res.status(400).json({
+          success: false,
+          message: 'filename and document_type are required'
+        });
+      }
+
+      logger.info('Deleting file:', { filename, document_type, bumdes_id });
+
+      // Determine folder based on document type
+      let folder = '';
+      if (document_type === 'dokumen_badan_hukum') {
+        folder = 'bumdes_dokumen_badanhukum';
+      } else if (document_type === 'laporan_keuangan') {
+        folder = 'bumdes_laporan_keuangan';
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid document_type'
+        });
+      }
+
+      // Find BUMDes that has this file
+      const documentFields = document_type === 'dokumen_badan_hukum' 
+        ? ['Perdes', 'ProfilBUMDesa', 'BeritaAcara', 'AnggaranDasar', 'AnggaranRumahTangga', 'ProgramKerja', 'SK_BUM_Desa']
+        : ['LaporanKeuangan2021', 'LaporanKeuangan2022', 'LaporanKeuangan2023', 'LaporanKeuangan2024'];
+
+      let updatedCount = 0;
+      const { Op } = require('sequelize');
+
+      for (const field of documentFields) {
+        const bumdesList = await Bumdes.findAll({
+          where: {
+            [field]: {
+              [Op.like]: `%${filename}%`
+            }
+          }
+        });
+
+        for (const bumdes of bumdesList) {
+          // Clear the field
+          await bumdes.update({ [field]: null });
+          updatedCount++;
+          logger.info(`Cleared field ${field} for BUMDes ${bumdes.id}`);
+        }
+      }
+
+      // Delete physical file
+      const filePath = path.join(__dirname, '../../storage/uploads', folder, filename);
+      try {
+        await fs.unlink(filePath);
+        logger.info(`Physical file deleted: ${filePath}`);
+      } catch (fileError) {
+        logger.warn(`Could not delete physical file: ${filePath}`, fileError.message);
+        // Continue even if file deletion fails (file might not exist)
+      }
+
+      return res.json({
+        success: true,
+        message: `File berhasil dihapus${updatedCount > 0 ? ` (${updatedCount} referensi database diperbarui)` : ''}`,
+        deleted_file: filename,
+        updated_records: updatedCount
+      });
+
+    } catch (error) {
+      logger.error('Error deleting file:', error);
       next(error);
     }
   }

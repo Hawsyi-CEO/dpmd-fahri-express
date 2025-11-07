@@ -30,6 +30,55 @@ router.get(
   perjadinController.getWeeklySchedule
 );
 
+router.get(
+  '/statistik',
+  auth,
+  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
+            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+  perjadinController.getStatistik
+);
+
+// ======================
+// MASTER DATA ROUTES
+// ======================
+router.get(
+  '/bidang',
+  auth,
+  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
+            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+  perjadinController.getAllBidang
+);
+
+router.get(
+  '/personil/:id_bidang',
+  auth,
+  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
+            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+  perjadinController.getPersonilByBidang
+);
+
+// ======================
+// CONFLICT CHECK ROUTE
+// ======================
+router.get(
+  '/check-personnel-conflict',
+  auth,
+  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
+            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+  perjadinController.checkPersonnelConflict
+);
+
+// ======================
+// STATISTIK ROUTES
+// ======================
+router.get(
+  '/statistik',
+  auth,
+  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
+            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+  perjadinController.getStatistik
+);
+
 // ======================
 // KEGIATAN ROUTES
 // ======================
