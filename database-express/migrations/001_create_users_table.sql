@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `email` varchar(255) NOT NULL,
   `email_verified_at` timestamp NULL DEFAULT NULL,
   `password` varchar(255) NOT NULL,
-  `role` enum('desa','kecamatan','dinas','sarpras','admin','superadmin') NOT NULL DEFAULT 'desa',
+  `role` enum('superadmin','admin','desa','kecamatan','dinas','sarpras','sekretariat','sarana_prasarana','kekayaan_keuangan','pemberdayaan_masyarakat','pemerintahan_desa') NOT NULL DEFAULT 'desa',
   `remember_token` varchar(100) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS `users` (
 
 -- Add foreign key columns for entity relations
 ALTER TABLE `users`
-ADD COLUMN `id_kecamatan` int UNSIGNED DEFAULT NULL AFTER `role`,
-ADD COLUMN `id_desa` int UNSIGNED DEFAULT NULL AFTER `id_kecamatan`,
-ADD COLUMN `id_bidang` int UNSIGNED DEFAULT NULL AFTER `id_desa`,
-ADD COLUMN `id_dinas` int UNSIGNED DEFAULT NULL AFTER `id_bidang`;
+ADD COLUMN `kecamatan_id` int UNSIGNED DEFAULT NULL AFTER `role`,
+ADD COLUMN `desa_id` bigint UNSIGNED DEFAULT NULL AFTER `kecamatan_id`,
+ADD COLUMN `bidang_id` int UNSIGNED DEFAULT NULL AFTER `desa_id`,
+ADD COLUMN `dinas_id` int UNSIGNED DEFAULT NULL AFTER `bidang_id`;

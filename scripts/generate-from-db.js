@@ -105,8 +105,9 @@ async function generateSeeders() {
           continue;
         }
         
-        // Get data
-        const [rows] = await connection.query(`SELECT * FROM \`${tableName}\` LIMIT 100`);
+        // Get data - no limit for desas and kecamatans (master data)
+        const limit = (tableName === 'desas' || tableName === 'kecamatans') ? '' : ' LIMIT 100';
+        const [rows] = await connection.query(`SELECT * FROM \`${tableName}\`${limit}`);
         
         if (rows.length === 0) {
           console.log(`  ℹ️  No data in ${tableName}, skipping...`);

@@ -13,7 +13,8 @@ const dbConfig = {
   port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'dpmd'
+  database: process.env.DB_NAME || 'dpmd',
+  multipleStatements: true
 };
 
 async function runMigrations() {
@@ -34,21 +35,14 @@ async function runMigrations() {
       
       const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
       
-      // Split by semicolon and run each statement
-      const statements = sql
-        .split(';')
-        .map(s => s.trim())
-        .filter(s => s && !s.startsWith('--'));
-      
-      for (const statement of statements) {
-        try {
-          await connection.query(statement);
-        } catch (err) {
-          if (err.code === 'ER_TABLE_EXISTS_ALREADY') {
-            console.log(`  ℹ️  Table already exists, skipping...`);
-          } else {
-            throw err;
-          }
+      try {
+        await connection.query(sql);
+      } catch (err) {
+        if (err.code === 'ER_TABLE_EXISTS_ALREADY') {
+          console.log(`  ℹ️  Table already exists, skipping...`);
+        } else {
+          console.error(`  ❌ Error in ${file}:`, err.message);
+          // Continue with next file instead of throwing
         }
       }
       
