@@ -7,8 +7,10 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "test": "jest",
-    "migrate": "node src/database/migrate.js",
-    "seed": "node src/database/seed.js"
+    "db:generate": "node scripts/generate-from-db.js",
+    "db:migrate": "node scripts/run-migrations.js",
+    "db:seed": "node scripts/run-seeders.js",
+    "db:setup": "npm run db:migrate && npm run db:seed"
   },
   "keywords": [
     "express",
