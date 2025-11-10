@@ -1,12 +1,12 @@
 -- Migration for table: desas
--- Generated: 2025-11-10T06:26:42.745Z
+-- Generated: 2025-11-10T17:06:16.810Z
 
 CREATE TABLE `desas` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `kecamatan_id` bigint unsigned NOT NULL,
-  `kode` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `nama` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status_pemerintahan` enum('desa','kelurahan') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'desa' COMMENT 'Status pemerintahan: desa atau kelurahan',
+  `kode` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `nama` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status_pemerintahan` enum('desa','kelurahan') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'desa' COMMENT 'Status pemerintahan: desa atau kelurahan',
   `is_musdesus_target` tinyint(1) NOT NULL DEFAULT '0',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,

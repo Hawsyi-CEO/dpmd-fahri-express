@@ -1,10 +1,10 @@
 -- Migration for table: personil
--- Generated: 2025-11-10T06:26:42.955Z
+-- Generated: 2025-11-10T17:06:16.815Z
 
 CREATE TABLE `personil` (
   `id_personil` bigint unsigned NOT NULL AUTO_INCREMENT,
   `id_bidang` bigint unsigned NOT NULL,
-  `nama_personil` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `nama_personil` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id_personil`),

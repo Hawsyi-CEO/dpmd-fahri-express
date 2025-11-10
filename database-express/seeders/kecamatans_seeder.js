@@ -1,6 +1,6 @@
 /**
  * Seeder for table: kecamatans
- * Generated: 2025-11-10T06:26:43.163Z
+ * Generated: 2025-11-10T17:06:16.826Z
  * Records: 40
  */
 

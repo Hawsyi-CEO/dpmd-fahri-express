@@ -1,11 +1,11 @@
 -- Migration for table: petugas_monitoring
--- Generated: 2025-11-10T06:26:42.962Z
+-- Generated: 2025-11-10T17:06:16.815Z
 
 CREATE TABLE `petugas_monitoring` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `nama_desa` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `nama_kecamatan` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `nama_petugas` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `nama_desa` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `nama_kecamatan` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `nama_petugas` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `desa_id` bigint unsigned DEFAULT NULL,
   `kecamatan_id` bigint unsigned DEFAULT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT '1',

@@ -1,11 +1,11 @@
 -- Migration for table: kegiatan_bidang
--- Generated: 2025-11-10T06:26:42.842Z
+-- Generated: 2025-11-10T17:06:16.814Z
 
 CREATE TABLE `kegiatan_bidang` (
   `id_kegiatan_bidang` int unsigned NOT NULL AUTO_INCREMENT,
   `id_kegiatan` int unsigned NOT NULL,
   `id_bidang` bigint unsigned NOT NULL,
-  `personil` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `personil` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id_kegiatan_bidang`),
