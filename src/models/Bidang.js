@@ -5,13 +5,11 @@ const Bidang = sequelize.define('Bidang', {
   id: {
     type: DataTypes.BIGINT.UNSIGNED,
     primaryKey: true,
-    autoIncrement: true,
-    comment: 'ID bidang'
+    autoIncrement: true
   },
   nama: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    comment: 'Nama bidang'
+    type: DataTypes.STRING(255),
+    allowNull: false
   },
   created_at: {
     type: DataTypes.DATE,
@@ -26,22 +24,7 @@ const Bidang = sequelize.define('Bidang', {
   timestamps: true,
   createdAt: 'created_at',
   updatedAt: 'updated_at',
-  underscored: false,
-  comment: 'Table untuk menyimpan data bidang'
-});
-
-// Import related models
-const Personil = require('./Personil');
-
-// Define associations
-Bidang.hasMany(Personil, { 
-  foreignKey: 'id_bidang', 
-  as: 'personil' 
-});
-
-Personil.belongsTo(Bidang, { 
-  foreignKey: 'id_bidang', 
-  as: 'bidang' 
+  underscored: false
 });
 
 module.exports = Bidang;

@@ -57,29 +57,4 @@ const PerjalananDinas = sequelize.define('PerjalananDinas', {
   comment: 'Table untuk menyimpan data kegiatan perjalanan dinas'
 });
 
-// Import related models
-const KegiatanBidang = require('./KegiatanBidang');
-const Bidang = require('./Bidang');
-
-// Define associations
-PerjalananDinas.hasMany(KegiatanBidang, { 
-  foreignKey: 'id_kegiatan', 
-  as: 'bidang_details' 
-});
-
-KegiatanBidang.belongsTo(PerjalananDinas, { 
-  foreignKey: 'id_kegiatan', 
-  as: 'kegiatan' 
-});
-
-KegiatanBidang.belongsTo(Bidang, { 
-  foreignKey: 'id_bidang', 
-  as: 'bidang' 
-});
-
-Bidang.hasMany(KegiatanBidang, { 
-  foreignKey: 'id_bidang', 
-  as: 'kegiatan_details' 
-});
-
 module.exports = PerjalananDinas;

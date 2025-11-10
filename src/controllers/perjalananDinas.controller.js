@@ -1,4 +1,10 @@
-const PerjalananDinas = require('../models/PerjalananDinas');
+// Import models from index to ensure associations are loaded
+const { 
+  PerjalananDinas, 
+  KegiatanBidang, 
+  Bidang, 
+  Personil 
+} = require('../models');
 const logger = require('../utils/logger');
 const { Op } = require('sequelize');
 const sequelize = require('../config/database');
@@ -15,9 +21,6 @@ exports.getAllKegiatan = async (req, res, next) => {
       date_filter,
       id_bidang
     } = req.query;
-
-    const KegiatanBidang = require('../models/KegiatanBidang');
-    const Bidang = require('../models/Bidang');
 
     const where = {};
     const includeOptions = [
@@ -82,8 +85,8 @@ exports.getAllKegiatan = async (req, res, next) => {
       distinct: true // Count distinct kegiatan, bukan rows yang di-join
     });
 
-    // Format response dengan bidang info
-    const formattedRows = rows.map(kegiatan => {
+    // Format response dengan bidang info dan personil
+    const formattedRows = await Promise.all(rows.map(async (kegiatan) => {
       const kegiatanData = kegiatan.toJSON();
       
       // Extract bidang names dari details
@@ -92,12 +95,55 @@ exports.getAllKegiatan = async (req, res, next) => {
           .map(d => d.bidang ? d.bidang.nama : null)
           .filter(nama => nama)
           .join(', ');
+        
+        // Process personil for each detail
+        for (let detail of kegiatanData.details) {
+          let personilList = [];
+          
+          if (detail.personil) {
+            try {
+              // Try to parse as JSON first
+              const personilData = JSON.parse(detail.personil);
+              if (Array.isArray(personilData)) {
+                // Get personil details from database
+                const personilIds = personilData
+                  .map(p => p.id_personil || p)
+                  .filter(id => id);
+                
+                if (personilIds.length > 0) {
+                  const personilRecords = await Personil.findAll({
+                    where: { id_personil: personilIds },
+                    attributes: ['id_personil', 'nama_personil']
+                  });
+                  
+                  personilList = personilRecords.map(p => ({
+                    id_personil: p.id_personil,
+                    nama_personil: p.nama_personil
+                  }));
+                }
+              }
+            } catch (error) {
+              // Not JSON, treat as comma-separated TEXT
+              const personilNames = detail.personil
+                .split(',')
+                .map(name => name.trim())
+                .filter(name => name);
+              
+              personilList = personilNames.map(name => ({
+                id_personil: null,
+                nama_personil: name
+              }));
+            }
+          }
+          
+          detail.personil_list = personilList;
+        }
       } else {
         kegiatanData.bidang_list = '';
       }
       
       return kegiatanData;
-    });
+    }));
 
     logger.info('Perjalanan Dinas - Get All Kegiatan', {
       user_id: req.user.id,
@@ -128,10 +174,6 @@ exports.getAllKegiatan = async (req, res, next) => {
 exports.getKegiatanById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    
-    const KegiatanBidang = require('../models/KegiatanBidang');
-    const Bidang = require('../models/Bidang');
-    const Personil = require('../models/Personil');
 
     const kegiatan = await PerjalananDinas.findByPk(id, {
       include: [
@@ -161,13 +203,16 @@ exports.getKegiatanById = async (req, res, next) => {
       id_kegiatan: kegiatan.id_kegiatan,
       nama_kegiatan: kegiatan.nama_kegiatan,
       nomor_sp: kegiatan.nomor_sp,
+      nomor_surat: kegiatan.nomor_sp, // Alias untuk kompabilitas frontend
       tanggal_mulai: kegiatan.tanggal_mulai,
       tanggal_selesai: kegiatan.tanggal_selesai,
       lokasi: kegiatan.lokasi,
       keterangan: kegiatan.keterangan,
       created_at: kegiatan.created_at,
       updated_at: kegiatan.updated_at,
-      details: []
+      details: [],
+      bidang: [], // Array bidang untuk frontend
+      personil: [] // Array personil untuk frontend
     };
 
     // Process kegiatan_bidang details
@@ -189,12 +234,13 @@ exports.getKegiatanById = async (req, res, next) => {
               if (personilIds.length > 0) {
                 const personilRecords = await Personil.findAll({
                   where: { id_personil: personilIds },
-                  attributes: ['id_personil', 'nama_personil']
+                  attributes: ['id_personil', 'nama_personil', 'id_bidang']
                 });
                 
                 personilList = personilRecords.map(p => ({
                   id_personil: p.id_personil,
-                  nama_personil: p.nama_personil
+                  nama_personil: p.nama_personil,
+                  id_bidang: p.id_bidang
                 }));
               }
             }
@@ -211,12 +257,13 @@ exports.getKegiatanById = async (req, res, next) => {
                 where: { 
                   nama_personil: personilNames 
                 },
-                attributes: ['id_personil', 'nama_personil']
+                attributes: ['id_personil', 'nama_personil', 'id_bidang']
               });
               
               personilList = personilRecords.map(p => ({
                 id_personil: p.id_personil,
-                nama_personil: p.nama_personil
+                nama_personil: p.nama_personil,
+                id_bidang: p.id_bidang
               }));
               
               // If some names not found in DB, add them as name-only
@@ -224,7 +271,8 @@ exports.getKegiatanById = async (req, res, next) => {
                 if (!personilList.find(p => p.nama_personil === name)) {
                   personilList.push({
                     id_personil: null,
-                    nama_personil: name
+                    nama_personil: name,
+                    id_bidang: detail.id_bidang
                   });
                 }
               });
@@ -232,12 +280,31 @@ exports.getKegiatanById = async (req, res, next) => {
           }
         }
 
+        // Add to details array (backward compatibility)
         response.details.push({
           id_kegiatan_bidang: detail.id_kegiatan_bidang,
           id_bidang: detail.id_bidang,
           nama_bidang: detail.bidang ? detail.bidang.nama : null,
           personil: personilList.map(p => p.nama_personil).join(', '),
           personil_list: personilList
+        });
+
+        // Add bidang to bidang array (for frontend)
+        if (detail.bidang) {
+          response.bidang.push({
+            id_bidang: detail.id_bidang,
+            nama_bidang: detail.bidang.nama,
+            status: 'aktif'
+          });
+        }
+
+        // Add personil to personil array (for frontend)
+        personilList.forEach(p => {
+          response.personil.push({
+            id_personil: p.id_personil,
+            nama: p.nama_personil,
+            bidang: detail.bidang ? detail.bidang.nama : 'Tidak diketahui'
+          });
         });
       }
     }
@@ -264,8 +331,6 @@ const checkPersonilConflict = async (personilIds, tanggalMulai, tanggalSelesai, 
   if (!personilIds || personilIds.length === 0) {
     return { hasConflict: false, conflicts: [] };
   }
-
-  const KegiatanBidang = require('../models/KegiatanBidang');
   
   // Query untuk cek personil yang sudah ada di kegiatan lain pada tanggal yang overlap
   const query = `
@@ -306,7 +371,6 @@ const checkPersonilConflict = async (personilIds, tanggalMulai, tanggalSelesai, 
       
       if (conflictPersonil.length > 0) {
         // Get nama personil yang conflict
-        const Personil = require('../models/Personil');
         const personilData = await Personil.findAll({
           where: { id_personil: conflictPersonil },
           attributes: ['id_personil', 'nama_personil']
@@ -629,9 +693,6 @@ exports.getDashboardStats = async (req, res, next) => {
     });
 
     // Get kegiatan per bidang
-    const Bidang = require('../models/Bidang');
-    const KegiatanBidang = require('../models/KegiatanBidang');
-    
     const perBidang = await sequelize.query(`
       SELECT 
         b.id as id_bidang,
@@ -766,8 +827,6 @@ exports.getWeeklySchedule = async (req, res, next) => {
  */
 exports.getAllBidang = async (req, res, next) => {
   try {
-    const Bidang = require('../models/Bidang');
-    
     const bidang = await Bidang.findAll({
       order: [['nama', 'ASC']]
     });

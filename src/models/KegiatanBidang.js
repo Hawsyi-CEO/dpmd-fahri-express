@@ -40,17 +40,4 @@ const KegiatanBidang = sequelize.define('KegiatanBidang', {
   comment: 'Table untuk menyimpan relasi kegiatan dengan bidang'
 });
 
-// Define associations
-KegiatanBidang.associate = (models) => {
-  KegiatanBidang.belongsTo(models.Bidang, {
-    foreignKey: 'id_bidang',
-    as: 'bidang'
-  });
-  
-  KegiatanBidang.belongsTo(models.PerjalananDinas, {
-    foreignKey: 'id_kegiatan',
-    as: 'kegiatan'
-  });
-};
-
 module.exports = KegiatanBidang;
