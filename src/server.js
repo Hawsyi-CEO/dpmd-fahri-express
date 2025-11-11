@@ -17,7 +17,6 @@ const perjalananDinasRoutes = require('./routes/perjalananDinas.routes');
 const heroGalleryRoutes = require('./routes/heroGallery.routes');
 const publicRoutes = require('./routes/public.routes');
 const locationRoutes = require('./routes/location.routes');
-const laporanDesaRoutes = require('./routes/laporanDesa.routes');
 
 const app = express();
 
@@ -94,7 +93,6 @@ app.use('/api/perjalanan-dinas', perjalananDinasRoutes);
 app.use('/api/perjadin', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/kegiatan', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/hero-gallery', heroGalleryRoutes);
-app.use('/api/laporan-desa', laporanDesaRoutes); // Laporan Desa routes
 
 // 404 handler
 app.use((req, res) => {
