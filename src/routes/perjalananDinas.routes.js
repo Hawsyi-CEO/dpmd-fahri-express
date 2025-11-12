@@ -12,13 +12,13 @@ const { auth, checkRole } = require('../middlewares/auth');
  */
 
 // ======================
-// DASHBOARD ROUTES
+// DASHBOARD ROUTES (Read-only access for kepala_dinas)
 // ======================
 router.get(
   '/dashboard',
   auth,
   checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin', 'kepala_dinas', 'sekretaris_dinas', 'kabid_pemerintahan_desa', 'kabid_spked', 'kabid_kekayaan_keuangan_desa', 'kabid_pemberdayaan_masyarakat_desa'),
   perjadinController.getDashboardStats
 );
 
@@ -26,7 +26,7 @@ router.get(
   '/dashboard/weekly-schedule',
   auth,
   checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin', 'kepala_dinas', 'sekretaris_dinas', 'kabid_pemerintahan_desa', 'kabid_spked', 'kabid_kekayaan_keuangan_desa', 'kabid_pemberdayaan_masyarakat_desa'),
   perjadinController.getWeeklySchedule
 );
 
@@ -34,18 +34,18 @@ router.get(
   '/statistik',
   auth,
   checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin', 'kepala_dinas', 'sekretaris_dinas', 'kabid_pemerintahan_desa', 'kabid_spked', 'kabid_kekayaan_keuangan_desa', 'kabid_pemberdayaan_masyarakat_desa'),
   perjadinController.getStatistik
 );
 
 // ======================
-// MASTER DATA ROUTES
+// MASTER DATA ROUTES (Read-only access for kepala_dinas)
 // ======================
 router.get(
   '/bidang',
   auth,
   checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin', 'kepala_dinas', 'sekretaris_dinas', 'kabid_pemerintahan_desa', 'kabid_spked', 'kabid_kekayaan_keuangan_desa', 'kabid_pemberdayaan_masyarakat_desa'),
   perjadinController.getAllBidang
 );
 
@@ -53,7 +53,7 @@ router.get(
   '/personil/:id_bidang',
   auth,
   checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin', 'kepala_dinas', 'sekretaris_dinas', 'kabid_pemerintahan_desa', 'kabid_spked', 'kabid_kekayaan_keuangan_desa', 'kabid_pemberdayaan_masyarakat_desa'),
   perjadinController.getPersonilByBidang
 );
 
@@ -80,13 +80,13 @@ router.get(
 );
 
 // ======================
-// KEGIATAN ROUTES
+// KEGIATAN ROUTES (Read access for kepala_dinas, full access for others)
 // ======================
 router.get(
   '/kegiatan',
   auth,
   checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin', 'kepala_dinas', 'sekretaris_dinas', 'kabid_pemerintahan_desa', 'kabid_spked', 'kabid_kekayaan_keuangan_desa', 'kabid_pemberdayaan_masyarakat_desa'),
   perjadinController.getAllKegiatan
 );
 
@@ -94,7 +94,7 @@ router.get(
   '/kegiatan/:id',
   auth,
   checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin', 'kepala_dinas', 'sekretaris_dinas', 'kabid_pemerintahan_desa', 'kabid_spked', 'kabid_kekayaan_keuangan_desa', 'kabid_pemberdayaan_masyarakat_desa'),
   perjadinController.getKegiatanById
 );
 

@@ -166,6 +166,31 @@ class BumdesController {
         folder = 'bumdes_dokumen_badanhukum';
       }
 
+      // Path file yang di-upload oleh multer
+      const uploadedFilePath = path.join(__dirname, '../../', req.file.path);
+      
+      // Path file tujuan yang benar
+      const correctFolder = path.join(__dirname, '../../storage/uploads', folder);
+      const correctFilePath = path.join(correctFolder, req.file.filename);
+      
+      // Ensure correct folder exists
+      if (!require('fs').existsSync(correctFolder)) {
+        require('fs').mkdirSync(correctFolder, { recursive: true });
+      }
+      
+      // Move file to correct folder if needed
+      if (uploadedFilePath !== correctFilePath) {
+        try {
+          await fs.rename(uploadedFilePath, correctFilePath);
+          logger.info('File moved to correct folder:', { from: uploadedFilePath, to: correctFilePath });
+        } catch (moveErr) {
+          logger.error('Error moving file:', moveErr);
+          // If rename fails, try copy then delete
+          await fs.copyFile(uploadedFilePath, correctFilePath);
+          await fs.unlink(uploadedFilePath);
+        }
+      }
+
       // Delete old file if exists
       const currentFilePath = bumdes[field_name];
       if (currentFilePath) {

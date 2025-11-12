@@ -4,6 +4,7 @@ const fs = require('fs');
 
 // Create upload directories if they don't exist
 const uploadDirs = [
+  'storage/uploads/bumdes',
   'storage/uploads/bumdes_laporan_keuangan',
   'storage/uploads/bumdes_dokumen_badanhukum',
   'storage/uploads/musdesus',

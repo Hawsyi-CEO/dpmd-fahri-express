@@ -17,6 +17,7 @@ const perjalananDinasRoutes = require('./routes/perjalananDinas.routes');
 const heroGalleryRoutes = require('./routes/heroGallery.routes');
 const publicRoutes = require('./routes/public.routes');
 const locationRoutes = require('./routes/location.routes');
+const kepalaDinasRoutes = require('./routes/kepalaDinas.routes');
 
 const app = express();
 
@@ -32,12 +33,22 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate limiting
+// Rate limiting - More permissive for development
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 1000, // increased from 100 to 1000 requests per windowMs
+  message: 'Terlalu banyak request dari IP ini, silakan coba lagi nanti.',
+  standardHeaders: true,
+  legacyHeaders: false,
 });
-app.use('/api/', limiter);
+
+// Only apply rate limiting in production
+if (process.env.NODE_ENV === 'production') {
+  app.use('/api/', limiter);
+  logger.info('🛡️  Rate limiting enabled (1000 requests per 15 minutes)');
+} else {
+  logger.info('⚠️  Rate limiting disabled for development');
+}
 
 // Body parsers
 app.use(express.json());
@@ -93,6 +104,7 @@ app.use('/api/perjalanan-dinas', perjalananDinasRoutes);
 app.use('/api/perjadin', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/kegiatan', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/hero-gallery', heroGalleryRoutes);
+app.use('/api/kepala-dinas', kepalaDinasRoutes); // Kepala Dinas dashboard
 
 // 404 handler
 app.use((req, res) => {

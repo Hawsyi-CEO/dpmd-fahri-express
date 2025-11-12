@@ -153,7 +153,7 @@ exports.getAllKegiatan = async (req, res, next) => {
     });
 
     res.json({
-      success: true,
+      status: 'success',
       data: formattedRows,
       pagination: {
         total: count,
@@ -193,7 +193,7 @@ exports.getKegiatanById = async (req, res, next) => {
 
     if (!kegiatan) {
       return res.status(404).json({
-        success: false,
+        status: 'error',
         message: 'Kegiatan tidak ditemukan'
       });
     }
@@ -315,7 +315,7 @@ exports.getKegiatanById = async (req, res, next) => {
     });
 
     res.json({
-      success: true,
+      status: 'success',
       data: response
     });
   } catch (error) {
@@ -410,7 +410,7 @@ exports.checkPersonnelConflict = async (req, res, next) => {
 
     if (!personnel_name || !start_date || !end_date) {
       return res.status(400).json({
-        success: false,
+        status: 'error',
         message: 'Parameter tidak lengkap',
         conflicts: []
       });
@@ -423,7 +423,7 @@ exports.checkPersonnelConflict = async (req, res, next) => {
 
     if (!personil) {
       return res.json({
-        success: true,
+        status: 'success',
         conflicts: []
       });
     }
@@ -437,13 +437,13 @@ exports.checkPersonnelConflict = async (req, res, next) => {
     );
 
     res.json({
-      success: true,
+      status: 'success',
       conflicts: conflictCheck.conflicts
     });
   } catch (error) {
     logger.error('Perjalanan Dinas - Check Personnel Conflict Error:', error);
     res.json({
-      success: true,
+      status: 'success',
       conflicts: []
     });
   }
@@ -464,7 +464,7 @@ exports.createKegiatan = async (req, res, next) => {
     // Validation
     if (!nama_kegiatan || !nomor_sp || !tanggal_mulai || !tanggal_selesai || !lokasi) {
       return res.status(400).json({
-        success: false,
+        status: 'error',
         message: 'Field wajib tidak boleh kosong',
         required: ['nama_kegiatan', 'nomor_sp', 'tanggal_mulai', 'tanggal_selesai', 'lokasi']
       });
@@ -473,7 +473,7 @@ exports.createKegiatan = async (req, res, next) => {
     // Validate date range
     if (new Date(tanggal_selesai) < new Date(tanggal_mulai)) {
       return res.status(400).json({
-        success: false,
+        status: 'error',
         message: 'Tanggal selesai tidak boleh lebih awal dari tanggal mulai'
       });
     }
@@ -502,7 +502,7 @@ exports.createKegiatan = async (req, res, next) => {
 
       if (conflictCheck.hasConflict) {
         return res.status(409).json({
-          success: false,
+          status: 'error',
           message: 'Terdapat personil yang sudah memiliki kegiatan pada tanggal yang sama',
           conflicts: conflictCheck.conflicts
         });
@@ -518,6 +518,41 @@ exports.createKegiatan = async (req, res, next) => {
       keterangan: keterangan || null
     });
 
+    // Save bidang and personil details
+    if (personil_bidang_list && Array.isArray(personil_bidang_list)) {
+      for (const bidangData of personil_bidang_list) {
+        if (bidangData.id_bidang) {
+          // Prepare personil data
+          let personilJson = [];
+          if (bidangData.personil && Array.isArray(bidangData.personil)) {
+            personilJson = bidangData.personil
+              .filter(p => p) // Remove empty values
+              .map(p => {
+                // Handle both object {id_personil, nama_personil} and string format
+                if (typeof p === 'object' && p.id_personil && p.nama_personil) {
+                  return {
+                    id_personil: p.id_personil,
+                    nama_personil: p.nama_personil
+                  };
+                } else if (typeof p === 'string' && p.trim()) {
+                  // If string, try to find matching personil
+                  return { nama_personil: p.trim() };
+                }
+                return null;
+              })
+              .filter(p => p !== null);
+          }
+
+          // Create KegiatanBidang record
+          await KegiatanBidang.create({
+            id_kegiatan: kegiatan.id_kegiatan,
+            id_bidang: parseInt(bidangData.id_bidang),
+            personil: JSON.stringify(personilJson)
+          });
+        }
+      }
+    }
+
     logger.info('Perjalanan Dinas - Kegiatan Created', {
       user_id: req.user.id,
       kegiatan_id: kegiatan.id_kegiatan,
@@ -525,7 +560,7 @@ exports.createKegiatan = async (req, res, next) => {
     });
 
     res.status(201).json({
-      success: true,
+      status: 'success',
       message: 'Kegiatan berhasil dibuat',
       data: kegiatan
     });
@@ -555,7 +590,7 @@ exports.updateKegiatan = async (req, res, next) => {
 
     if (!kegiatan) {
       return res.status(404).json({
-        success: false,
+        status: 'error',
         message: 'Kegiatan tidak ditemukan'
       });
     }
@@ -563,7 +598,7 @@ exports.updateKegiatan = async (req, res, next) => {
     // Validate date range if both dates provided
     if (tanggal_mulai && tanggal_selesai && new Date(tanggal_selesai) < new Date(tanggal_mulai)) {
       return res.status(400).json({
-        success: false,
+        status: 'error',
         message: 'Tanggal selesai tidak boleh lebih awal dari tanggal mulai'
       });
     }
@@ -593,7 +628,7 @@ exports.updateKegiatan = async (req, res, next) => {
 
       if (conflictCheck.hasConflict) {
         return res.status(409).json({
-          success: false,
+          status: 'error',
           message: 'Terdapat personil yang sudah memiliki kegiatan pada tanggal yang sama',
           conflicts: conflictCheck.conflicts
         });
@@ -610,13 +645,53 @@ exports.updateKegiatan = async (req, res, next) => {
 
     await kegiatan.save();
 
+    // Update bidang and personil details
+    if (personil_bidang_list && Array.isArray(personil_bidang_list)) {
+      // Delete existing kegiatan_bidang records
+      await KegiatanBidang.destroy({
+        where: { id_kegiatan: parseInt(id) }
+      });
+
+      // Create new records
+      for (const bidangData of personil_bidang_list) {
+        if (bidangData.id_bidang) {
+          // Prepare personil data
+          let personilJson = [];
+          if (bidangData.personil && Array.isArray(bidangData.personil)) {
+            personilJson = bidangData.personil
+              .filter(p => p) // Remove empty values
+              .map(p => {
+                // Handle both object {id_personil, nama_personil} and string format
+                if (typeof p === 'object' && p.id_personil && p.nama_personil) {
+                  return {
+                    id_personil: p.id_personil,
+                    nama_personil: p.nama_personil
+                  };
+                } else if (typeof p === 'string' && p.trim()) {
+                  return { nama_personil: p.trim() };
+                }
+                return null;
+              })
+              .filter(p => p !== null);
+          }
+
+          // Create KegiatanBidang record
+          await KegiatanBidang.create({
+            id_kegiatan: parseInt(id),
+            id_bidang: parseInt(bidangData.id_bidang),
+            personil: JSON.stringify(personilJson)
+          });
+        }
+      }
+    }
+
     logger.info('Perjalanan Dinas - Kegiatan Updated', {
       user_id: req.user.id,
       kegiatan_id: id
     });
 
     res.json({
-      success: true,
+      status: 'success',
       message: 'Kegiatan berhasil diupdate',
       data: kegiatan
     });
@@ -637,7 +712,7 @@ exports.deleteKegiatan = async (req, res, next) => {
 
     if (!kegiatan) {
       return res.status(404).json({
-        success: false,
+        status: 'error',
         message: 'Kegiatan tidak ditemukan'
       });
     }
@@ -651,7 +726,7 @@ exports.deleteKegiatan = async (req, res, next) => {
     });
 
     res.json({
-      success: true,
+      status: 'success',
       message: 'Kegiatan berhasil dihapus'
     });
   } catch (error) {
@@ -712,7 +787,7 @@ exports.getDashboardStats = async (req, res, next) => {
     });
 
     res.json({
-      success: true,
+      status: 'success',
       data: {
         total: totalKegiatan,
         mingguan: 0, // Will be calculated from weekly schedule
@@ -769,6 +844,19 @@ exports.getWeeklySchedule = async (req, res, next) => {
           }
         ]
       },
+      include: [
+        {
+          model: KegiatanBidang,
+          as: 'details',
+          include: [
+            {
+              model: Bidang,
+              as: 'bidang',
+              attributes: ['id', 'nama']
+            }
+          ]
+        }
+      ],
       order: [['tanggal_mulai', 'ASC']]
     });
 
@@ -797,7 +885,8 @@ exports.getWeeklySchedule = async (req, res, next) => {
           nomor_sp: k.nomor_sp,
           tanggal_mulai: k.tanggal_mulai,
           tanggal_selesai: k.tanggal_selesai,
-          lokasi: k.lokasi
+          lokasi: k.lokasi,
+          details: k.details || []
         }))
       });
     }
@@ -809,7 +898,7 @@ exports.getWeeklySchedule = async (req, res, next) => {
     });
 
     res.json({
-      success: true,
+      status: 'success',
       data: weeklyData,
       period: {
         start: startOfWeek,
@@ -837,7 +926,7 @@ exports.getAllBidang = async (req, res, next) => {
     });
 
     res.json({
-      success: true,
+      status: 'success',
       data: bidang.map(b => ({
         id_bidang: b.id,
         nama_bidang: b.nama,
@@ -872,7 +961,7 @@ exports.getPersonilByBidang = async (req, res, next) => {
     });
 
     res.json({
-      success: true,
+      status: 'success',
       data: personil.map(p => ({
         id_personil: p.id_personil,
         id_bidang: p.id_bidang,
@@ -970,7 +1059,7 @@ exports.getStatistik = async (req, res, next) => {
     });
 
     res.json({
-      success: true,
+      status: 'success',
       data: {
         ...stats[0],
         per_bidang: perBidang.map(b => ({
