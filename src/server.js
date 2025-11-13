@@ -17,6 +17,9 @@ const perjalananDinasRoutes = require('./routes/perjalananDinas.routes');
 const heroGalleryRoutes = require('./routes/heroGallery.routes');
 const publicRoutes = require('./routes/public.routes');
 const locationRoutes = require('./routes/location.routes');
+const kelembagaanRoutes = require('./routes/kelembagaan.routes');
+const desaKelembagaanRoutes = require('./routes/desa.kelembagaan.routes');
+const produkHukumRoutes = require('./routes/produkHukum.routes');
 
 const app = express();
 
@@ -89,10 +92,14 @@ app.use('/api/desa/bumdes', bumdesRoutes);
 app.use('/api/bumdes', bumdesRoutes); // Admin routes
 app.use('/api/desa/musdesus', musdesusRoutes);
 app.use('/api/musdesus', musdesusRoutes); // Admin routes
+app.use('/api/desa', desaKelembagaanRoutes); // Desa kelembagaan routes (RW, RT, Posyandu, etc.)
 app.use('/api/perjalanan-dinas', perjalananDinasRoutes);
 app.use('/api/perjadin', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/kegiatan', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/hero-gallery', heroGalleryRoutes);
+app.use('/api/kelembagaan', kelembagaanRoutes); // Kelembagaan routes (admin/global)
+app.use('/api/admin', kelembagaanRoutes); // Admin alias for kelembagaan
+app.use('/api/produk-hukum', produkHukumRoutes); // Produk Hukum routes
 
 // 404 handler
 app.use((req, res) => {
