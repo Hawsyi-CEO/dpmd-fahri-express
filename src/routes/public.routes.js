@@ -11,9 +11,9 @@ router.get('/stats', async (req, res) => {
   try {
     const [results] = await db.query(`
       SELECT 
-        (SELECT COUNT(*) FROM kecamatans WHERE deleted_at IS NULL) as kecamatan,
-        (SELECT COUNT(*) FROM desas WHERE deleted_at IS NULL AND jenis_wilayah = 'desa') as desa,
-        (SELECT COUNT(*) FROM desas WHERE deleted_at IS NULL AND jenis_wilayah = 'kelurahan') as kelurahan
+        (SELECT COUNT(*) FROM kecamatans) as kecamatan,
+        (SELECT COUNT(*) FROM desas WHERE status_pemerintahan = 'desa') as desa,
+        (SELECT COUNT(*) FROM desas WHERE status_pemerintahan = 'kelurahan') as kelurahan
     `);
 
     res.status(200).json({

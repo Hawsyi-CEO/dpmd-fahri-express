@@ -35,40 +35,40 @@ router.delete(
 );
 
 // ======================
-// ADMIN ROUTES (requires role: admin, sarpras, or superadmin)
+// ADMIN ROUTES (requires role: dinas or superadmin)
 // ======================
 router.get(
   '/all',
   auth,
-  checkRole('sarpras', 'admin', 'superadmin'),
+  checkRole('dinas', 'superadmin'),
   musdesusController.getAllMusdesus
 );
 
 router.get(
   '/statistics',
   auth,
-  checkRole('sarpras', 'admin', 'superadmin'),
+  checkRole('dinas', 'superadmin'),
   musdesusController.getStatistics
 );
 
 router.put(
   '/:id/status',
   auth,
-  checkRole('sarpras', 'admin', 'superadmin'),
+  checkRole('dinas', 'superadmin'),
   musdesusController.updateStatus
 );
 
 router.delete(
   '/:id',
   auth,
-  checkRole('sarpras', 'admin', 'superadmin'),
+  checkRole('dinas', 'superadmin'),
   musdesusController.deleteMusdesus
 );
 
 router.get(
   '/check-upload/:desa_id',
   auth,
-  checkRole('sarpras', 'admin', 'superadmin'),
+  checkRole('dinas', 'superadmin'),
   musdesusController.checkDesaUploadStatus
 );
 

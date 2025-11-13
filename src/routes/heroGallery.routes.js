@@ -7,11 +7,11 @@ const { uploadHeroGallery } = require('../middlewares/upload');
 // Public routes
 router.get('/public', heroGalleryController.getPublicGallery);
 
-// Admin routes - hanya superadmin dan admin
-router.get('/', auth, checkRole('admin', 'superadmin'), heroGalleryController.getAllGallery);
-router.post('/', auth, checkRole('admin', 'superadmin'), uploadHeroGallery.single('image'), heroGalleryController.createGallery);
-router.put('/:id', auth, checkRole('admin', 'superadmin'), uploadHeroGallery.single('image'), heroGalleryController.updateGallery);
-router.delete('/:id', auth, checkRole('admin', 'superadmin'), heroGalleryController.deleteGallery);
-router.patch('/:id/toggle-status', auth, checkRole('admin', 'superadmin'), heroGalleryController.toggleStatus);
+// Admin routes - hanya superadmin dan dinas (kepala dinas)
+router.get('/', auth, checkRole('dinas', 'superadmin'), heroGalleryController.getAllGallery);
+router.post('/', auth, checkRole('dinas', 'superadmin'), uploadHeroGallery.single('image'), heroGalleryController.createGallery);
+router.put('/:id', auth, checkRole('dinas', 'superadmin'), uploadHeroGallery.single('image'), heroGalleryController.updateGallery);
+router.delete('/:id', auth, checkRole('dinas', 'superadmin'), heroGalleryController.deleteGallery);
+router.patch('/:id/toggle-status', auth, checkRole('dinas', 'superadmin'), heroGalleryController.toggleStatus);
 
 module.exports = router;

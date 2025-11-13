@@ -7,53 +7,47 @@ const { auth, checkRole } = require('../middlewares/auth');
  * PERJALANAN DINAS (PERJADIN) ROUTES
  * Base path: /api/perjadin
  * 
- * Access: superadmin, sekretariat, sarana_prasarana, kekayaan_keuangan, 
- *         pemberdayaan_masyarakat, pemerintahan_desa
+ * Access: superadmin (full), dinas (read-only), pemberdayaan_masyarakat (manage)
  */
 
 // ======================
-// DASHBOARD ROUTES (Read-only access for kepala_dinas)
+// DASHBOARD ROUTES (Read-only access for dinas role)
 // ======================
 router.get(
   '/dashboard',
   auth,
-  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin', 'kepala_dinas', 'sekretaris_dinas', 'kabid_pemerintahan_desa', 'kabid_spked', 'kabid_kekayaan_keuangan_desa', 'kabid_pemberdayaan_masyarakat_desa'),
+  checkRole('superadmin', 'dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getDashboardStats
 );
 
 router.get(
   '/dashboard/weekly-schedule',
   auth,
-  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin', 'kepala_dinas', 'sekretaris_dinas', 'kabid_pemerintahan_desa', 'kabid_spked', 'kabid_kekayaan_keuangan_desa', 'kabid_pemberdayaan_masyarakat_desa'),
+  checkRole('superadmin', 'dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getWeeklySchedule
 );
 
 router.get(
   '/statistik',
   auth,
-  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin', 'kepala_dinas', 'sekretaris_dinas', 'kabid_pemerintahan_desa', 'kabid_spked', 'kabid_kekayaan_keuangan_desa', 'kabid_pemberdayaan_masyarakat_desa'),
+  checkRole('superadmin', 'dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getStatistik
 );
 
 // ======================
-// MASTER DATA ROUTES (Read-only access for kepala_dinas)
+// MASTER DATA ROUTES (Read-only access for dinas)
 // ======================
 router.get(
   '/bidang',
   auth,
-  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin', 'kepala_dinas', 'sekretaris_dinas', 'kabid_pemerintahan_desa', 'kabid_spked', 'kabid_kekayaan_keuangan_desa', 'kabid_pemberdayaan_masyarakat_desa'),
+  checkRole('superadmin', 'dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getAllBidang
 );
 
 router.get(
   '/personil/:id_bidang',
   auth,
-  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin', 'kepala_dinas', 'sekretaris_dinas', 'kabid_pemerintahan_desa', 'kabid_spked', 'kabid_kekayaan_keuangan_desa', 'kabid_pemberdayaan_masyarakat_desa'),
+  checkRole('superadmin', 'dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getPersonilByBidang
 );
 
@@ -63,8 +57,7 @@ router.get(
 router.get(
   '/check-personnel-conflict',
   auth,
-  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+  checkRole('superadmin', 'pemberdayaan_masyarakat'),
   perjadinController.checkPersonnelConflict
 );
 
@@ -74,51 +67,45 @@ router.get(
 router.get(
   '/statistik',
   auth,
-  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+  checkRole('superadmin', 'dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getStatistik
 );
 
 // ======================
-// KEGIATAN ROUTES (Read access for kepala_dinas, full access for others)
+// KEGIATAN ROUTES (Read access for dinas, full access for superadmin and pemberdayaan_masyarakat)
 // ======================
 router.get(
   '/kegiatan',
   auth,
-  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin', 'kepala_dinas', 'sekretaris_dinas', 'kabid_pemerintahan_desa', 'kabid_spked', 'kabid_kekayaan_keuangan_desa', 'kabid_pemberdayaan_masyarakat_desa'),
+  checkRole('superadmin', 'dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getAllKegiatan
 );
 
 router.get(
   '/kegiatan/:id',
   auth,
-  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin', 'kepala_dinas', 'sekretaris_dinas', 'kabid_pemerintahan_desa', 'kabid_spked', 'kabid_kekayaan_keuangan_desa', 'kabid_pemberdayaan_masyarakat_desa'),
+  checkRole('superadmin', 'dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getKegiatanById
 );
 
 router.post(
   '/kegiatan',
   auth,
-  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+  checkRole('superadmin', 'pemberdayaan_masyarakat'),
   perjadinController.createKegiatan
 );
 
 router.put(
   '/kegiatan/:id',
   auth,
-  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+  checkRole('superadmin', 'pemberdayaan_masyarakat'),
   perjadinController.updateKegiatan
 );
 
 router.delete(
   '/kegiatan/:id',
   auth,
-  checkRole('superadmin', 'sekretariat', 'sarana_prasarana', 'kekayaan_keuangan', 
-            'pemberdayaan_masyarakat', 'pemerintahan_desa', 'admin'),
+  checkRole('superadmin', 'pemberdayaan_masyarakat'),
   perjadinController.deleteKegiatan
 );
 

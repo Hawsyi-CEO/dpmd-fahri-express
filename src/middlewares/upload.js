@@ -120,6 +120,25 @@ const storageHeroGallery = multer.diskStorage({
   }
 });
 
+// Storage configuration for BERITA
+const storageBerita = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const dir = 'storage/uploads/berita';
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: function (req, file, cb) {
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    const nameWithoutExt = path.basename(file.originalname, ext);
+    const filename = `${timestamp}_${nameWithoutExt}${ext}`;
+    
+    cb(null, filename);
+  }
+});
+
 // Multer configurations
 const uploadBumdes = multer({
   storage: storageBumdes,
@@ -153,9 +172,18 @@ const uploadHeroGallery = multer({
   }
 });
 
+const uploadBerita = multer({
+  storage: storageBerita,
+  fileFilter: imageFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB for images
+  }
+});
+
 module.exports = {
   uploadBumdes,
   uploadMusdesus,
   uploadPerjadinDinas,
-  uploadHeroGallery
+  uploadHeroGallery,
+  uploadBerita
 };

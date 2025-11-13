@@ -28,7 +28,9 @@ app.use(cors({
     'http://localhost:5173',
     'http://localhost:5174',
     'http://127.0.0.1:5173',
-    'http://127.0.0.1:5174'
+    'http://127.0.0.1:5174',
+    'http://protodpmd.vertinova.id',
+    'https://protodpmd.vertinova.id'
   ],
   credentials: true
 }));
@@ -105,6 +107,7 @@ app.use('/api/perjadin', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/kegiatan', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/hero-gallery', heroGalleryRoutes);
 app.use('/api/kepala-dinas', kepalaDinasRoutes); // Kepala Dinas dashboard
+app.use('/api/berita', require('./routes/berita.routes')); // Berita routes
 
 // 404 handler
 app.use((req, res) => {

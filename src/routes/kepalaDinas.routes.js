@@ -3,10 +3,10 @@ const router = express.Router();
 const kepalaDinasController = require('../controllers/kepalaDinas.controller');
 const { auth, checkRole } = require('../middlewares/auth');
 
-// Dashboard statistics route - only for kepala_dinas
+// Dashboard statistics route - only for dinas (kepala dinas) and superadmin
 router.get('/dashboard', 
   auth, 
-  checkRole('kepala_dinas', 'superadmin'), 
+  checkRole('dinas', 'superadmin'), 
   kepalaDinasController.getDashboardStats.bind(kepalaDinasController)
 );
 
