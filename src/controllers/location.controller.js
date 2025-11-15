@@ -1,5 +1,4 @@
-const Kecamatan = require('../models/Kecamatan');
-const Desa = require('../models/Desa');
+const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
 
 class LocationController {
@@ -9,8 +8,8 @@ class LocationController {
     try {
       logger.info('Fetching all kecamatans');
 
-      const kecamatans = await Kecamatan.findAll({
-        order: [['nama', 'ASC']]
+      const kecamatans = await prisma.kecamatans.findMany({
+        orderBy: { nama_kecamatan: 'asc' }
       });
 
       logger.info(`Found ${kecamatans.length} kecamatans`);
@@ -31,8 +30,8 @@ class LocationController {
     try {
       logger.info('Fetching all desas');
 
-      const desas = await Desa.findAll({
-        order: [['nama', 'ASC']]
+      const desas = await prisma.desas.findMany({
+        orderBy: { nama_desa: 'asc' }
       });
 
       logger.info(`Found ${desas.length} desas`);
@@ -55,9 +54,9 @@ class LocationController {
 
       logger.info(`Fetching desas for kecamatan_id: ${kecamatanId}`);
 
-      const desas = await Desa.findAll({
-        where: { kecamatan_id: kecamatanId },
-        order: [['nama', 'ASC']]
+      const desas = await prisma.desas.findMany({
+        where: { id_kecamatan: parseInt(kecamatanId) },
+        orderBy: { nama_desa: 'asc' }
       });
 
       logger.info(`Found ${desas.length} desas for kecamatan_id: ${kecamatanId}`);

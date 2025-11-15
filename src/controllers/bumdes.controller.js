@@ -1,4 +1,4 @@
-const Bumdes = require('../models/Bumdes');
+const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
 const fs = require('fs').promises;
 const path = require('path');
@@ -20,8 +20,8 @@ class BumdesController {
 
       logger.info(`Fetching BUMDES for desa_id: ${desaId}`);
 
-      const bumdes = await Bumdes.findOne({
-        where: { desa_id: desaId }
+      const bumdes = await prisma.bumdes.findFirst({
+        where: { id_desa: desaId }
       });
 
       return res.json({
@@ -82,20 +82,24 @@ class BumdesController {
       }
 
       // Check if BUMDES already exists for this desa_id
-      const existing = await Bumdes.findOne({
-        where: { desa_id: targetDesaId }
+      const existing = await prisma.bumdes.findFirst({
+        where: { id_desa: targetDesaId }
       });
 
       let bumdes;
       
       if (existing) {
         // Update existing
-        await existing.update(data);
-        bumdes = existing;
+        bumdes = await prisma.bumdes.update({
+          where: { id: existing.id },
+          data
+        });
         logger.info(`BUMDES updated for desa_id: ${targetDesaId} by user ${userId} (${userRole})`);
       } else {
         // Create new
-        bumdes = await Bumdes.create(data);
+        bumdes = await prisma.bumdes.create({
+          data
+        });
         logger.info(`BUMDES created for desa_id: ${targetDesaId}, id: ${bumdes.id} by user ${userId} (${userRole})`);
       }
 
@@ -141,10 +145,10 @@ class BumdesController {
       }
 
       // Find BUMDES and verify ownership
-      const bumdes = await Bumdes.findOne({
+      const bumdes = await prisma.bumdes.findFirst({
         where: { 
-          id: bumdes_id,
-          desa_id: desaId 
+          id: parseInt(bumdes_id),
+          id_desa: desaId 
         }
       });
 
@@ -237,21 +241,24 @@ class BumdesController {
       const { id } = req.params;
       const desaId = req.user.desa_id;
 
-      const bumdes = await Bumdes.findOne({
+      const existing = await prisma.bumdes.findFirst({
         where: { 
-          id,
-          desa_id: desaId 
+          id: parseInt(id),
+          id_desa: desaId 
         }
       });
 
-      if (!bumdes) {
+      if (!existing) {
         return res.status(404).json({
           success: false,
           message: 'BUMDES not found or access denied'
         });
       }
 
-      await bumdes.update(req.body);
+      const bumdes = await prisma.bumdes.update({
+        where: { id: parseInt(id) },
+        data: req.body
+      });
 
       logger.info(`BUMDES updated: ${id}`);
 
@@ -273,10 +280,10 @@ class BumdesController {
       const { id } = req.params;
       const desaId = req.user.desa_id;
 
-      const bumdes = await Bumdes.findOne({
+      const bumdes = await prisma.bumdes.findFirst({
         where: { 
-          id,
-          desa_id: desaId 
+          id: parseInt(id),
+          id_desa: desaId 
         }
       });
 
@@ -306,7 +313,9 @@ class BumdesController {
         }
       }
 
-      await bumdes.destroy();
+      await prisma.bumdes.delete({
+        where: { id: parseInt(id) }
+      });
 
       logger.info(`BUMDES deleted: ${id}`);
 
@@ -329,8 +338,8 @@ class BumdesController {
         user_id: req.user.id
       });
 
-      const bumdes = await Bumdes.findAll({
-        order: [['created_at', 'DESC']]
+      const bumdes = await prisma.bumdes.findMany({
+        orderBy: { created_at: 'desc' }
       });
 
       logger.info(`Found ${bumdes.length} BUMDES records`);
@@ -363,11 +372,18 @@ class BumdesController {
       }
 
       // Get all BUMDES data once (cached in memory)
-      const allBumdes = await Bumdes.findAll({
+      const allBumdes = await prisma.bumdes.findMany({
         where: whereClause,
-        attributes: ['id', 'namabumdesa', 'desa', 'kecamatan', 
-                     'ProfilBUMDesa', 'BeritaAcara', 'AnggaranDasar', 
-                     'AnggaranRumahTangga', 'ProgramKerja', 'Perdes', 'SK_BUM_Desa']
+        select: {
+          id: true,
+          nama_bumdes: true,
+          id_desa: true,
+          kode_desa: true,
+          // File fields
+          file_badan_hukum: true,
+          file_sk_bumdes: true,
+          file_laporan_keuangan: true
+        }
       });
 
       // Build lightweight file list from database (no filesystem scan)
