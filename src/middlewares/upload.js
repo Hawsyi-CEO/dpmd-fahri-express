@@ -9,7 +9,8 @@ const uploadDirs = [
   'storage/uploads/bumdes_dokumen_badanhukum',
   'storage/uploads/musdesus',
   'storage/uploads/perjalanan_dinas',
-  'storage/uploads/hero-gallery'
+  'storage/uploads/hero-gallery',
+  'storage/produk_hukum'
 ];
 
 uploadDirs.forEach(dir => {
@@ -180,10 +181,47 @@ const uploadBerita = multer({
   }
 });
 
+// Storage configuration for PRODUK HUKUM (PDF only)
+const storageProdukHukum = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'storage/produk_hukum');
+  },
+  filename: function (req, file, cb) {
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    const nameWithoutExt = path.basename(file.originalname, ext);
+    // Sanitize filename: remove special characters
+    const sanitizedName = nameWithoutExt.replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `${sanitizedName}_${timestamp}${ext}`;
+    
+    cb(null, filename);
+  }
+});
+
+// File filter for PDF only
+const pdfFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  
+  if (ext === '.pdf' && file.mimetype === 'application/pdf') {
+    cb(null, true);
+  } else {
+    cb(new Error('Hanya file PDF yang diperbolehkan'), false);
+  }
+};
+
+const uploadProdukHukum = multer({
+  storage: storageProdukHukum,
+  fileFilter: pdfFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB for PDF
+  }
+});
+
 module.exports = {
   uploadBumdes,
   uploadMusdesus,
   uploadPerjadinDinas,
   uploadHeroGallery,
-  uploadBerita
+  uploadBerita,
+  uploadProdukHukum
 };

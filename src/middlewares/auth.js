@@ -22,12 +22,17 @@ const auth = async (req, res, next) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     
     // Attach user to request
+    // Coerce desa_id to integer to satisfy Prisma Int fields
+    const desaId = decoded.desa_id !== undefined && decoded.desa_id !== null
+      ? parseInt(decoded.desa_id, 10)
+      : null;
+
     req.user = {
       id: decoded.id,
       name: decoded.name,
       email: decoded.email,
       role: decoded.role,
-      desa_id: decoded.desa_id
+      desa_id: Number.isNaN(desaId) ? null : desaId
     };
     
     logger.info(`✅ Auth successful: User ${req.user.id} (${req.user.role})`);
@@ -102,13 +107,21 @@ const checkRole = (...roles) => {
 
 // Generate JWT token
 const generateToken = (user) => {
+  // Convert all BigInt fields to strings for JWT serialization
+  const convertBigInt = (value) => {
+    if (value === null || value === undefined) return value;
+    return typeof value === 'bigint' ? value.toString() : value;
+  };
+
   return jwt.sign(
     {
-      id: user.id,
+      id: convertBigInt(user.id),
       name: user.name,
       email: user.email,
       role: user.role,
-      desa_id: user.desa_id
+      desa_id: convertBigInt(user.desa_id),
+      kecamatan_id: convertBigInt(user.kecamatan_id),
+      bidang_id: convertBigInt(user.bidang_id)
     },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN }

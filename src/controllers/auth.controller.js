@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { generateToken } = require('../middlewares/auth');
-const sequelize = require('../config/database');
+const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
 
 /**
@@ -17,25 +17,28 @@ const login = async (req, res) => {
       });
     }
 
-    // Query user from database
-    const [users] = await sequelize.query(`
-      SELECT id, name, email, password, role, desa_id 
-      FROM users 
-      WHERE email = ?
-      LIMIT 1
-    `, {
-      replacements: [email]
+    // Query user from database using Prisma
+    const user = await prisma.users.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        password: true,
+        role: true,
+        desa_id: true,
+        kecamatan_id: true,
+        bidang_id: true
+      }
     });
 
-    if (!users || users.length === 0) {
+    if (!user) {
       logger.warn(`Login failed: User not found - ${email}`);
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
       });
     }
-
-    const user = users[0];
 
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -53,17 +56,25 @@ const login = async (req, res) => {
 
     logger.info(`✅ Login successful: ${user.email} (${user.role})`);
 
+    // Helper to convert BigInt to string
+    const convertBigInt = (value) => {
+      if (value === null || value === undefined) return value;
+      return typeof value === 'bigint' ? value.toString() : value;
+    };
+
     return res.status(200).json({
       success: true,
       message: 'Login successful',
       data: {
         token,
         user: {
-          id: user.id,
+          id: convertBigInt(user.id),
           name: user.name,
           email: user.email,
           role: user.role,
-          desa_id: user.desa_id
+          desa_id: convertBigInt(user.desa_id),
+          kecamatan_id: convertBigInt(user.kecamatan_id),
+          bidang_id: convertBigInt(user.bidang_id)
         }
       }
     });

@@ -1,0 +1,2474 @@
+/**
+ * Kelembagaan Controller
+ * Handles all community organization (kelembagaan) endpoints
+ * Converted from Laravel Eloquent to Prisma ORM
+ */
+
+const prisma = require('../config/prisma');
+const { v4: uuidv4 } = require('uuid');
+
+/**
+ * Helper function to get statistics for desa or kelurahan
+ */
+async function getStatsForStatus(ids, count) {
+  if (ids.length === 0) {
+    return {
+      total: 0,
+      aktif: 0,
+      tidak_aktif: 0,
+      belum_dibentuk: 0
+    };
+  }
+
+  const [rw, rt, posyandu, karangTaruna, lpm, satlinmas, pkk] = await Promise.all([
+    prisma.rws.count({ where: { desa_id: { in: ids }, status_kelembagaan: 'aktif' } }),
+    prisma.rts.count({ where: { desa_id: { in: ids }, status_kelembagaan: 'aktif' } }),
+    prisma.posyandus.count({ where: { desa_id: { in: ids }, status_kelembagaan: 'aktif' } }),
+    prisma.karang_tarunas.count({ where: { desa_id: { in: ids }, status_kelembagaan: 'aktif' } }),
+    prisma.lpms.count({ where: { desa_id: { in: ids }, status_kelembagaan: 'aktif' } }),
+    prisma.satlinmas.count({ where: { desa_id: { in: ids }, status_kelembagaan: 'aktif' } }),
+    prisma.pkks.count({ where: { desa_id: { in: ids }, status_kelembagaan: 'aktif' } })
+  ]);
+
+  const total = rw + rt + posyandu + karangTaruna + lpm + satlinmas + pkk;
+  const countActive = count || 0;
+
+  return {
+    total: countActive,
+    aktif: total,
+    tidak_aktif: 0,
+    belum_dibentuk: countActive - total
+  };
+}
+
+class KelembagaanController {
+  async index(req, res) {
+    try {
+      const kecamatans = await prisma.kecamatans.findMany({
+        include: {
+          desas: {
+            select: { 
+              id_desa: true, 
+              nama_desa: true, 
+              kode_desa: true, 
+              status_pemerintahan: true 
+            }
+          }
+        },
+        orderBy: { id_kecamatan: 'asc' }
+      });
+
+      // Get all desa IDs for batch queries
+      const allDesaIds = kecamatans.flatMap(k => k.desas.map(d => d.id_desa));
+
+      // Batch query untuk semua data kelembagaan dan pengurus sekaligus
+      const [
+        rwData,
+        rtData,
+        posyanduData,
+        karangTarunaData,
+        lpmData,
+        satlinmasData,
+        pkkData,
+        // Get pengurus data for each kelembagaan type
+        pengurusData
+      ] = await Promise.all([
+        prisma.rws.groupBy({
+          by: ['desa_id'],
+          _count: { id: true },
+          where: { desa_id: { in: allDesaIds }, status_kelembagaan: 'aktif' }
+        }),
+        prisma.rts.groupBy({
+          by: ['desa_id'],
+          _count: { id: true },
+          where: { desa_id: { in: allDesaIds }, status_kelembagaan: 'aktif' }
+        }),
+        prisma.posyandus.groupBy({
+          by: ['desa_id'],
+          _count: { id: true },
+          where: { desa_id: { in: allDesaIds }, status_kelembagaan: 'aktif' }
+        }),
+        prisma.karang_tarunas.findMany({
+          where: { desa_id: { in: allDesaIds }, status_kelembagaan: 'aktif' },
+          select: { id: true, desa_id: true, status_kelembagaan: true }
+        }),
+        prisma.lpms.findMany({
+          where: { desa_id: { in: allDesaIds }, status_kelembagaan: 'aktif' },
+          select: { id: true, desa_id: true, status_kelembagaan: true }
+        }),
+        prisma.satlinmas.findMany({
+          where: { desa_id: { in: allDesaIds }, status_kelembagaan: 'aktif' },
+          select: { id: true, desa_id: true, status_kelembagaan: true }
+        }),
+        prisma.pkks.findMany({
+          where: { desa_id: { in: allDesaIds }, status_kelembagaan: 'aktif' },
+          select: { id: true, desa_id: true, status_kelembagaan: true }
+        }),
+        // Fetch all pengurus for active kelembagaan
+        prisma.pengurus.groupBy({
+          by: ['pengurusable_type', 'pengurusable_id'],
+          _count: { id: true },
+          where: { status_jabatan: 'aktif' }
+        })
+      ]);
+
+      // Convert to lookup maps
+      const rwMap = new Map(rwData.map(item => [item.desa_id.toString(), item._count.id]));
+      const rtMap = new Map(rtData.map(item => [item.desa_id.toString(), item._count.id]));
+      const posyanduMap = new Map(posyanduData.map(item => [item.desa_id.toString(), item._count.id]));
+      const karangTarunaMap = new Map(karangTarunaData.map(item => [item.desa_id.toString(), item.status_kelembagaan === 'aktif' ? 'Terbentuk' : 'Belum Terbentuk']));
+      const lpmMap = new Map(lpmData.map(item => [item.desa_id.toString(), item.status_kelembagaan === 'aktif' ? 'Terbentuk' : 'Belum Terbentuk']));
+      const satlinmasMap = new Map(satlinmasData.map(item => [item.desa_id.toString(), item.status_kelembagaan === 'aktif' ? 'Terbentuk' : 'Belum Terbentuk']));
+      const pkkMap = new Map(pkkData.map(item => [item.desa_id.toString(), item.status_kelembagaan === 'aktif' ? 'Terbentuk' : 'Belum Terbentuk']));
+
+      // Create pengurus lookup maps by type and ID
+      const pengurusMap = new Map();
+      pengurusData.forEach(p => {
+        const key = `${p.pengurusable_type}_${p.pengurusable_id}`;
+        pengurusMap.set(key, p._count.id);
+      });
+
+      // Helper to get pengurus count for kelembagaan
+      const getPengurusCount = (type, kelembagaanArray, desaId) => {
+        return kelembagaanArray
+          .filter(k => k.desa_id.toString() === desaId.toString())
+          .reduce((sum, k) => {
+            const key = `${type}_${k.id}`;
+            return sum + (pengurusMap.get(key) || 0);
+          }, 0);
+      };
+
+      const kelembagaanData = [];
+
+      for (const kecamatan of kecamatans) {
+        const desasWithKelembagaan = kecamatan.desas.map(desa => {
+          const desaIdStr = desa.id_desa.toString();
+          
+          return {
+            id: desa.id_desa,
+            nama: desa.nama_desa,
+            kode: desa.kode_desa,
+            status: desa.status_pemerintahan,
+            kelembagaan: {
+              rw: rwMap.get(desaIdStr) || 0,
+              rt: rtMap.get(desaIdStr) || 0,
+              posyandu: posyanduMap.get(desaIdStr) || 0,
+              karangTaruna: karangTarunaMap.get(desaIdStr) || 'Belum Terbentuk',
+              lpm: lpmMap.get(desaIdStr) || 'Belum Terbentuk',
+              satlinmas: satlinmasMap.get(desaIdStr) || 'Belum Terbentuk',
+              pkk: pkkMap.get(desaIdStr) || 'Belum Terbentuk'
+            },
+            pengurus: {
+              rw: getPengurusCount('rws', [...rwData.map(r => ({ id: r.desa_id, desa_id: r.desa_id }))].filter(r => r.desa_id.toString() === desaIdStr), desa.id_desa),
+              rt: getPengurusCount('rts', [...rtData.map(r => ({ id: r.desa_id, desa_id: r.desa_id }))].filter(r => r.desa_id.toString() === desaIdStr), desa.id_desa),
+              posyandu: getPengurusCount('posyandus', posyanduData.filter(p => p.desa_id.toString() === desaIdStr), desa.id_desa),
+              karangTaruna: getPengurusCount('karang_tarunas', karangTarunaData.filter(k => k.desa_id.toString() === desaIdStr), desa.id_desa),
+              lpm: getPengurusCount('lpms', lpmData.filter(l => l.desa_id.toString() === desaIdStr), desa.id_desa),
+              satlinmas: getPengurusCount('satlinmas', satlinmasData.filter(s => s.desa_id.toString() === desaIdStr), desa.id_desa),
+              pkk: getPengurusCount('pkks', pkkData.filter(p => p.desa_id.toString() === desaIdStr), desa.id_desa)
+            }
+          };
+        });
+
+        // Calculate total for kecamatan
+        const totalKelembagaan = desasWithKelembagaan.reduce((acc, desa) => ({
+          rw: acc.rw + desa.kelembagaan.rw,
+          rt: acc.rt + desa.kelembagaan.rt,
+          posyandu: acc.posyandu + desa.kelembagaan.posyandu,
+          karangTaruna: acc.karangTaruna + (desa.kelembagaan.karangTaruna === 'Terbentuk' ? 1 : 0),
+          lpm: acc.lpm + (desa.kelembagaan.lpm === 'Terbentuk' ? 1 : 0),
+          satlinmas: acc.satlinmas + (desa.kelembagaan.satlinmas === 'Terbentuk' ? 1 : 0),
+          pkk: acc.pkk + (desa.kelembagaan.pkk === 'Terbentuk' ? 1 : 0)
+        }), { rw: 0, rt: 0, posyandu: 0, karangTaruna: 0, lpm: 0, satlinmas: 0, pkk: 0 });
+
+        const totalPengurus = desasWithKelembagaan.reduce((acc, desa) => ({
+          rw: acc.rw + desa.pengurus.rw,
+          rt: acc.rt + desa.pengurus.rt,
+          posyandu: acc.posyandu + desa.pengurus.posyandu,
+          karangTaruna: acc.karangTaruna + desa.pengurus.karangTaruna,
+          lpm: acc.lpm + desa.pengurus.lpm,
+          satlinmas: acc.satlinmas + desa.pengurus.satlinmas,
+          pkk: acc.pkk + desa.pengurus.pkk
+        }), { rw: 0, rt: 0, posyandu: 0, karangTaruna: 0, lpm: 0, satlinmas: 0, pkk: 0 });
+
+        kelembagaanData.push({
+          id: kecamatan.id_kecamatan,
+          nama: kecamatan.nama_kecamatan,
+          desas: desasWithKelembagaan,
+          totalKelembagaan,
+          totalPengurus
+        });
+      }
+
+      res.json({ success: true, data: kelembagaanData });
+    } catch (error) {
+      console.error('Error in index:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data kelembagaan', error: error.message });
+    }
+  }
+
+  async summary(req, res) {
+    try {
+      const [desaDesas, desaKelurahan, kecamatanCount] = await Promise.all([
+        prisma.desas.findMany({ where: { status_pemerintahan: 'desa' }, select: { id_desa: true } }),
+        prisma.desas.findMany({ where: { status_pemerintahan: 'kelurahan' }, select: { id_desa: true } }),
+        prisma.kecamatans.count()
+      ]);
+
+      const desaDesaIds = desaDesas.map(d => d.id_desa);
+      const desaKelurahanIds = desaKelurahan.map(d => d.id_desa);
+      const allDesaIds = [...desaDesaIds, ...desaKelurahanIds];
+
+      // Get total counts for all kelembagaan types (active only)
+      const [rwTotal, rtTotal, posyanduTotal, karangTarunaTotal, lpmTotal, satlinmasTotal, pkkTotal] = await Promise.all([
+        prisma.rws.count({ where: { status_kelembagaan: 'aktif' } }),
+        prisma.rts.count({ where: { status_kelembagaan: 'aktif' } }),
+        prisma.posyandus.count({ where: { status_kelembagaan: 'aktif' } }),
+        prisma.karang_tarunas.count({ where: { status_kelembagaan: 'aktif' } }),
+        prisma.lpms.count({ where: { status_kelembagaan: 'aktif' } }),
+        prisma.satlinmas.count({ where: { status_kelembagaan: 'aktif' } }),
+        prisma.pkks.count({ where: { status_kelembagaan: 'aktif' } })
+      ]);
+
+      // Get all active kelembagaan IDs for pengurus queries
+      const [
+        activeRws,
+        activeRts,
+        activePosyandus,
+        activeKarangTarunas,
+        activeLpms,
+        activeSatlinmas,
+        activePkks
+      ] = await Promise.all([
+        prisma.rws.findMany({ where: { status_kelembagaan: 'aktif' }, select: { id: true, desa_id: true } }),
+        prisma.rts.findMany({ where: { status_kelembagaan: 'aktif' }, select: { id: true, desa_id: true } }),
+        prisma.posyandus.findMany({ where: { status_kelembagaan: 'aktif' }, select: { id: true, desa_id: true } }),
+        prisma.karang_tarunas.findMany({ where: { status_kelembagaan: 'aktif' }, select: { id: true, desa_id: true } }),
+        prisma.lpms.findMany({ where: { status_kelembagaan: 'aktif' }, select: { id: true, desa_id: true } }),
+        prisma.satlinmas.findMany({ where: { status_kelembagaan: 'aktif' }, select: { id: true, desa_id: true } }),
+        prisma.pkks.findMany({ where: { status_kelembagaan: 'aktif' }, select: { id: true, desa_id: true } })
+      ]);
+
+      // Count pengurus for each kelembagaan type (active only)
+      const [
+        pengurusRw,
+        pengurusRt,
+        pengurusPosyandu,
+        pengurusKarangTaruna,
+        pengurusLpm,
+        pengurusSatlinmas,
+        pengurusPkk
+      ] = await Promise.all([
+        prisma.pengurus.count({ 
+          where: { 
+            pengurusable_type: 'rws',
+            pengurusable_id: { in: activeRws.map(r => r.id) },
+            status_jabatan: 'aktif'
+          } 
+        }),
+        prisma.pengurus.count({ 
+          where: { 
+            pengurusable_type: 'rts',
+            pengurusable_id: { in: activeRts.map(r => r.id) },
+            status_jabatan: 'aktif'
+          } 
+        }),
+        prisma.pengurus.count({ 
+          where: { 
+            pengurusable_type: 'posyandus',
+            pengurusable_id: { in: activePosyandus.map(p => p.id) },
+            status_jabatan: 'aktif'
+          } 
+        }),
+        prisma.pengurus.count({ 
+          where: { 
+            pengurusable_type: 'karang_tarunas',
+            pengurusable_id: { in: activeKarangTarunas.map(k => k.id) },
+            status_jabatan: 'aktif'
+          } 
+        }),
+        prisma.pengurus.count({ 
+          where: { 
+            pengurusable_type: 'lpms',
+            pengurusable_id: { in: activeLpms.map(l => l.id) },
+            status_jabatan: 'aktif'
+          } 
+        }),
+        prisma.pengurus.count({ 
+          where: { 
+            pengurusable_type: 'satlinmas',
+            pengurusable_id: { in: activeSatlinmas.map(s => s.id) },
+            status_jabatan: 'aktif'
+          } 
+        }),
+        prisma.pengurus.count({ 
+          where: { 
+            pengurusable_type: 'pkks',
+            pengurusable_id: { in: activePkks.map(p => p.id) },
+            status_jabatan: 'aktif'
+          } 
+        })
+      ]);
+
+      // Get counts by desa/kelurahan status (active only)
+      const [
+        rwDesa, rtDesa, posyanduDesa, karangTarunaDesa, lpmDesa, satlinmasDesa, pkkDesa,
+        rwKelurahan, rtKelurahan, posyanduKelurahan, karangTarunaKelurahan, lpmKelurahan, satlinmasKelurahan, pkkKelurahan
+      ] = await Promise.all([
+        prisma.rws.count({ where: { desa_id: { in: desaDesaIds }, status_kelembagaan: 'aktif' } }),
+        prisma.rts.count({ where: { desa_id: { in: desaDesaIds }, status_kelembagaan: 'aktif' } }),
+        prisma.posyandus.count({ where: { desa_id: { in: desaDesaIds }, status_kelembagaan: 'aktif' } }),
+        prisma.karang_tarunas.count({ where: { desa_id: { in: desaDesaIds }, status_kelembagaan: 'aktif' } }),
+        prisma.lpms.count({ where: { desa_id: { in: desaDesaIds }, status_kelembagaan: 'aktif' } }),
+        prisma.satlinmas.count({ where: { desa_id: { in: desaDesaIds }, status_kelembagaan: 'aktif' } }),
+        prisma.pkks.count({ where: { desa_id: { in: desaDesaIds }, status_kelembagaan: 'aktif' } }),
+        prisma.rws.count({ where: { desa_id: { in: desaKelurahanIds }, status_kelembagaan: 'aktif' } }),
+        prisma.rts.count({ where: { desa_id: { in: desaKelurahanIds }, status_kelembagaan: 'aktif' } }),
+        prisma.posyandus.count({ where: { desa_id: { in: desaKelurahanIds }, status_kelembagaan: 'aktif' } }),
+        prisma.karang_tarunas.count({ where: { desa_id: { in: desaKelurahanIds }, status_kelembagaan: 'aktif' } }),
+        prisma.lpms.count({ where: { desa_id: { in: desaKelurahanIds }, status_kelembagaan: 'aktif' } }),
+        prisma.satlinmas.count({ where: { desa_id: { in: desaKelurahanIds }, status_kelembagaan: 'aktif' } }),
+        prisma.pkks.count({ where: { desa_id: { in: desaKelurahanIds }, status_kelembagaan: 'aktif' } })
+      ]);
+
+      // Count pengurus by desa/kelurahan status
+      const desaActiveIds = {
+        rw: activeRws.filter(r => desaDesaIds.includes(r.desa_id)).map(r => r.id),
+        rt: activeRts.filter(r => desaDesaIds.includes(r.desa_id)).map(r => r.id),
+        posyandu: activePosyandus.filter(p => desaDesaIds.includes(p.desa_id)).map(p => p.id),
+        karangTaruna: activeKarangTarunas.filter(k => desaDesaIds.includes(k.desa_id)).map(k => k.id),
+        lpm: activeLpms.filter(l => desaDesaIds.includes(l.desa_id)).map(l => l.id),
+        satlinmas: activeSatlinmas.filter(s => desaDesaIds.includes(s.desa_id)).map(s => s.id),
+        pkk: activePkks.filter(p => desaDesaIds.includes(p.desa_id)).map(p => p.id)
+      };
+
+      const kelurahanActiveIds = {
+        rw: activeRws.filter(r => desaKelurahanIds.includes(r.desa_id)).map(r => r.id),
+        rt: activeRts.filter(r => desaKelurahanIds.includes(r.desa_id)).map(r => r.id),
+        posyandu: activePosyandus.filter(p => desaKelurahanIds.includes(p.desa_id)).map(p => p.id),
+        karangTaruna: activeKarangTarunas.filter(k => desaKelurahanIds.includes(k.desa_id)).map(k => k.id),
+        lpm: activeLpms.filter(l => desaKelurahanIds.includes(l.desa_id)).map(l => l.id),
+        satlinmas: activeSatlinmas.filter(s => desaKelurahanIds.includes(s.desa_id)).map(s => s.id),
+        pkk: activePkks.filter(p => desaKelurahanIds.includes(p.desa_id)).map(p => p.id)
+      };
+
+      const [
+        pengurusDesaRw, pengurusDesaRt, pengurusDesaPosyandu, pengurusDesaKarangTaruna, 
+        pengurusDesaLpm, pengurusDesaSatlinmas, pengurusDesaPkk,
+        pengurusKelurahanRw, pengurusKelurahanRt, pengurusKelurahanPosyandu, pengurusKelurahanKarangTaruna,
+        pengurusKelurahanLpm, pengurusKelurahanSatlinmas, pengurusKelurahanPkk
+      ] = await Promise.all([
+        prisma.pengurus.count({ where: { pengurusable_type: 'rws', pengurusable_id: { in: desaActiveIds.rw }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'rts', pengurusable_id: { in: desaActiveIds.rt }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'posyandus', pengurusable_id: { in: desaActiveIds.posyandu }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'karang_tarunas', pengurusable_id: { in: desaActiveIds.karangTaruna }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'lpms', pengurusable_id: { in: desaActiveIds.lpm }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'satlinmas', pengurusable_id: { in: desaActiveIds.satlinmas }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'pkks', pengurusable_id: { in: desaActiveIds.pkk }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'rws', pengurusable_id: { in: kelurahanActiveIds.rw }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'rts', pengurusable_id: { in: kelurahanActiveIds.rt }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'posyandus', pengurusable_id: { in: kelurahanActiveIds.posyandu }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'karang_tarunas', pengurusable_id: { in: kelurahanActiveIds.karangTaruna }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'lpms', pengurusable_id: { in: kelurahanActiveIds.lpm }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'satlinmas', pengurusable_id: { in: kelurahanActiveIds.satlinmas }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'pkks', pengurusable_id: { in: kelurahanActiveIds.pkk }, status_jabatan: 'aktif' } })
+      ]);
+
+      // Calculate formation percentages
+      const totalDesa = desaDesas.length + desaKelurahan.length;
+      const formationStats = {
+        karangTaruna: {
+          total: karangTarunaTotal,
+          aktif: karangTarunaTotal,
+          persentase: totalDesa > 0 ? Math.round((karangTarunaTotal / totalDesa) * 100) : 0
+        },
+        lpm: {
+          total: lpmTotal,
+          aktif: lpmTotal,
+          persentase: totalDesa > 0 ? Math.round((lpmTotal / totalDesa) * 100) : 0
+        },
+        satlinmas: {
+          total: satlinmasTotal,
+          aktif: satlinmasTotal,
+          persentase: totalDesa > 0 ? Math.round((satlinmasTotal / totalDesa) * 100) : 0
+        }
+      };
+
+      const [desaStats, kelurahanStats] = await Promise.all([
+        getStatsForStatus(desaDesaIds, desaDesas.length),
+        getStatsForStatus(desaKelurahanIds, desaKelurahan.length)
+      ]);
+
+      res.json({ 
+        success: true, 
+        data: { 
+          overview: {
+            kecamatan: kecamatanCount,
+            desa: desaDesas.length,
+            kelurahan: desaKelurahan.length,
+            desa_kelurahan_total: totalDesa
+          },
+          total_kelembagaan: {
+            rw: rwTotal,
+            rt: rtTotal,
+            posyandu: posyanduTotal,
+            karangTaruna: karangTarunaTotal,
+            lpm: lpmTotal,
+            satlinmas: satlinmasTotal,
+            pkk: pkkTotal
+          },
+          total_pengurus: {
+            rw: pengurusRw,
+            rt: pengurusRt,
+            posyandu: pengurusPosyandu,
+            karangTaruna: pengurusKarangTaruna,
+            lpm: pengurusLpm,
+            satlinmas: pengurusSatlinmas,
+            pkk: pengurusPkk
+          },
+          formation_stats: formationStats,
+          by_status: {
+            desa: {
+              count: desaDesas.length,
+              rw: rwDesa,
+              rt: rtDesa,
+              posyandu: posyanduDesa,
+              karangTaruna: karangTarunaDesa,
+              lpm: lpmDesa,
+              satlinmas: satlinmasDesa,
+              pkk: pkkDesa,
+              pengurus: {
+                rw: pengurusDesaRw,
+                rt: pengurusDesaRt,
+                posyandu: pengurusDesaPosyandu,
+                karangTaruna: pengurusDesaKarangTaruna,
+                lpm: pengurusDesaLpm,
+                satlinmas: pengurusDesaSatlinmas,
+                pkk: pengurusDesaPkk
+              }
+            },
+            kelurahan: {
+              count: desaKelurahan.length,
+              rw: rwKelurahan,
+              rt: rtKelurahan,
+              posyandu: posyanduKelurahan,
+              karangTaruna: karangTarunaKelurahan,
+              lpm: lpmKelurahan,
+              satlinmas: satlinmasKelurahan,
+              pkk: pkkKelurahan,
+              pengurus: {
+                rw: pengurusKelurahanRw,
+                rt: pengurusKelurahanRt,
+                posyandu: pengurusKelurahanPosyandu,
+                karangTaruna: pengurusKelurahanKarangTaruna,
+                lpm: pengurusKelurahanLpm,
+                satlinmas: pengurusKelurahanSatlinmas,
+                pkk: pengurusKelurahanPkk
+              }
+            }
+          },
+          desa: desaStats, 
+          kelurahan: kelurahanStats 
+        } 
+      });
+    } catch (error) {
+      console.error('Error in summary:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil summary kelembagaan', error: error.message });
+    }
+  }
+
+  async byKecamatan(req, res) {
+    try {
+      const { id } = req.params;
+      const kecamatan = await prisma.kecamatans.findUnique({
+        where: { id_kecamatan: parseInt(id) },
+        include: { desas: { select: { id_desa: true, nama_desa: true, status_pemerintahan: true } } }
+      });
+
+      if (!kecamatan) {
+        return res.status(404).json({ success: false, message: 'Kecamatan tidak ditemukan' });
+      }
+
+      const desaIds = kecamatan.desas.map(d => d.id_desa);
+      const [rwCount, rtCount, posyanduCount, karangTarunaCount, lpmCount, satlinmasCount, pkkCount] = await Promise.all([
+        prisma.rws.count({ where: { desa_id: { in: desaIds } } }),
+        prisma.rts.count({ where: { desa_id: { in: desaIds } } }),
+        prisma.posyandus.count({ where: { desa_id: { in: desaIds } } }),
+        prisma.karang_tarunas.count({ where: { desa_id: { in: desaIds } } }),
+        prisma.lpms.count({ where: { desa_id: { in: desaIds } } }),
+        prisma.satlinmas.count({ where: { desa_id: { in: desaIds } } }),
+        prisma.pkks.count({ where: { desa_id: { in: desaIds } } })
+      ]);
+
+      res.json({
+        success: true,
+        data: {
+          id_kecamatan: kecamatan.id_kecamatan,
+          nama_kecamatan: kecamatan.nama_kecamatan,
+          jumlah_desa: kecamatan.desas.length,
+          desas: kecamatan.desas,
+          kelembagaan: { rw: rwCount, rt: rtCount, posyandu: posyanduCount, karang_taruna: karangTarunaCount, lpm: lpmCount, satlinmas: satlinmasCount, pkk: pkkCount }
+        }
+      });
+    } catch (error) {
+      console.error('Error in byKecamatan:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data kelembagaan kecamatan', error: error.message });
+    }
+  }
+
+  async summaryByDesa(req, res) {
+    try {
+      const { id } = req.params;
+      const desa = await prisma.desas.findUnique({ where: { id_desa: parseInt(id) } });
+
+      if (!desa) {
+        return res.status(404).json({ success: false, message: 'Desa tidak ditemukan' });
+      }
+
+      const [rwCount, rtCount, posyanduCount, karangTarunaCount, lpmCount, satlinmasCount, pkkCount] = await Promise.all([
+        prisma.rws.count({ where: { desa_id: parseInt(id) } }),
+        prisma.rts.count({ where: { desa_id: parseInt(id) } }),
+        prisma.posyandus.count({ where: { desa_id: parseInt(id) } }),
+        prisma.karang_tarunas.count({ where: { desa_id: parseInt(id) } }),
+        prisma.lpms.count({ where: { desa_id: parseInt(id) } }),
+        prisma.satlinmas.count({ where: { desa_id: parseInt(id) } }),
+        prisma.pkks.count({ where: { desa_id: parseInt(id) } })
+      ]);
+
+      res.json({
+        success: true,
+        data: {
+          desa: { id_desa: desa.id_desa, nama_desa: desa.nama_desa, status_pemerintahan: desa.status_pemerintahan },
+          kelembagaan: { rw: rwCount, rt: rtCount, posyandu: posyanduCount, karang_taruna: karangTarunaCount, lpm: lpmCount, satlinmas: satlinmasCount, pkk: pkkCount, total: rwCount + rtCount + posyanduCount + karangTarunaCount + lpmCount + satlinmasCount + pkkCount }
+        }
+      });
+    } catch (error) {
+      console.error('Error in summaryByDesa:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil summary kelembagaan desa', error: error.message });
+    }
+  }
+
+  // Get complete kelembagaan data for admin (used by AdminKelembagaanDetailPage)
+  async getDesaKelembagaanDetail(req, res) {
+    try {
+      const { id } = req.params;
+      const desa = await prisma.desas.findUnique({ 
+        where: { id_desa: parseInt(id) },
+        include: {
+          kecamatans: {
+            select: { id_kecamatan: true, nama_kecamatan: true }
+          }
+        }
+      });
+
+      if (!desa) {
+        return res.status(404).json({ success: false, message: 'Desa tidak ditemukan' });
+      }
+
+      // Fetch all kelembagaan data
+      const [rws, posyandus, karangTaruna, lpm, satlinmas, pkk] = await Promise.all([
+        prisma.rws.findMany({ 
+          where: { desa_id: parseInt(id) },
+          orderBy: { nomor: 'asc' },
+          include: {
+            rts: {
+              select: { id: true }
+            }
+          }
+        }),
+        prisma.posyandus.findMany({ 
+          where: { desa_id: parseInt(id) },
+          orderBy: { nama: 'asc' }
+        }),
+        prisma.karang_tarunas.findFirst({ 
+          where: { desa_id: parseInt(id) }
+        }),
+        prisma.lpms.findFirst({ 
+          where: { desa_id: parseInt(id) }
+        }),
+        prisma.satlinmas.findFirst({ 
+          where: { desa_id: parseInt(id) }
+        }),
+        prisma.pkks.findFirst({ 
+          where: { desa_id: parseInt(id) }
+        })
+      ]);
+
+      // Map RW with RT count and provide frontend-compatible field names
+      const rwsWithRtCount = rws.map(rw => ({
+        id: rw.id,
+        nomor_rw: rw.nomor,
+        nomor: rw.nomor,
+        alamat: rw.alamat,
+        desa_id: rw.desa_id,
+        rt_count: rw.rts.length,
+        created_at: rw.created_at,
+        updated_at: rw.updated_at
+      }));
+
+      res.json({
+        success: true,
+        data: {
+          desa: {
+            id_desa: desa.id_desa,
+            nama_desa: desa.nama_desa,
+            nama_kecamatan: desa.kecamatans?.nama_kecamatan,
+            status_pemerintahan: desa.status_pemerintahan
+          },
+          kelembagaan: {
+            rw: rwsWithRtCount,
+            posyandu: posyandus,
+            karang_taruna: karangTaruna,
+            lpm: lpm,
+            satlinmas: satlinmas,
+            pkk: pkk
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error in getDesaKelembagaanDetail:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil detail kelembagaan desa', error: error.message });
+    }
+  }
+
+  async getDesaRW(req, res) {
+    try {
+      const { id } = req.params;
+      const rws = await prisma.rws.findMany({
+        where: { desa_id: parseInt(id) },
+        include: { desas: { select: { nama_desa: true, id_kecamatan: true, kecamatans: { select: { nama_kecamatan: true } } } } },
+        orderBy: { nomor: 'asc' }
+      });
+
+      res.json({
+        success: true,
+        data: rws.map(rw => ({
+          id: rw.id,
+          nomor_rw: rw.nomor,
+          nama_ketua: rw.nama_ketua,
+          status_kelembagaan: rw.status_kelembagaan,
+          jumlah_rt: rw.jumlah_rt,
+          desa: { id_desa: rw.desas.id_desa, nama_desa: rw.desas.nama_desa, kecamatan: rw.desas.kecamatans.nama_kecamatan }
+        }))
+      });
+    } catch (error) {
+      console.error('Error in getDesaRW:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data RW', error: error.message });
+    }
+  }
+
+  async listRT(req, res) {
+    try {
+      const { desa_id } = req.query;
+      const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
+      const rts = await prisma.rts.findMany({
+        where,
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } }, rws: { select: { nomor: true } } },
+        orderBy: [{ desa_id: 'asc' }, { nomor: 'asc' }]
+      });
+
+      res.json({
+        success: true,
+        data: rts.map(rt => ({
+          id: rt.id,
+          nomor_rt: rt.nomor,
+          nama_ketua: rt.nama_ketua,
+          status_kelembagaan: rt.status_kelembagaan,
+          jumlah_kk: rt.jumlah_kk,
+          rw: rt.rws ? rt.rws.nomor : null,
+          desa: { id_desa: rt.desas.id_desa, nama_desa: rt.desas.nama_desa, kecamatan: rt.desas.kecamatans.nama_kecamatan }
+        }))
+      });
+    } catch (error) {
+      console.error('Error in listRT:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data RT', error: error.message });
+    }
+  }
+
+  async listPosyandu(req, res) {
+    try {
+      const { desa_id } = req.query;
+      const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
+      const posyandus = await prisma.posyandus.findMany({
+        where,
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } },
+        orderBy: { nama: 'asc' }
+      });
+
+      res.json({
+        success: true,
+        data: posyandus.map(p => ({
+          id: p.id,
+          nama_posyandu: p.nama_posyandu,
+          nama_ketua: p.nama_ketua,
+          status_kelembagaan: p.status_kelembagaan,
+          jumlah_kader: p.jumlah_kader,
+          desa: { id_desa: p.desas.id_desa, nama_desa: p.desas.nama_desa, kecamatan: p.desas.kecamatans.nama_kecamatan }
+        }))
+      });
+    } catch (error) {
+      console.error('Error in listPosyandu:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data Posyandu', error: error.message });
+    }
+  }
+
+  async listKarangTaruna(req, res) {
+    try {
+      const { desa_id } = req.query;
+      const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
+      const karangTarunas = await prisma.karang_tarunas.findMany({
+        where,
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } },
+        orderBy: { nama: 'asc' }
+      });
+
+      res.json({
+        success: true,
+        data: karangTarunas.map(kt => ({
+          id: kt.id,
+          nama_karang_taruna: kt.nama_karang_taruna,
+          nama_ketua: kt.nama_ketua,
+          status_kelembagaan: kt.status_kelembagaan,
+          jumlah_anggota: kt.jumlah_anggota,
+          desa: { id_desa: kt.desas.id_desa, nama_desa: kt.desas.nama_desa, kecamatan: kt.desas.kecamatans.nama_kecamatan }
+        }))
+      });
+    } catch (error) {
+      console.error('Error in listKarangTaruna:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data Karang Taruna', error: error.message });
+    }
+  }
+
+  async listLPM(req, res) {
+    try {
+      const { desa_id } = req.query;
+      const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
+      const lpms = await prisma.lpms.findMany({
+        where,
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } },
+        orderBy: { nama: 'asc' }
+      });
+
+      res.json({
+        success: true,
+        data: lpms.map(lpm => ({
+          id: lpm.id,
+          nama_lpm: lpm.nama_lpm,
+          nama_ketua: lpm.nama_ketua,
+          status_kelembagaan: lpm.status_kelembagaan,
+          jumlah_anggota: lpm.jumlah_anggota,
+          desa: { id_desa: lpm.desas.id_desa, nama_desa: lpm.desas.nama_desa, kecamatan: lpm.desas.kecamatans.nama_kecamatan }
+        }))
+      });
+    } catch (error) {
+      console.error('Error in listLPM:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data LPM', error: error.message });
+    }
+  }
+
+  async listSatlinmas(req, res) {
+    try {
+      const { desa_id } = req.query;
+      const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
+      const satlinmas = await prisma.satlinmas.findMany({
+        where,
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } },
+        orderBy: { nama: 'asc' }
+      });
+
+      res.json({
+        success: true,
+        data: satlinmas.map(s => ({
+          id: s.id,
+          nama_satlinmas: s.nama_satlinmas,
+          nama_ketua: s.nama_ketua,
+          status_kelembagaan: s.status_kelembagaan,
+          jumlah_anggota: s.jumlah_anggota,
+          desa: { id_desa: s.desas.id_desa, nama_desa: s.desas.nama_desa, kecamatan: s.desas.kecamatans.nama_kecamatan }
+        }))
+      });
+    } catch (error) {
+      console.error('Error in listSatlinmas:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data Satlinmas', error: error.message });
+    }
+  }
+
+  async listPKK(req, res) {
+    try {
+      const { desa_id } = req.query;
+      const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
+      const pkks = await prisma.pkks.findMany({
+        where,
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } },
+        orderBy: { nama: 'asc' }
+      });
+
+      res.json({
+        success: true,
+        data: pkks.map(pkk => ({
+          id: pkk.id,
+          nama_pkk: pkk.nama_pkk,
+          nama_ketua: pkk.nama_ketua,
+          status_kelembagaan: pkk.status_kelembagaan,
+          jumlah_anggota: pkk.jumlah_anggota,
+          desa: { id_desa: pkk.desas.id_desa, nama_desa: pkk.desas.nama_desa, kecamatan: pkk.desas.kecamatans.nama_kecamatan }
+        }))
+      });
+    } catch (error) {
+      console.error('Error in listPKK:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data PKK', error: error.message });
+    }
+  }
+
+  async showRW(req, res) {
+    try {
+      const { id } = req.params;
+      const rw = await prisma.rws.findUnique({
+        where: { id: parseInt(id) },
+        include: {
+          desas: { select: { id_desa: true, nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } },
+          rts: { select: { id: true, nomor: true, nama_ketua: true, status_kelembagaan: true }, orderBy: { nomor: 'asc' } }
+        }
+      });
+
+      if (!rw) {
+        return res.status(404).json({ success: false, message: 'RW tidak ditemukan' });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          id: rw.id,
+          nomor_rw: rw.nomor,
+          nama_ketua: rw.nama_ketua,
+          status_kelembagaan: rw.status_kelembagaan,
+          jumlah_rt: rw.jumlah_rt,
+          alamat: rw.alamat,
+          desa: { id_desa: rw.desas.id_desa, nama_desa: rw.desas.nama_desa, kecamatan: rw.desas.kecamatans.nama_kecamatan },
+          rt_list: rw.rts.map(rt => ({...rt, nomor_rt: rt.nomor}))
+        }
+      });
+    } catch (error) {
+      console.error('Error in showRW:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil detail RW', error: error.message });
+    }
+  }
+
+  async showRT(req, res) {
+    try {
+      const { id } = req.params;
+      const rt = await prisma.rts.findUnique({
+        where: { id: parseInt(id) },
+        include: {
+          desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } },
+          rws: { select: { nomor: true } }
+        }
+      });
+
+      if (!rt) {
+        return res.status(404).json({ success: false, message: 'RT tidak ditemukan' });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          id: rt.id,
+          nomor_rt: rt.nomor,
+          nama_ketua: rt.nama_ketua,
+          status_kelembagaan: rt.status_kelembagaan,
+          jumlah_kk: rt.jumlah_kk,
+          alamat: rt.alamat,
+          rw: rt.rws ? rt.rws.nomor : null,
+          desa: { id_desa: rt.desas.id_desa, nama_desa: rt.desas.nama_desa, kecamatan: rt.desas.kecamatans.nama_kecamatan }
+        }
+      });
+    } catch (error) {
+      console.error('Error in showRT:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil detail RT', error: error.message });
+    }
+  }
+
+  async showPosyandu(req, res) {
+    try {
+      const { id } = req.params;
+      const posyandu = await prisma.posyandus.findUnique({
+        where: { id: parseInt(id) },
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } }
+      });
+
+      if (!posyandu) {
+        return res.status(404).json({ success: false, message: 'Posyandu tidak ditemukan' });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          id: posyandu.id,
+          nama_posyandu: posyandu.nama_posyandu,
+          nama_ketua: posyandu.nama_ketua,
+          status_kelembagaan: posyandu.status_kelembagaan,
+          jumlah_kader: posyandu.jumlah_kader,
+          alamat: posyandu.alamat,
+          desa: { id_desa: posyandu.desas.id_desa, nama_desa: posyandu.desas.nama_desa, kecamatan: posyandu.desas.kecamatans.nama_kecamatan }
+        }
+      });
+    } catch (error) {
+      console.error('Error in showPosyandu:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil detail Posyandu', error: error.message });
+    }
+  }
+
+  async showKarangTaruna(req, res) {
+    try {
+      const { id } = req.params;
+      const karangTaruna = await prisma.karang_tarunas.findUnique({
+        where: { id: parseInt(id) },
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } }
+      });
+
+      if (!karangTaruna) {
+        return res.status(404).json({ success: false, message: 'Karang Taruna tidak ditemukan' });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          id: karangTaruna.id,
+          nama_karang_taruna: karangTaruna.nama_karang_taruna,
+          nama_ketua: karangTaruna.nama_ketua,
+          status_kelembagaan: karangTaruna.status_kelembagaan,
+          jumlah_anggota: karangTaruna.jumlah_anggota,
+          alamat: karangTaruna.alamat,
+          desa: { id_desa: karangTaruna.desas.id_desa, nama_desa: karangTaruna.desas.nama_desa, kecamatan: karangTaruna.desas.kecamatans.nama_kecamatan }
+        }
+      });
+    } catch (error) {
+      console.error('Error in showKarangTaruna:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil detail Karang Taruna', error: error.message });
+    }
+  }
+
+  async showLPM(req, res) {
+    try {
+      const { id } = req.params;
+      const lpm = await prisma.lpms.findUnique({
+        where: { id: parseInt(id) },
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } }
+      });
+
+      if (!lpm) {
+        return res.status(404).json({ success: false, message: 'LPM tidak ditemukan' });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          id: lpm.id,
+          nama_lpm: lpm.nama_lpm,
+          nama_ketua: lpm.nama_ketua,
+          status_kelembagaan: lpm.status_kelembagaan,
+          jumlah_anggota: lpm.jumlah_anggota,
+          alamat: lpm.alamat,
+          desa: { id_desa: lpm.desas.id_desa, nama_desa: lpm.desas.nama_desa, kecamatan: lpm.desas.kecamatans.nama_kecamatan }
+        }
+      });
+    } catch (error) {
+      console.error('Error in showLPM:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil detail LPM', error: error.message });
+    }
+  }
+
+  async showSatlinmas(req, res) {
+    try {
+      const { id } = req.params;
+      const satlinmas = await prisma.satlinmas.findUnique({
+        where: { id: parseInt(id) },
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } }
+      });
+
+      if (!satlinmas) {
+        return res.status(404).json({ success: false, message: 'Satlinmas tidak ditemukan' });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          id: satlinmas.id,
+          nama_satlinmas: satlinmas.nama_satlinmas,
+          nama_ketua: satlinmas.nama_ketua,
+          status_kelembagaan: satlinmas.status_kelembagaan,
+          jumlah_anggota: satlinmas.jumlah_anggota,
+          alamat: satlinmas.alamat,
+          desa: { id_desa: satlinmas.desas.id_desa, nama_desa: satlinmas.desas.nama_desa, kecamatan: satlinmas.desas.kecamatans.nama_kecamatan }
+        }
+      });
+    } catch (error) {
+      console.error('Error in showSatlinmas:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil detail Satlinmas', error: error.message });
+    }
+  }
+
+  async showPKK(req, res) {
+    try {
+      const { id } = req.params;
+      const pkk = await prisma.pkks.findUnique({
+        where: { id: parseInt(id) },
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } }
+      });
+
+      if (!pkk) {
+        return res.status(404).json({ success: false, message: 'PKK tidak ditemukan' });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          id: pkk.id,
+          nama_pkk: pkk.nama_pkk,
+          nama_ketua: pkk.nama_ketua,
+          status_kelembagaan: pkk.status_kelembagaan,
+          jumlah_anggota: pkk.jumlah_anggota,
+          alamat: pkk.alamat,
+          desa: { id_desa: pkk.desas.id_desa, nama_desa: pkk.desas.nama_desa, kecamatan: pkk.desas.kecamatans.nama_kecamatan }
+        }
+      });
+    } catch (error) {
+      console.error('Error in showPKK:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil detail PKK', error: error.message });
+    }
+  }
+
+  async getDesaRT(req, res) {
+    try {
+      const { id } = req.params;
+      const rts = await prisma.rts.findMany({
+        where: { desa_id: parseInt(id) },
+        include: { rws: { select: { nomor: true } } },
+        orderBy: { nomor: 'asc' }
+      });
+
+      res.json({
+        success: true,
+        data: rts.map(rt => ({
+          id: rt.id,
+          nomor_rt: rt.nomor,
+          nama_ketua: rt.nama_ketua,
+          status_kelembagaan: rt.status_kelembagaan,
+          jumlah_kk: rt.jumlah_kk,
+          rw: rt.rws ? rt.rws.nomor : null
+        }))
+      });
+    } catch (error) {
+      console.error('Error in getDesaRT:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data RT desa', error: error.message });
+    }
+  }
+
+  async getDesaPosyandu(req, res) {
+    try {
+      const { id } = req.params;
+      const posyandus = await prisma.posyandus.findMany({
+        where: { desa_id: parseInt(id) },
+        orderBy: { nama: 'asc' }
+      });
+
+      res.json({ success: true, data: posyandus });
+    } catch (error) {
+      console.error('Error in getDesaPosyandu:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data Posyandu desa', error: error.message });
+    }
+  }
+
+  async getDesaKarangTaruna(req, res) {
+    try {
+      const { id } = req.params;
+      const karangTarunas = await prisma.karang_tarunas.findMany({
+        where: { desa_id: parseInt(id) },
+        orderBy: { nama: 'asc' }
+      });
+
+      res.json({ success: true, data: karangTarunas });
+    } catch (error) {
+      console.error('Error in getDesaKarangTaruna:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data Karang Taruna desa', error: error.message });
+    }
+  }
+
+  async getDesaLPM(req, res) {
+    try {
+      const { id } = req.params;
+      const lpms = await prisma.lpms.findMany({
+        where: { desa_id: parseInt(id) },
+        orderBy: { nama: 'asc' }
+      });
+
+      res.json({ success: true, data: lpms });
+    } catch (error) {
+      console.error('Error in getDesaLPM:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data LPM desa', error: error.message });
+    }
+  }
+
+  async getDesaSatlinmas(req, res) {
+    try {
+      const { id } = req.params;
+      const satlinmas = await prisma.satlinmas.findMany({
+        where: { desa_id: parseInt(id) },
+        orderBy: { nama: 'asc' }
+      });
+
+      res.json({ success: true, data: satlinmas });
+    } catch (error) {
+      console.error('Error in getDesaSatlinmas:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data Satlinmas desa', error: error.message });
+    }
+  }
+
+  async getDesaPKK(req, res) {
+    try {
+      const { id } = req.params;
+      const pkks = await prisma.pkks.findMany({
+        where: { desa_id: parseInt(id) },
+        orderBy: { nama: 'asc' }
+      });
+
+      res.json({ success: true, data: pkks });
+    } catch (error) {
+      console.error('Error in getDesaPKK:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data PKK desa', error: error.message });
+    }
+  }
+
+  async getPengurusByKelembagaan(req, res) {
+    try {
+      const { kelembagaan_type, kelembagaan_id } = req.query;
+
+      if (!kelembagaan_type || !kelembagaan_id) {
+        return res.status(400).json({ success: false, message: 'Parameter kelembagaan_type dan kelembagaan_id harus diisi' });
+      }
+
+      const pengurus = await prisma.pengurus.findMany({
+        where: { pengurusable_type: kelembagaan_type, pengurusable_id: parseInt(kelembagaan_id) },
+        orderBy: { jabatan: 'asc' }
+      });
+
+      res.json({ success: true, data: pengurus });
+    } catch (error) {
+      console.error('Error in getPengurusByKelembagaan:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data pengurus', error: error.message });
+    }
+  }
+
+  async getPengurusHistory(req, res) {
+    try {
+      const { kelembagaan_type, kelembagaan_id } = req.query;
+
+      if (!kelembagaan_type || !kelembagaan_id) {
+        return res.status(400).json({ success: false, message: 'Parameter kelembagaan_type dan kelembagaan_id harus diisi' });
+      }
+
+      const pengurus = await prisma.pengurus.findMany({
+        where: { pengurusable_type: kelembagaan_type, pengurusable_id: parseInt(kelembagaan_id) },
+        orderBy: [{ is_active: 'desc' }, { jabatan: 'asc' }]
+      });
+
+      res.json({ success: true, data: pengurus });
+    } catch (error) {
+      console.error('Error in getPengurusHistory:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil riwayat pengurus', error: error.message });
+    }
+  }
+
+  async showPengurus(req, res) {
+    try {
+      const { id } = req.params;
+      const pengurus = await prisma.pengurus.findUnique({
+        where: { id: parseInt(id) }
+      });
+
+      if (!pengurus) {
+        return res.status(404).json({ success: false, message: 'Pengurus tidak ditemukan' });
+      }
+
+      res.json({ success: true, data: pengurus });
+    } catch (error) {
+      console.error('Error in showPengurus:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil detail pengurus', error: error.message });
+    }
+  }
+
+  // ==================== DESA ROLE METHODS ====================
+  // Methods for desa role to manage their own kelembagaan
+  // Matches Laravel pattern: /api/desa/rw, /api/desa/rt, etc.
+
+  /**
+   * Get summary for logged-in desa
+   * GET /api/desa/kelembagaan/summary
+   */
+  async getDesaSummary(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const desaId = user.desa_id;
+
+      const [rt, rw, posyandu, karangTaruna, lpm, satlinmas, pkk] = await Promise.all([
+        prisma.rts.count({ where: { desa_id: desaId } }),
+        prisma.rws.count({ where: { desa_id: desaId } }),
+        prisma.posyandus.count({ where: { desa_id: desaId } }),
+        prisma.karang_tarunas.count({ where: { desa_id: desaId } }),
+        prisma.lpms.count({ where: { desa_id: desaId } }),
+        prisma.satlinmas.count({ where: { desa_id: desaId } }),
+        prisma.pkks.count({ where: { desa_id: desaId } })
+      ]);
+
+      const summary = {
+        rt,
+        rw,
+        posyandu,
+        karang_taruna: karangTaruna,
+        lpm,
+        satlinmas,
+        pkk,
+        karang_taruna_formed: karangTaruna > 0,
+        lpm_formed: lpm > 0,
+        satlinmas_formed: satlinmas > 0,
+        pkk_formed: pkk > 0,
+        total: rt + rw + posyandu + karangTaruna + lpm + satlinmas + pkk
+      };
+
+      res.json({ success: true, data: summary });
+    } catch (error) {
+      console.error('Error in getDesaSummary:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil summary kelembagaan', error: error.message });
+    }
+  }
+
+  /**
+   * List RW for logged-in desa
+   * GET /api/desa/rw
+   */
+  async listDesaRW(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const items = await prisma.rws.findMany({
+        where: { desa_id: user.desa_id },
+        include: {
+          rts: {
+            select: { id: true }
+          }
+        },
+        orderBy: { nomor: 'asc' }
+      });
+
+      const formatted = items.map(item => ({
+        ...item,
+        jumlah_rt: item.rts?.length || 0,
+        rts: undefined // Remove relation from response
+      }));
+
+      res.json({ success: true, data: formatted });
+    } catch (error) {
+      console.error('Error in listDesaRW:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data RW', error: error.message });
+    }
+  }
+
+  /**
+   * Show single RW for logged-in desa
+   * GET /api/desa/rw/:id
+   */
+  async showDesaRW(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.rws.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id },
+        include: {
+          rts: true,
+          desas: true
+        }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'RW tidak ditemukan' });
+      }
+
+      res.json({ success: true, data: item });
+    } catch (error) {
+      console.error('Error in showDesaRW:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil detail RW', error: error.message });
+    }
+  }
+
+  /**
+   * Create RW for logged-in desa
+   * POST /api/desa/rw
+   */
+  async createRW(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const { nomor, alamat, status_kelembagaan } = req.body;
+
+      if (!nomor) {
+        return res.status(400).json({ success: false, message: 'Nomor RW harus diisi' });
+      }
+
+      const item = await prisma.rws.create({
+        data: {
+          id: uuidv4(),
+          desa_id: user.desa_id,
+          nomor: nomor.toString(),
+          alamat: alamat || null,
+          status_kelembagaan: status_kelembagaan || 'aktif'
+        }
+      });
+
+      res.status(201).json({ success: true, data: item });
+    } catch (error) {
+      console.error('Error in createRW:', error);
+      res.status(500).json({ success: false, message: 'Gagal membuat RW', error: error.message });
+    }
+  }
+
+  /**
+   * Update RW for logged-in desa
+   * PUT /api/desa/rw/:id
+   */
+  async updateRW(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.rws.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'RW tidak ditemukan' });
+      }
+
+      const { nomor, alamat, status_kelembagaan } = req.body;
+
+      const updated = await prisma.rws.update({
+        where: { id: String(req.params.id) },
+        data: {
+          nomor: nomor || item.nomor,
+          alamat: alamat !== undefined ? alamat : item.alamat,
+          status_kelembagaan: status_kelembagaan || item.status_kelembagaan
+        }
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in updateRW:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengupdate RW', error: error.message });
+    }
+  }
+
+  /**
+   * Delete RW for logged-in desa
+   * DELETE /api/desa/rw/:id
+   */
+  async deleteRW(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.rws.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'RW tidak ditemukan' });
+      }
+
+      await prisma.rws.delete({
+        where: { id: String(req.params.id) }
+      });
+
+      res.json({ success: true, message: 'RW berhasil dihapus' });
+    } catch (error) {
+      console.error('Error in deleteRW:', error);
+      res.status(500).json({ success: false, message: 'Gagal menghapus RW', error: error.message });
+    }
+  }
+
+  /**
+   * Toggle RW status
+   * PUT /api/desa/rw/:id/toggle-status
+   */
+  async toggleRWStatus(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.rws.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'RW tidak ditemukan' });
+      }
+
+      const { status_kelembagaan } = req.body;
+
+      const updated = await prisma.rws.update({
+        where: { id: String(req.params.id) },
+        data: { status_kelembagaan }
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in toggleRWStatus:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengubah status RW', error: error.message });
+    }
+  }
+
+  // RT Methods - Similar to RW
+  async listDesaRT(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const items = await prisma.rts.findMany({
+        where: { desa_id: user.desa_id },
+        include: {
+          rws: {
+            select: { id: true, nomor: true }
+          }
+        },
+        orderBy: { nomor: 'asc' }
+      });
+
+      res.json({ success: true, data: items });
+    } catch (error) {
+      console.error('Error in listDesaRT:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data RT', error: error.message });
+    }
+  }
+
+  async showDesaRT(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.rts.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id },
+        include: {
+          rws: true,
+          desas: true
+        }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'RT tidak ditemukan' });
+      }
+
+      res.json({ success: true, data: item });
+    } catch (error) {
+      console.error('Error in showDesaRT:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil detail RT', error: error.message });
+    }
+  }
+
+  async createRT(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const { nomor, rw_id, alamat, status_kelembagaan } = req.body;
+
+      if (!nomor || !rw_id) {
+        return res.status(400).json({ success: false, message: 'Nomor RT dan RW harus diisi' });
+      }
+
+      const item = await prisma.rts.create({
+        data: {
+          id: uuidv4(),
+          desa_id: user.desa_id,
+          // rw_id stored as UUID string in DB
+          rw_id: String(rw_id),
+          nomor: nomor.toString(),
+          alamat: alamat || null,
+          status_kelembagaan: status_kelembagaan || 'aktif'
+        }
+      });
+
+      res.status(201).json({ success: true, data: item });
+    } catch (error) {
+      console.error('Error in createRT:', error);
+      res.status(500).json({ success: false, message: 'Gagal membuat RT', error: error.message });
+    }
+  }
+
+  async updateRT(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.rts.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'RT tidak ditemukan' });
+      }
+
+      const { nomor, rw_id, alamat, status_kelembagaan } = req.body;
+
+      const updated = await prisma.rts.update({
+        where: { id: String(req.params.id) },
+        data: {
+          nomor: nomor || item.nomor,
+          rw_id: rw_id ? parseInt(rw_id) : item.rw_id,
+          alamat: alamat !== undefined ? alamat : item.alamat,
+          status_kelembagaan: status_kelembagaan || item.status_kelembagaan
+        }
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in updateRT:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengupdate RT', error: error.message });
+    }
+  }
+
+  async deleteRT(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.rts.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'RT tidak ditemukan' });
+      }
+
+      await prisma.rts.delete({
+        where: { id: String(req.params.id) }
+      });
+
+      res.json({ success: true, message: 'RT berhasil dihapus' });
+    } catch (error) {
+      console.error('Error in deleteRT:', error);
+      res.status(500).json({ success: false, message: 'Gagal menghapus RT', error: error.message });
+    }
+  }
+
+  async toggleRTStatus(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.rts.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'RT tidak ditemukan' });
+      }
+
+      const { status_kelembagaan } = req.body;
+
+      const updated = await prisma.rts.update({
+        where: { id: String(req.params.id) },
+        data: { status_kelembagaan }
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in toggleRTStatus:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengubah status RT', error: error.message });
+    }
+  }
+
+  // Posyandu Methods
+  async listDesaPosyandu(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const items = await prisma.posyandus.findMany({
+        where: { desa_id: user.desa_id },
+        orderBy: { nama: 'asc' }
+      });
+
+      res.json({ success: true, data: items });
+    } catch (error) {
+      console.error('Error in listDesaPosyandu:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data Posyandu', error: error.message });
+    }
+  }
+
+  async showDesaPosyandu(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.posyandus.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id },
+        include: { desas: true }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'Posyandu tidak ditemukan' });
+      }
+
+      res.json({ success: true, data: item });
+    } catch (error) {
+      console.error('Error in showDesaPosyandu:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil detail Posyandu', error: error.message });
+    }
+  }
+
+  async createPosyandu(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const { nama, alamat, status_kelembagaan } = req.body;
+
+      if (!nama) {
+        return res.status(400).json({ success: false, message: 'Nama Posyandu harus diisi' });
+      }
+
+      const item = await prisma.posyandus.create({
+        data: {
+          id: uuidv4(),
+          desa_id: user.desa_id,
+          nama,
+          alamat: alamat || null,
+          status_kelembagaan: status_kelembagaan || 'aktif'
+        }
+      });
+
+      res.status(201).json({ success: true, data: item });
+    } catch (error) {
+      console.error('Error in createPosyandu:', error);
+      res.status(500).json({ success: false, message: 'Gagal membuat Posyandu', error: error.message });
+    }
+  }
+
+  async updatePosyandu(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.posyandus.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'Posyandu tidak ditemukan' });
+      }
+
+      const { nama, alamat, status_kelembagaan } = req.body;
+
+      const updated = await prisma.posyandus.update({
+        where: { id: String(req.params.id) },
+        data: {
+          nama: nama || item.nama,
+          alamat: alamat !== undefined ? alamat : item.alamat,
+          status_kelembagaan: status_kelembagaan || item.status_kelembagaan
+        }
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in updatePosyandu:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengupdate Posyandu', error: error.message });
+    }
+  }
+
+  async deletePosyandu(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.posyandus.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'Posyandu tidak ditemukan' });
+      }
+
+      await prisma.posyandus.delete({
+        where: { id: String(req.params.id) }
+      });
+
+      res.json({ success: true, message: 'Posyandu berhasil dihapus' });
+    } catch (error) {
+      console.error('Error in deletePosyandu:', error);
+      res.status(500).json({ success: false, message: 'Gagal menghapus Posyandu', error: error.message });
+    }
+  }
+
+  async togglePosyanduStatus(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.posyandus.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'Posyandu tidak ditemukan' });
+      }
+
+      const { status_kelembagaan } = req.body;
+
+      const updated = await prisma.posyandus.update({
+        where: { id: String(req.params.id) },
+        data: { status_kelembagaan }
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in togglePosyanduStatus:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengubah status Posyandu', error: error.message });
+    }
+  }
+
+  // Placeholder methods for other kelembagaan types (to be implemented)
+  // ==========================================
+  // KARANG TARUNA METHODS (Singleton)
+  // ==========================================
+  async listDesaKarangTaruna(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const items = await prisma.karang_tarunas.findMany({
+        where: { desa_id: user.desa_id },
+        orderBy: { created_at: 'desc' }
+      });
+
+      res.json({ success: true, data: items });
+    } catch (error) {
+      console.error('Error in listDesaKarangTaruna:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data Karang Taruna', error: error.message });
+    }
+  }
+
+  async showDesaKarangTaruna(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.karang_tarunas.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id },
+        include: { desas: true }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'Karang Taruna tidak ditemukan' });
+      }
+
+      res.json({ success: true, data: item });
+    } catch (error) {
+      console.error('Error in showDesaKarangTaruna:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil detail Karang Taruna', error: error.message });
+    }
+  }
+
+  async createKarangTaruna(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      // Check if already exists for this desa
+      const existing = await prisma.karang_tarunas.findFirst({
+        where: { desa_id: user.desa_id }
+      });
+
+      if (existing) {
+        return res.status(400).json({ success: false, message: 'Karang Taruna sudah dibentuk untuk desa ini' });
+      }
+
+      const { nama, alamat, status_kelembagaan } = req.body;
+
+      const item = await prisma.karang_tarunas.create({
+        data: {
+          id: uuidv4(),
+          desa_id: user.desa_id,
+          nama: nama || 'Karang Taruna',
+          alamat: alamat || null,
+          status_kelembagaan: status_kelembagaan || 'aktif'
+        }
+      });
+
+      res.status(201).json({ success: true, data: item });
+    } catch (error) {
+      console.error('Error in createKarangTaruna:', error);
+      res.status(500).json({ success: false, message: 'Gagal membuat Karang Taruna', error: error.message });
+    }
+  }
+
+  async updateKarangTaruna(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.karang_tarunas.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'Karang Taruna tidak ditemukan' });
+      }
+
+      const { nama, alamat, status_kelembagaan } = req.body;
+
+      const updated = await prisma.karang_tarunas.update({
+        where: { id: String(req.params.id) },
+        data: {
+          nama: nama || item.nama,
+          alamat: alamat !== undefined ? alamat : item.alamat,
+          status_kelembagaan: status_kelembagaan || item.status_kelembagaan
+        }
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in updateKarangTaruna:', error);
+      res.status(500).json({ success: false, message: 'Gagal update Karang Taruna', error: error.message });
+    }
+  }
+
+  async deleteKarangTaruna(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.karang_tarunas.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'Karang Taruna tidak ditemukan' });
+      }
+
+      await prisma.karang_tarunas.delete({
+        where: { id: String(req.params.id) }
+      });
+
+      res.json({ success: true, message: 'Karang Taruna berhasil dihapus' });
+    } catch (error) {
+      console.error('Error in deleteKarangTaruna:', error);
+      res.status(500).json({ success: false, message: 'Gagal menghapus Karang Taruna', error: error.message });
+    }
+  }
+
+  async toggleKarangTarunaStatus(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.karang_tarunas.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'Karang Taruna tidak ditemukan' });
+      }
+
+      const { status_kelembagaan } = req.body;
+      if (!status_kelembagaan) {
+        return res.status(400).json({ success: false, message: 'Status kelembagaan harus diisi' });
+      }
+
+      const updated = await prisma.karang_tarunas.update({
+        where: { id: String(req.params.id) },
+        data: { status_kelembagaan }
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in toggleKarangTarunaStatus:', error);
+      res.status(500).json({ success: false, message: 'Gagal toggle status', error: error.message });
+    }
+  }
+
+  // ==========================================
+  // LPM METHODS (Singleton)
+  // ==========================================
+  async listDesaLPM(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const items = await prisma.lpms.findMany({
+        where: { desa_id: user.desa_id },
+        orderBy: { created_at: 'desc' }
+      });
+
+      res.json({ success: true, data: items });
+    } catch (error) {
+      console.error('Error in listDesaLPM:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data LPM', error: error.message });
+    }
+  }
+
+  async showDesaLPM(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.lpms.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id },
+        include: { desas: true }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'LPM tidak ditemukan' });
+      }
+
+      res.json({ success: true, data: item });
+    } catch (error) {
+      console.error('Error in showDesaLPM:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil detail LPM', error: error.message });
+    }
+  }
+
+  async createLPM(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      // Check if already exists for this desa
+      const existing = await prisma.lpms.findFirst({
+        where: { desa_id: user.desa_id }
+      });
+
+      if (existing) {
+        return res.status(400).json({ success: false, message: 'LPM sudah dibentuk untuk desa ini' });
+      }
+
+      const { nama, alamat, status_kelembagaan } = req.body;
+
+      const item = await prisma.lpms.create({
+        data: {
+          id: uuidv4(),
+          desa_id: user.desa_id,
+          nama: nama || 'Lembaga Pemberdayaan Masyarakat',
+          alamat: alamat || null,
+          status_kelembagaan: status_kelembagaan || 'aktif'
+        }
+      });
+
+      res.status(201).json({ success: true, data: item });
+    } catch (error) {
+      console.error('Error in createLPM:', error);
+      res.status(500).json({ success: false, message: 'Gagal membuat LPM', error: error.message });
+    }
+  }
+
+  async updateLPM(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.lpms.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'LPM tidak ditemukan' });
+      }
+
+      const { nama, alamat, status_kelembagaan } = req.body;
+
+      const updated = await prisma.lpms.update({
+        where: { id: String(req.params.id) },
+        data: {
+          nama: nama || item.nama,
+          alamat: alamat !== undefined ? alamat : item.alamat,
+          status_kelembagaan: status_kelembagaan || item.status_kelembagaan
+        }
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in updateLPM:', error);
+      res.status(500).json({ success: false, message: 'Gagal update LPM', error: error.message });
+    }
+  }
+
+  async deleteLPM(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.lpms.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'LPM tidak ditemukan' });
+      }
+
+      await prisma.lpms.delete({
+        where: { id: String(req.params.id) }
+      });
+
+      res.json({ success: true, message: 'LPM berhasil dihapus' });
+    } catch (error) {
+      console.error('Error in deleteLPM:', error);
+      res.status(500).json({ success: false, message: 'Gagal menghapus LPM', error: error.message });
+    }
+  }
+
+  async toggleLPMStatus(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.lpms.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'LPM tidak ditemukan' });
+      }
+
+      const { status_kelembagaan } = req.body;
+      if (!status_kelembagaan) {
+        return res.status(400).json({ success: false, message: 'Status kelembagaan harus diisi' });
+      }
+
+      const updated = await prisma.lpms.update({
+        where: { id: String(req.params.id) },
+        data: { status_kelembagaan }
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in toggleLPMStatus:', error);
+      res.status(500).json({ success: false, message: 'Gagal toggle status', error: error.message });
+    }
+  }
+
+  // ==========================================
+  // SATLINMAS METHODS (Singleton)
+  // ==========================================
+  async listDesaSatlinmas(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const items = await prisma.satlinmas.findMany({
+        where: { desa_id: user.desa_id },
+        orderBy: { created_at: 'desc' }
+      });
+
+      res.json({ success: true, data: items });
+    } catch (error) {
+      console.error('Error in listDesaSatlinmas:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data Satlinmas', error: error.message });
+    }
+  }
+
+  async showDesaSatlinmas(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.satlinmas.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id },
+        include: { desas: true }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'Satlinmas tidak ditemukan' });
+      }
+
+      res.json({ success: true, data: item });
+    } catch (error) {
+      console.error('Error in showDesaSatlinmas:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil detail Satlinmas', error: error.message });
+    }
+  }
+
+  async createSatlinmas(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      // Check if already exists for this desa
+      const existing = await prisma.satlinmas.findFirst({
+        where: { desa_id: user.desa_id }
+      });
+
+      if (existing) {
+        return res.status(400).json({ success: false, message: 'Satlinmas sudah dibentuk untuk desa ini' });
+      }
+
+      const { nama, alamat, status_kelembagaan } = req.body;
+
+      const item = await prisma.satlinmas.create({
+        data: {
+          id: uuidv4(),
+          desa_id: user.desa_id,
+          nama: nama || 'Satuan Perlindungan Masyarakat',
+          alamat: alamat || null,
+          status_kelembagaan: status_kelembagaan || 'aktif'
+        }
+      });
+
+      res.status(201).json({ success: true, data: item });
+    } catch (error) {
+      console.error('Error in createSatlinmas:', error);
+      res.status(500).json({ success: false, message: 'Gagal membuat Satlinmas', error: error.message });
+    }
+  }
+
+  async updateSatlinmas(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.satlinmas.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'Satlinmas tidak ditemukan' });
+      }
+
+      const { nama, alamat, status_kelembagaan } = req.body;
+
+      const updated = await prisma.satlinmas.update({
+        where: { id: String(req.params.id) },
+        data: {
+          nama: nama || item.nama,
+          alamat: alamat !== undefined ? alamat : item.alamat,
+          status_kelembagaan: status_kelembagaan || item.status_kelembagaan
+        }
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in updateSatlinmas:', error);
+      res.status(500).json({ success: false, message: 'Gagal update Satlinmas', error: error.message });
+    }
+  }
+
+  async deleteSatlinmas(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.satlinmas.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'Satlinmas tidak ditemukan' });
+      }
+
+      await prisma.satlinmas.delete({
+        where: { id: String(req.params.id) }
+      });
+
+      res.json({ success: true, message: 'Satlinmas berhasil dihapus' });
+    } catch (error) {
+      console.error('Error in deleteSatlinmas:', error);
+      res.status(500).json({ success: false, message: 'Gagal menghapus Satlinmas', error: error.message });
+    }
+  }
+
+  async toggleSatlinmasStatus(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.satlinmas.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'Satlinmas tidak ditemukan' });
+      }
+
+      const { status_kelembagaan } = req.body;
+      if (!status_kelembagaan) {
+        return res.status(400).json({ success: false, message: 'Status kelembagaan harus diisi' });
+      }
+
+      const updated = await prisma.satlinmas.update({
+        where: { id: String(req.params.id) },
+        data: { status_kelembagaan }
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in toggleSatlinmasStatus:', error);
+      res.status(500).json({ success: false, message: 'Gagal toggle status', error: error.message });
+    }
+  }
+
+  // ==========================================
+  // PKK METHODS (Singleton)
+  // ==========================================
+  async listDesaPKK(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const items = await prisma.pkks.findMany({
+        where: { desa_id: user.desa_id },
+        orderBy: { created_at: 'desc' }
+      });
+
+      res.json({ success: true, data: items });
+    } catch (error) {
+      console.error('Error in listDesaPKK:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data PKK', error: error.message });
+    }
+  }
+
+  async showDesaPKK(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.pkks.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id },
+        include: { desas: true }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'PKK tidak ditemukan' });
+      }
+
+      res.json({ success: true, data: item });
+    } catch (error) {
+      console.error('Error in showDesaPKK:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil detail PKK', error: error.message });
+    }
+  }
+
+  async createPKK(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      // Check if already exists for this desa
+      const existing = await prisma.pkks.findFirst({
+        where: { desa_id: user.desa_id }
+      });
+
+      if (existing) {
+        return res.status(400).json({ success: false, message: 'PKK sudah dibentuk untuk desa ini' });
+      }
+
+      const { nama, alamat, status_kelembagaan } = req.body;
+
+      const item = await prisma.pkks.create({
+        data: {
+          id: uuidv4(),
+          desa_id: user.desa_id,
+          nama: nama || 'Pemberdayaan Kesejahteraan Keluarga',
+          alamat: alamat || null,
+          status_kelembagaan: status_kelembagaan || 'aktif'
+        }
+      });
+
+      res.status(201).json({ success: true, data: item });
+    } catch (error) {
+      console.error('Error in createPKK:', error);
+      res.status(500).json({ success: false, message: 'Gagal membuat PKK', error: error.message });
+    }
+  }
+
+  async updatePKK(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.pkks.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'PKK tidak ditemukan' });
+      }
+
+      const { nama, alamat, status_kelembagaan } = req.body;
+
+      const updated = await prisma.pkks.update({
+        where: { id: String(req.params.id) },
+        data: {
+          nama: nama || item.nama,
+          alamat: alamat !== undefined ? alamat : item.alamat,
+          status_kelembagaan: status_kelembagaan || item.status_kelembagaan
+        }
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in updatePKK:', error);
+      res.status(500).json({ success: false, message: 'Gagal update PKK', error: error.message });
+    }
+  }
+
+  async deletePKK(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.pkks.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'PKK tidak ditemukan' });
+      }
+
+      await prisma.pkks.delete({
+        where: { id: String(req.params.id) }
+      });
+
+      res.json({ success: true, message: 'PKK berhasil dihapus' });
+    } catch (error) {
+      console.error('Error in deletePKK:', error);
+      res.status(500).json({ success: false, message: 'Gagal menghapus PKK', error: error.message });
+    }
+  }
+
+  async togglePKKStatus(req, res) {
+    try {
+      const user = req.user;
+      if (!user || !user.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.pkks.findFirst({
+        where: { id: String(req.params.id), desa_id: user.desa_id }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'PKK tidak ditemukan' });
+      }
+
+      const { status_kelembagaan } = req.body;
+      if (!status_kelembagaan) {
+        return res.status(400).json({ success: false, message: 'Status kelembagaan harus diisi' });
+      }
+
+      const updated = await prisma.pkks.update({
+        where: { id: String(req.params.id) },
+        data: { status_kelembagaan }
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in togglePKKStatus:', error);
+      res.status(500).json({ success: false, message: 'Gagal toggle status', error: error.message });
+    }
+  }
+
+  // Stub methods for Pengurus - to be implemented
+  async listDesaPengurus(req, res) { res.json({ success: true, data: [] }); }
+  async showDesaPengurus(req, res) { res.json({ success: true, data: null }); }
+  async createPengurus(req, res) { res.json({ success: true, data: {} }); }
+  async updatePengurus(req, res) { res.json({ success: true, data: {} }); }
+  async deletePengurus(req, res) { res.json({ success: true, message: 'Deleted' }); }
+  async updatePengurusStatus(req, res) { res.json({ success: true, data: {} }); }
+}
+
+module.exports = new KelembagaanController();
