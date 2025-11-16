@@ -63,4 +63,12 @@ router.delete('/:id', auth, (req, res) => produkHukumController.destroy(req, res
  */
 router.put('/:id/status', auth, (req, res) => produkHukumController.updateStatus(req, res));
 
+/**
+ * @route   GET /api/produk-hukum/:id/download
+ * @desc    Download PDF file of produk hukum
+ * @access  Private (requires authentication)
+ * @params  id - UUID of produk hukum
+ */
+router.get('/:id/download', auth, (req, res) => produkHukumController.download(req, res));
+
 module.exports = router;

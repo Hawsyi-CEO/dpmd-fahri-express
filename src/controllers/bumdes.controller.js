@@ -21,7 +21,7 @@ class BumdesController {
       logger.info(`Fetching BUMDES for desa_id: ${desaId}`);
 
       const bumdes = await prisma.bumdes.findFirst({
-        where: { id_desa: desaId }
+        where: { desa_id: desaId }
       });
 
       return res.json({
@@ -52,6 +52,77 @@ class BumdesController {
 
       const data = req.body;
       
+      // Log received data untuk debugging
+      logger.info('BUMDES Data Received:', {
+        namabumdesa: data.namabumdesa,
+        desa_id: data.desa_id,
+        kode_desa: data.kode_desa,
+        fields_count: Object.keys(data).length
+      });
+      
+      // Validate required field
+      if (!data.namabumdesa || data.namabumdesa.trim() === '') {
+        return res.status(400).json({
+          success: false,
+          message: 'Nama BUMDes harus diisi',
+          error: 'Field namabumdesa is required'
+        });
+      }
+
+      // Fix field name typos from frontend
+      if (data.AlamatBumdes) {
+        data.AlamatBumdesa = data.AlamatBumdes;
+        delete data.AlamatBumdes;
+      }
+      if (data.NoHpBumdes) {
+        data.TelfonBumdes = data.NoHpBumdes;
+        delete data.NoHpBumdes;
+      }
+      if (data.EmailBumdes) {
+        data.Alamatemail = data.EmailBumdes;
+        delete data.EmailBumdes;
+      }
+      if (data.NoPerdes) {
+        data.NomorPerdes = data.NoPerdes;
+        delete data.NoPerdes;
+      }
+
+      // Remove fields that don't exist in schema or need special handling
+      const invalidFields = [
+        'TanggalPerdes', 'NoSKKemenkumham', 'TanggalSKKemenkumham',
+        'TenagaKerjaLaki', 'TenagaKerjaPerempuan', 'KelasUsaha', 
+        'StatusUsaha', 'ModalAwal', 'ModalSekarang', 'Aset', 
+        'KekayaanBersih', 'Omzet2022', 'SHU2022', 'SHU2023', 
+        'SHU2024', 'Laba2022', 'PotensiWisata', 'OVOP', 
+        'DesaWisata', 'KontribusiPADesRP', 'KontribusiPADesPersen',
+        'PeranOVOP', 'PeranKetapang2025', 'PeranDesaWisata',
+        'upload_status', 'AlamatBumdes', 'NoHpBumdes', 'EmailBumdes', 'NoPerdes',
+        'produk_hukum_perdes_id', 'produk_hukum_sk_bumdes_id'  // Remove FK fields - not supported in create
+      ];
+      
+      invalidFields.forEach(field => {
+        if (data[field] !== undefined) {
+          delete data[field];
+        }
+      });
+
+      // Convert empty strings to null for optional fields
+      Object.keys(data).forEach(key => {
+        if (data[key] === '') {
+          data[key] = null;
+        }
+      });
+
+      logger.info('BUMDES Data After Cleanup:', {
+        namabumdesa: data.namabumdesa,
+        has_AlamatBumdes: !!data.AlamatBumdes,
+        has_AlamatBumdesa: !!data.AlamatBumdesa,
+        has_NoHpBumdes: !!data.NoHpBumdes,
+        produk_hukum_perdes_id: data.produk_hukum_perdes_id,
+        produk_hukum_sk_bumdes_id: data.produk_hukum_sk_bumdes_id,
+        total_fields: Object.keys(data).length
+      });
+      
       // For role 'desa', use their desa_id
       // For role 'sarpras' or 'admin', use desa_id from form data
       let targetDesaId;
@@ -63,8 +134,8 @@ class BumdesController {
             message: 'User desa tidak memiliki desa_id'
           });
         }
-        targetDesaId = desaId;
-        data.desa_id = desaId;
+        targetDesaId = parseInt(desaId);
+        data.desa_id = parseInt(desaId);
       } else if (['sarpras', 'admin', 'superadmin'].includes(userRole)) {
         // Sarpras/Admin must provide desa_id in the form data
         if (!data.desa_id) {
@@ -73,7 +144,8 @@ class BumdesController {
             message: 'desa_id harus disertakan dalam data'
           });
         }
-        targetDesaId = data.desa_id;
+        targetDesaId = parseInt(data.desa_id);
+        data.desa_id = parseInt(data.desa_id);
       } else {
         return res.status(403).json({
           success: false,
@@ -81,9 +153,30 @@ class BumdesController {
         });
       }
 
+      // Convert numeric string fields to proper types
+      if (data.TotalTenagaKerja) data.TotalTenagaKerja = parseInt(data.TotalTenagaKerja);
+      
+      // Convert decimal string fields to Decimal (Prisma handles this, but we should parse)
+      const decimalFields = [
+        'Omset2023', 'Laba2023', 'Omset2024', 'Laba2024',
+        'PenyertaanModal2019', 'PenyertaanModal2020', 'PenyertaanModal2021',
+        'PenyertaanModal2022', 'PenyertaanModal2023', 'PenyertaanModal2024',
+        'SumberLain', 'NilaiAset'
+      ];
+      
+      decimalFields.forEach(field => {
+        if (data[field] !== undefined && data[field] !== null && data[field] !== '') {
+          // Convert string to number, Prisma will handle Decimal conversion
+          data[field] = parseFloat(data[field]);
+        } else if (data[field] === '') {
+          // Convert empty strings to null
+          data[field] = null;
+        }
+      });
+
       // Check if BUMDES already exists for this desa_id
       const existing = await prisma.bumdes.findFirst({
-        where: { id_desa: targetDesaId }
+        where: { desa_id: targetDesaId }
       });
 
       let bumdes;
@@ -119,12 +212,14 @@ class BumdesController {
   async uploadDesaBumdesFile(req, res, next) {
     try {
       const userId = req.user.id;
+      const userRole = req.user.role;
       const desaId = req.user.desa_id;
 
       logger.info('=== BUMDES UPLOAD FILE REQUEST ===', {
         has_file: !!req.file,
         bumdes_id: req.body.bumdes_id,
         field_name: req.body.field_name,
+        user_role: userRole,
         desa_id: desaId
       });
 
@@ -144,13 +239,29 @@ class BumdesController {
         });
       }
 
-      // Find BUMDES and verify ownership
-      const bumdes = await prisma.bumdes.findFirst({
-        where: { 
-          id: parseInt(bumdes_id),
-          id_desa: desaId 
-        }
-      });
+      // Find BUMDES and verify authorization based on role
+      let bumdes;
+      if (userRole === 'desa') {
+        // Desa users can only upload to their own BUMDes
+        bumdes = await prisma.bumdes.findFirst({
+          where: { 
+            id: parseInt(bumdes_id),
+            desa_id: desaId 
+          }
+        });
+      } else if (userRole === 'dinas' || userRole === 'superadmin') {
+        // Dinas and superadmin can upload to any BUMDes
+        bumdes = await prisma.bumdes.findFirst({
+          where: { 
+            id: parseInt(bumdes_id)
+          }
+        });
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
 
       if (!bumdes) {
         return res.status(404).json({
@@ -210,14 +321,20 @@ class BumdesController {
       // New file path (relative)
       const newFilePath = `${folder}/${req.file.filename}`;
 
-      // Update database
-      bumdes[field_name] = newFilePath;
-      await bumdes.save();
+      // Update database using Prisma
+      const updateData = {};
+      updateData[field_name] = newFilePath;
+      
+      await prisma.bumdes.update({
+        where: { id: parseInt(bumdes_id) },
+        data: updateData
+      });
 
       logger.info('BUMDES File uploaded successfully', {
         bumdes_id,
         field_name,
-        file_path: newFilePath
+        file_path: newFilePath,
+        user_role: userRole
       });
 
       return res.json({
@@ -225,7 +342,8 @@ class BumdesController {
         message: 'File berhasil diupload',
         data: {
           field_name,
-          file_path: newFilePath
+          file_path: newFilePath,
+          bumdes_id: parseInt(bumdes_id)
         }
       });
 
@@ -239,14 +357,32 @@ class BumdesController {
   async updateDesaBumdes(req, res, next) {
     try {
       const { id } = req.params;
+      const userRole = req.user.role;
       const desaId = req.user.desa_id;
 
-      const existing = await prisma.bumdes.findFirst({
-        where: { 
-          id: parseInt(id),
-          id_desa: desaId 
-        }
-      });
+      // Check authorization based on role
+      let existing;
+      if (userRole === 'desa') {
+        // Desa users can only update their own BUMDes
+        existing = await prisma.bumdes.findFirst({
+          where: { 
+            id: parseInt(id),
+            desa_id: desaId 
+          }
+        });
+      } else if (userRole === 'dinas' || userRole === 'superadmin') {
+        // Dinas and superadmin can update any BUMDes
+        existing = await prisma.bumdes.findFirst({
+          where: { 
+            id: parseInt(id)
+          }
+        });
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
 
       if (!existing) {
         return res.status(404).json({
@@ -255,12 +391,44 @@ class BumdesController {
         });
       }
 
+      // Filter only valid fields for Prisma update
+      const validFields = [
+        'desa_id', 'kode_desa', 'kecamatan', 'desa', 'namabumdesa', 'status', 'keterangan_tidak_aktif',
+        'NIB', 'LKPP', 'NPWP', 'badanhukum',
+        'NamaPenasihat', 'JenisKelaminPenasihat', 'HPPenasihat',
+        'NamaPengawas', 'JenisKelaminPengawas', 'HPPengawas',
+        'NamaDirektur', 'JenisKelaminDirektur', 'HPDirektur',
+        'NamaSekretaris', 'JenisKelaminSekretaris', 'HPSekretaris',
+        'NamaBendahara', 'JenisKelaminBendahara', 'HPBendahara',
+        'TahunPendirian', 'AlamatBumdesa', 'Alamatemail', 'TotalTenagaKerja', 'TelfonBumdes',
+        'JenisUsaha', 'JenisUsahaUtama', 'JenisUsahaLainnya',
+        'Omset2023', 'Laba2023', 'Omset2024', 'Laba2024',
+        'PenyertaanModal2019', 'PenyertaanModal2020', 'PenyertaanModal2021',
+        'PenyertaanModal2022', 'PenyertaanModal2023', 'PenyertaanModal2024',
+        'SumberLain', 'JenisAset', 'NilaiAset',
+        'KerjasamaPihakKetiga', 'TahunMulai-TahunBerakhir',
+        'KontribusiTerhadapPADes2021', 'KontribusiTerhadapPADes2022',
+        'KontribusiTerhadapPADes2023', 'KontribusiTerhadapPADes2024',
+        'Ketapang2024', 'Ketapang2025', 'BantuanKementrian', 'BantuanLaptopShopee',
+        'NomorPerdes', 'DesaWisata',
+        'LaporanKeuangan2021', 'LaporanKeuangan2022', 'LaporanKeuangan2023', 'LaporanKeuangan2024',
+        'Perdes', 'produk_hukum_perdes_id', 'ProfilBUMDesa', 'BeritaAcara',
+        'AnggaranDasar', 'AnggaranRumahTangga', 'ProgramKerja', 'SK_BUM_Desa', 'produk_hukum_sk_bumdes_id'
+      ];
+
+      const dataToUpdate = {};
+      for (const field of validFields) {
+        if (req.body[field] !== undefined) {
+          dataToUpdate[field] = req.body[field];
+        }
+      }
+
       const bumdes = await prisma.bumdes.update({
         where: { id: parseInt(id) },
-        data: req.body
+        data: dataToUpdate
       });
 
-      logger.info(`BUMDES updated: ${id}`);
+      logger.info(`BUMDES updated: ${id} by ${userRole}`);
 
       return res.json({
         success: true,
@@ -278,14 +446,32 @@ class BumdesController {
   async deleteDesaBumdes(req, res, next) {
     try {
       const { id } = req.params;
+      const userRole = req.user.role;
       const desaId = req.user.desa_id;
 
-      const bumdes = await prisma.bumdes.findFirst({
-        where: { 
-          id: parseInt(id),
-          id_desa: desaId 
-        }
-      });
+      // Check authorization based on role
+      let bumdes;
+      if (userRole === 'desa') {
+        // Desa users can only delete their own BUMDes
+        bumdes = await prisma.bumdes.findFirst({
+          where: { 
+            id: parseInt(id),
+            desa_id: desaId 
+          }
+        });
+      } else if (userRole === 'dinas' || userRole === 'superadmin') {
+        // Dinas and superadmin can delete any BUMDes
+        bumdes = await prisma.bumdes.findFirst({
+          where: { 
+            id: parseInt(id)
+          }
+        });
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
 
       if (!bumdes) {
         return res.status(404).json({
@@ -317,7 +503,7 @@ class BumdesController {
         where: { id: parseInt(id) }
       });
 
-      logger.info(`BUMDES deleted: ${id}`);
+      logger.info(`BUMDES deleted: ${id} by ${userRole}`);
 
       return res.json({
         success: true,
@@ -355,6 +541,62 @@ class BumdesController {
     }
   }
 
+  // GET /api/bumdes/:id - Get BUMDES by ID
+  async getBumdesById(req, res, next) {
+    try {
+      const { id } = req.params;
+      const userRole = req.user.role;
+      const desaId = req.user.desa_id;
+
+      logger.info(`Getting BUMDES by ID: ${id}`, {
+        user_role: userRole,
+        user_id: req.user.id
+      });
+
+      // Check authorization based on role
+      let bumdes;
+      if (userRole === 'desa') {
+        // Desa users can only get their own BUMDes
+        bumdes = await prisma.bumdes.findFirst({
+          where: { 
+            id: parseInt(id),
+            desa_id: desaId 
+          }
+        });
+      } else if (userRole === 'dinas' || userRole === 'superadmin') {
+        // Dinas and superadmin can get any BUMDes
+        bumdes = await prisma.bumdes.findFirst({
+          where: { 
+            id: parseInt(id)
+          }
+        });
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
+      if (!bumdes) {
+        return res.status(404).json({
+          success: false,
+          message: 'BUMDES not found or access denied'
+        });
+      }
+
+      logger.info(`Found BUMDES: ${bumdes.namabumdesa}`);
+
+      return res.json({
+        success: true,
+        data: bumdes
+      });
+
+    } catch (error) {
+      logger.error('Error getting BUMDES by ID:', error);
+      next(error);
+    }
+  }
+
   // GET /api/bumdes/dokumen-badan-hukum - Get dokumen badan hukum files (OPTIMIZED - Lazy Load)
   async getDokumenBadanHukum(req, res, next) {
     try {
@@ -368,7 +610,7 @@ class BumdesController {
       // Build where clause
       const whereClause = {};
       if (bumdes_id) {
-        whereClause.id = bumdes_id;
+        whereClause.id = parseInt(bumdes_id);
       }
 
       // Get all BUMDES data once (cached in memory)
@@ -376,13 +618,19 @@ class BumdesController {
         where: whereClause,
         select: {
           id: true,
-          nama_bumdes: true,
-          id_desa: true,
+          namabumdesa: true,
+          desa_id: true,
           kode_desa: true,
+          desa: true,
+          kecamatan: true,
           // File fields
-          file_badan_hukum: true,
-          file_sk_bumdes: true,
-          file_laporan_keuangan: true
+          ProfilBUMDesa: true,
+          BeritaAcara: true,
+          AnggaranDasar: true,
+          AnggaranRumahTangga: true,
+          ProgramKerja: true,
+          Perdes: true,
+          SK_BUM_Desa: true
         }
       });
 
@@ -460,15 +708,22 @@ class BumdesController {
       // Build where clause
       const whereClause = {};
       if (bumdes_id) {
-        whereClause.id = bumdes_id;
+        whereClause.id = parseInt(bumdes_id);
       }
 
       // Get all BUMDES data once (cached in memory)
-      const allBumdes = await Bumdes.findAll({
+      const allBumdes = await prisma.bumdes.findMany({
         where: whereClause,
-        attributes: ['id', 'namabumdesa', 'desa', 'kecamatan',
-                     'LaporanKeuangan2021', 'LaporanKeuangan2022', 
-                     'LaporanKeuangan2023', 'LaporanKeuangan2024']
+        select: {
+          id: true,
+          namabumdesa: true,
+          desa: true,
+          kecamatan: true,
+          LaporanKeuangan2021: true,
+          LaporanKeuangan2022: true,
+          LaporanKeuangan2023: true,
+          LaporanKeuangan2024: true
+        }
       });
 
       // Build lightweight file list from database (no filesystem scan)
@@ -617,12 +872,10 @@ class BumdesController {
   // GET /api/bumdes/statistics - Get BUMDES statistics (Admin)
   async getStatistics(req, res, next) {
     try {
-      const { Op } = require('sequelize');
-      
       // Basic counts
-      const total = await Bumdes.count();
-      const aktif = await Bumdes.count({ where: { status: 'aktif' } });
-      const tidakAktif = await Bumdes.count({ where: { status: 'tidak aktif' } });
+      const total = await prisma.bumdes.count();
+      const aktif = await prisma.bumdes.count({ where: { status: 'aktif' } });
+      const tidakAktif = await prisma.bumdes.count({ where: { status: 'tidak_aktif' } });
 
       // Calculate progress to target (assuming target is 416 desa)
       const target = 416;
@@ -630,14 +883,25 @@ class BumdesController {
       const percentage = Math.min(100, Math.round((total / target) * 100));
 
       // Get all bumdes for detailed stats with actual database field names
-      const allBumdes = await Bumdes.findAll({
-        attributes: [
-          'kecamatan', 'JenisUsaha', 'status', 'TahunPendirian', 'badanhukum',
-          'PenyertaanModal2019', 'PenyertaanModal2020', 'PenyertaanModal2021',
-          'PenyertaanModal2022', 'PenyertaanModal2023', 'PenyertaanModal2024',
-          'SumberLain', 'NilaiAset', 'Omset2024', 'Laba2024',
-          'TotalTenagaKerja'
-        ]
+      const allBumdes = await prisma.bumdes.findMany({
+        select: {
+          kecamatan: true,
+          JenisUsaha: true,
+          status: true,
+          TahunPendirian: true,
+          badanhukum: true,
+          PenyertaanModal2019: true,
+          PenyertaanModal2020: true,
+          PenyertaanModal2021: true,
+          PenyertaanModal2022: true,
+          PenyertaanModal2023: true,
+          PenyertaanModal2024: true,
+          SumberLain: true,
+          NilaiAset: true,
+          Omset2024: true,
+          Laba2024: true,
+          TotalTenagaKerja: true
+        }
       });
 
       // Statistics by Kecamatan
@@ -649,7 +913,7 @@ class BumdesController {
         }
         byKecamatan[kec].total++;
         if (b.status === 'aktif') byKecamatan[kec].aktif++;
-        if (b.status === 'tidak aktif') byKecamatan[kec].tidak_aktif++;
+        if (b.status === 'tidak_aktif') byKecamatan[kec].tidak_aktif++;
       });
 
       // Statistics by Jenis Usaha
@@ -771,22 +1035,49 @@ class BumdesController {
     }
   }
 
-  // GET /api/desa/bumdes/produk-hukum - Get produk hukum options for dropdown
+  // GET /api/desa/bumdes/produk-hukum-options - Get produk hukum options for dropdown
   async getProdukHukumForBumdes(req, res, next) {
     try {
       const desaId = req.user.desa_id;
 
-      logger.info('Getting produk hukum options for desa:', desaId);
+      logger.info('Getting produk hukum options for BUMDES, desa_id:', desaId);
 
-      // For now, return empty arrays since produk hukum linking is not yet implemented
-      // In the future, this should fetch from produk_hukum table filtered by desa
+      // Fetch ALL Peraturan Desa (PERDES) - let user choose any PERDES
+      const perdes = await prisma.produk_hukums.findMany({
+        where: {
+          desa_id: desaId,
+          singkatan_jenis: 'PERDES',
+          status_peraturan: 'berlaku'
+        },
+        orderBy: [
+          { tahun: 'desc' },
+          { nomor: 'desc' }
+        ]
+      });
+
+      // Fetch ALL Surat Keputusan (SK KADES) - let user choose any SK
+      const sk = await prisma.produk_hukums.findMany({
+        where: {
+          desa_id: desaId,
+          singkatan_jenis: 'SK_KADES',
+          status_peraturan: 'berlaku'
+        },
+        orderBy: [
+          { tahun: 'desc' },
+          { nomor: 'desc' }
+        ]
+      });
+
+      logger.info(`Found ${perdes.length} PERDES and ${sk.length} SK for BUMDES`);
+
       return res.json({
         success: true,
         data: {
-          perdes: [],
-          sk: []
+          perdes: perdes,
+          sk: sk,
+          sk_bumdes: sk // Alias for backward compatibility
         },
-        message: 'Produk hukum options retrieved (feature coming soon)'
+        message: 'Produk hukum options retrieved successfully'
       });
 
     } catch (error) {
@@ -802,7 +1093,7 @@ class BumdesController {
       
       logger.info(`Checking if kode_desa ${kode_desa} has existing BUMDes`);
 
-      const bumdes = await Bumdes.findOne({
+      const bumdes = await prisma.bumdes.findFirst({
         where: { kode_desa: kode_desa }
       });
 
@@ -810,10 +1101,10 @@ class BumdesController {
         success: true,
         exists: !!bumdes,
         data: bumdes ? { 
-          id: bumdes.id, 
+          id: bumdes.id.toString(), 
           namabumdesa: bumdes.namabumdesa,
           kode_desa: bumdes.kode_desa,
-          desa: bumdes.desa
+          desa_id: bumdes.desa_id?.toString()
         } : null
       });
 

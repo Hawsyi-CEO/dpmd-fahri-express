@@ -39,6 +39,7 @@ router.post(
   uploadBumdes.single('file'),
   bumdesController.uploadDesaBumdesFile
 );
+router.get('/:id', auth, checkRole('desa', 'dinas', 'superadmin'), bumdesController.getBumdesById);
 router.put('/:id', auth, checkRole('desa', 'dinas', 'superadmin'), bumdesController.updateDesaBumdes);
 router.delete('/:id', auth, checkRole('desa', 'dinas', 'superadmin'), bumdesController.deleteDesaBumdes);
 

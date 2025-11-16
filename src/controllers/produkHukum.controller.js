@@ -47,10 +47,26 @@ class ProdukHukumController {
           }
         });
 
+        // Transform response to match frontend expectations
+        const transformedData = produkHukums.map(item => ({
+          ...item,
+          desa: item.desas ? {
+            id: item.desas.id_desa,
+            nama: item.desas.nama_desa,
+            kode: item.desas.kode_desa,
+            kecamatan: item.desas.kecamatans ? {
+              id: item.desas.kecamatans.id_kecamatan,
+              nama: item.desas.kecamatans.nama_kecamatan
+            } : null
+          } : null,
+          desas: undefined,  // Remove original desas field
+          jenis: item.jenis.replace(/_/g, ' ')  // Convert "Peraturan_Desa" back to "Peraturan Desa"
+        }));
+
         return res.json({
           success: true,
           message: 'Daftar Produk Hukum',
-          data: produkHukums
+          data: transformedData
         });
       }
 
@@ -75,11 +91,27 @@ class ProdukHukumController {
         prisma.produk_hukums.count({ where })
       ]);
 
+      // Transform response to match frontend expectations
+      const transformedData = produkHukums.map(item => ({
+        ...item,
+        desa: item.desas ? {
+          id: item.desas.id_desa,
+          nama: item.desas.nama_desa,
+          kode: item.desas.kode_desa,
+          kecamatan: item.desas.kecamatans ? {
+            id: item.desas.kecamatans.id_kecamatan,
+            nama: item.desas.kecamatans.nama_kecamatan
+          } : null
+        } : null,
+        desas: undefined,  // Remove original desas field
+        jenis: item.jenis.replace(/_/g, ' ')  // Convert "Peraturan_Desa" back to "Peraturan Desa"
+      }));
+
       return res.json({
         success: true,
         message: 'Daftar Produk Hukum',
         data: {
-          data: produkHukums,
+          data: transformedData,
           current_page: parseInt(page),
           per_page: parseInt(limit),
           total,
@@ -144,6 +176,9 @@ class ProdukHukumController {
         });
       }
 
+      // Convert jenis from "Peraturan Desa" format to "Peraturan_Desa" (Prisma enum format)
+      const jenisEnum = jenis.replace(/\s+/g, '_');
+
       // Create produk hukum
       const produkHukum = await prisma.produk_hukums.create({
         data: {
@@ -152,7 +187,7 @@ class ProdukHukumController {
           judul,
           nomor,
           tahun: parseInt(tahun),
-          jenis,
+          jenis: jenisEnum,  // Use converted enum value
           singkatan_jenis,
           tempat_penetapan,
           tanggal_penetapan: new Date(tanggal_penetapan),
@@ -214,10 +249,26 @@ class ProdukHukumController {
         });
       }
 
+      // Transform response to match frontend expectations
+      const transformedData = {
+        ...produkHukum,
+        desa: produkHukum.desas ? {
+          id: produkHukum.desas.id_desa,
+          nama: produkHukum.desas.nama_desa,
+          kode: produkHukum.desas.kode_desa,
+          kecamatan: produkHukum.desas.kecamatans ? {
+            id: produkHukum.desas.kecamatans.id_kecamatan,
+            nama: produkHukum.desas.kecamatans.nama_kecamatan
+          } : null
+        } : null,
+        desas: undefined,  // Remove original desas field
+        jenis: produkHukum.jenis.replace(/_/g, ' ')  // Convert "Peraturan_Desa" back to "Peraturan Desa"
+      };
+
       return res.json({
         success: true,
         message: 'Detail Produk Hukum',
-        data: produkHukum
+        data: transformedData
       });
     } catch (error) {
       console.error('Error in show:', error);
@@ -276,7 +327,7 @@ class ProdukHukumController {
         judul,
         nomor,
         tahun: parseInt(tahun),
-        jenis,
+        jenis: jenis.replace(/\s+/g, '_'),  // Convert "Peraturan Desa" to "Peraturan_Desa"
         singkatan_jenis,
         tempat_penetapan,
         tanggal_penetapan: new Date(tanggal_penetapan),
@@ -431,6 +482,57 @@ class ProdukHukumController {
       return res.status(500).json({
         success: false,
         message: 'Gagal mengupdate status',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Download PDF file of produk hukum
+   */
+  async download(req, res) {
+    try {
+      const { id } = req.params;
+
+      // Get produk hukum from database
+      const produkHukum = await prisma.produk_hukums.findUnique({
+        where: { id }
+      });
+
+      if (!produkHukum) {
+        return res.status(404).json({
+          success: false,
+          message: 'Produk Hukum tidak ditemukan'
+        });
+      }
+
+      if (!produkHukum.file) {
+        return res.status(404).json({
+          success: false,
+          message: 'File PDF tidak ditemukan'
+        });
+      }
+
+      // Construct file path
+      const filePath = path.join(__dirname, '../../storage/produk_hukum', produkHukum.file);
+
+      // Check if file exists
+      try {
+        await fs.access(filePath);
+      } catch (error) {
+        return res.status(404).json({
+          success: false,
+          message: 'File tidak ditemukan di server'
+        });
+      }
+
+      // Send file
+      return res.sendFile(filePath);
+    } catch (error) {
+      console.error('Error in download:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Gagal mengunduh file',
         error: error.message
       });
     }

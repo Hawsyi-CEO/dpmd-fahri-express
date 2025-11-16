@@ -6,6 +6,11 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
+// Fix BigInt serialization for JSON
+BigInt.prototype.toJSON = function() {
+  return this.toString();
+};
+
 const logger = require('./utils/logger');
 const errorHandler = require('./middlewares/errorHandler');
 

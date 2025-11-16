@@ -14,9 +14,15 @@ class LocationController {
 
       logger.info(`Found ${kecamatans.length} kecamatans`);
 
+      // Convert BigInt to String for JSON serialization
+      const serializedData = kecamatans.map(kec => ({
+        ...kec,
+        id_kecamatan: kec.id_kecamatan.toString()
+      }));
+
       return res.json({
         success: true,
-        data: kecamatans
+        data: serializedData
       });
 
     } catch (error) {
@@ -36,9 +42,16 @@ class LocationController {
 
       logger.info(`Found ${desas.length} desas`);
 
+      // Convert BigInt to String for JSON serialization
+      const serializedData = desas.map(desa => ({
+        ...desa,
+        id_desa: desa.id_desa.toString(),
+        id_kecamatan: desa.id_kecamatan.toString()
+      }));
+
       return res.json({
         success: true,
-        data: desas
+        data: serializedData
       });
 
     } catch (error) {
@@ -61,9 +74,16 @@ class LocationController {
 
       logger.info(`Found ${desas.length} desas for kecamatan_id: ${kecamatanId}`);
 
+      // Convert BigInt to String for JSON serialization
+      const serializedData = desas.map(desa => ({
+        ...desa,
+        id_desa: desa.id_desa.toString(),
+        id_kecamatan: desa.id_kecamatan.toString()
+      }));
+
       return res.json({
         success: true,
-        data: desas
+        data: serializedData
       });
 
     } catch (error) {
