@@ -31,15 +31,21 @@ const app = express();
 
 // Security middleware
 app.use(helmet());
+
+// CORS Configuration - Use environment variable or fallback to defaults
+const allowedOrigins = process.env.CORS_ORIGIN 
+  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+  : [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:5174',
+      'https://dpmdbogorkab.id',
+      'http://dpmdbogorkab.id'
+    ];
+
 app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:5174',
-    'http://protodpmd.vertinova.id',
-    'https://protodpmd.vertinova.id'
-  ],
+  origin: allowedOrigins,
   credentials: true
 }));
 

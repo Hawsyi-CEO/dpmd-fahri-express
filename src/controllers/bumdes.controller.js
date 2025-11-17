@@ -124,7 +124,7 @@ class BumdesController {
       });
       
       // For role 'desa', use their desa_id
-      // For role 'sarpras' or 'admin', use desa_id from form data
+      // For role 'sarana_prasarana', 'dinas', or 'superadmin', use desa_id from form data
       let targetDesaId;
       
       if (userRole === 'desa') {
@@ -136,7 +136,7 @@ class BumdesController {
         }
         targetDesaId = parseInt(desaId);
         data.desa_id = parseInt(desaId);
-      } else if (['sarpras', 'admin', 'superadmin'].includes(userRole)) {
+      } else if (['sarana_prasarana', 'dinas', 'superadmin'].includes(userRole)) {
         // Sarpras/Admin must provide desa_id in the form data
         if (!data.desa_id) {
           return res.status(400).json({
@@ -249,8 +249,8 @@ class BumdesController {
             desa_id: desaId 
           }
         });
-      } else if (userRole === 'dinas' || userRole === 'superadmin') {
-        // Dinas and superadmin can upload to any BUMDes
+      } else if (userRole === 'dinas' || userRole === 'superadmin' || userRole === 'sarana_prasarana') {
+        // Dinas, superadmin, and sarana_prasarana can upload to any BUMDes
         bumdes = await prisma.bumdes.findFirst({
           where: { 
             id: parseInt(bumdes_id)
@@ -370,8 +370,8 @@ class BumdesController {
             desa_id: desaId 
           }
         });
-      } else if (userRole === 'dinas' || userRole === 'superadmin') {
-        // Dinas and superadmin can update any BUMDes
+      } else if (userRole === 'dinas' || userRole === 'superadmin' || userRole === 'sarana_prasarana') {
+        // Dinas, superadmin, and sarana_prasarana can update any BUMDes
         existing = await prisma.bumdes.findFirst({
           where: { 
             id: parseInt(id)
@@ -459,8 +459,8 @@ class BumdesController {
             desa_id: desaId 
           }
         });
-      } else if (userRole === 'dinas' || userRole === 'superadmin') {
-        // Dinas and superadmin can delete any BUMDes
+      } else if (userRole === 'dinas' || userRole === 'superadmin' || userRole === 'sarana_prasarana') {
+        // Dinas, superadmin, and sarana_prasarana can delete any BUMDes
         bumdes = await prisma.bumdes.findFirst({
           where: { 
             id: parseInt(id)
@@ -563,8 +563,8 @@ class BumdesController {
             desa_id: desaId 
           }
         });
-      } else if (userRole === 'dinas' || userRole === 'superadmin') {
-        // Dinas and superadmin can get any BUMDes
+      } else if (userRole === 'dinas' || userRole === 'superadmin' || userRole === 'sarana_prasarana') {
+        // Dinas, superadmin, and sarana_prasarana can get any BUMDes
         bumdes = await prisma.bumdes.findFirst({
           where: { 
             id: parseInt(id)
@@ -1147,20 +1147,23 @@ class BumdesController {
         : ['LaporanKeuangan2021', 'LaporanKeuangan2022', 'LaporanKeuangan2023', 'LaporanKeuangan2024'];
 
       let updatedCount = 0;
-      const { Op } = require('sequelize');
 
       for (const field of documentFields) {
-        const bumdesList = await Bumdes.findAll({
+        // Find all BUMDes that have this file in the specified field
+        const bumdesList = await prisma.bumdes.findMany({
           where: {
             [field]: {
-              [Op.like]: `%${filename}%`
+              contains: filename
             }
           }
         });
 
         for (const bumdes of bumdesList) {
           // Clear the field
-          await bumdes.update({ [field]: null });
+          await prisma.bumdes.update({
+            where: { id: bumdes.id },
+            data: { [field]: null }
+          });
           updatedCount++;
           logger.info(`Cleared field ${field} for BUMDes ${bumdes.id}`);
         }

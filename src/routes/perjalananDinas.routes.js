@@ -16,21 +16,21 @@ const { auth, checkRole } = require('../middlewares/auth');
 router.get(
   '/dashboard',
   auth,
-  checkRole('superadmin', 'dinas', 'pemberdayaan_masyarakat'),
+  checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getDashboardStats
 );
 
 router.get(
   '/dashboard/weekly-schedule',
   auth,
-  checkRole('superadmin', 'dinas', 'pemberdayaan_masyarakat'),
+  checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getWeeklySchedule
 );
 
 router.get(
   '/statistik',
   auth,
-  checkRole('superadmin', 'dinas', 'pemberdayaan_masyarakat'),
+  checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getStatistik
 );
 
@@ -40,14 +40,14 @@ router.get(
 router.get(
   '/bidang',
   auth,
-  checkRole('superadmin', 'dinas', 'pemberdayaan_masyarakat'),
+  checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getAllBidang
 );
 
 router.get(
   '/personil/:id_bidang',
   auth,
-  checkRole('superadmin', 'dinas', 'pemberdayaan_masyarakat'),
+  checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getPersonilByBidang
 );
 
@@ -67,7 +67,7 @@ router.get(
 router.get(
   '/statistik',
   auth,
-  checkRole('superadmin', 'dinas', 'pemberdayaan_masyarakat'),
+  checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getStatistik
 );
 
@@ -77,14 +77,14 @@ router.get(
 router.get(
   '/kegiatan',
   auth,
-  checkRole('superadmin', 'dinas', 'pemberdayaan_masyarakat'),
+  checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getAllKegiatan
 );
 
 router.get(
   '/kegiatan/:id',
   auth,
-  checkRole('superadmin', 'dinas', 'pemberdayaan_masyarakat'),
+  checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getKegiatanById
 );
 
