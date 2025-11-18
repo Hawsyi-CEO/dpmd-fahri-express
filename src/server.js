@@ -26,6 +26,14 @@ const kepalaDinasRoutes = require('./routes/kepalaDinas.routes');
 const kelembagaanRoutes = require('./routes/kelembagaan.routes');
 const desaKelembagaanRoutes = require('./routes/desa.kelembagaan.routes');
 const produkHukumRoutes = require('./routes/produkHukum.routes');
+const bankeuRoutes = require('./routes/bankeu.routes');
+const addRoutes = require('./routes/add.routes');
+const ddEarmarkedT1Routes = require('./routes/dd-earmarked-t1.routes');
+const ddEarmarkedT2Routes = require('./routes/dd-earmarked-t2.routes');
+const ddNonEarmarkedT1Routes = require('./routes/dd-nonearmarked-t1.routes');
+const ddNonEarmarkedT2Routes = require('./routes/dd-nonearmarked-t2.routes');
+const insentifDdRoutes = require('./routes/insentif-dd.routes');
+const bhprdRoutes = require('./routes/bhprd.routes');
 
 const app = express();
 
@@ -97,6 +105,13 @@ app.use('/uploads', (req, res, next) => {
   next();
 }, express.static(path.join(__dirname, '../storage/uploads')));
 
+// Serve public files (bankeu2025.json, etc)
+app.use('/public', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.join(__dirname, '../public')));
+
 logger.info(`📁 Static files served from: ${path.join(__dirname, '../storage')}`);
 
 // Health check
@@ -126,6 +141,14 @@ app.use('/api/berita', require('./routes/berita.routes')); // Berita routes
 app.use('/api/kelembagaan', kelembagaanRoutes); // Kelembagaan routes (admin/global)
 app.use('/api/admin', kelembagaanRoutes); // Admin alias for kelembagaan
 app.use('/api/produk-hukum', produkHukumRoutes); // Produk Hukum routes
+app.use('/api/bankeu', bankeuRoutes); // Bantuan Keuangan routes
+app.use('/api/add', addRoutes); // ADD (Alokasi Dana Desa) routes
+app.use('/api/dd-earmarked-t1', ddEarmarkedT1Routes); // DD Earmarked Tahap 1
+app.use('/api/dd-earmarked-t2', ddEarmarkedT2Routes); // DD Earmarked Tahap 2
+app.use('/api/dd-nonearmarked-t1', ddNonEarmarkedT1Routes); // DD Non-Earmarked Tahap 1
+app.use('/api/dd-nonearmarked-t2', ddNonEarmarkedT2Routes); // DD Non-Earmarked Tahap 2
+app.use('/api/insentif-dd', insentifDdRoutes); // Insentif DD
+app.use('/api/bhprd', bhprdRoutes); // BHPRD (Bagi Hasil Pajak dan Retribusi Daerah) routes
 
 // 404 handler
 app.use((req, res) => {
