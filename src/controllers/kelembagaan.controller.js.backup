@@ -503,8 +503,8 @@ class KelembagaanController {
       res.json({
         success: true,
         data: {
-          id: kecamatan.id,
-          nama: kecamatan.nama,
+          id_kecamatan: kecamatan.id_kecamatan,
+          nama_kecamatan: kecamatan.nama_kecamatan,
           jumlah_desa: kecamatan.desas.length,
           desas: kecamatan.desas,
           kelembagaan: { rw: rwCount, rt: rtCount, posyandu: posyanduCount, karang_taruna: karangTarunaCount, lpm: lpmCount, satlinmas: satlinmasCount, pkk: pkkCount }
@@ -519,7 +519,7 @@ class KelembagaanController {
   async summaryByDesa(req, res) {
     try {
       const { id } = req.params;
-      const desa = await prisma.desas.findUnique({ where: { id: parseInt(id) } });
+      const desa = await prisma.desas.findUnique({ where: { id_desa: parseInt(id) } });
 
       if (!desa) {
         return res.status(404).json({ success: false, message: 'Desa tidak ditemukan' });
@@ -538,7 +538,7 @@ class KelembagaanController {
       res.json({
         success: true,
         data: {
-          desa: { id: desa.id, nama: desa.nama, status_pemerintahan: desa.status_pemerintahan },
+          desa: { id_desa: desa.id_desa, nama_desa: desa.nama_desa, status_pemerintahan: desa.status_pemerintahan },
           kelembagaan: { rw: rwCount, rt: rtCount, posyandu: posyanduCount, karang_taruna: karangTarunaCount, lpm: lpmCount, satlinmas: satlinmasCount, pkk: pkkCount, total: rwCount + rtCount + posyanduCount + karangTarunaCount + lpmCount + satlinmasCount + pkkCount }
         }
       });
@@ -553,10 +553,10 @@ class KelembagaanController {
     try {
       const { id } = req.params;
       const desa = await prisma.desas.findUnique({ 
-        where: { id: parseInt(id) },
+        where: { id_desa: parseInt(id) },
         include: {
           kecamatans: {
-            select: { id: true, nama: true }
+            select: { id_kecamatan: true, nama_kecamatan: true }
           }
         }
       });
@@ -610,9 +610,9 @@ class KelembagaanController {
         success: true,
         data: {
           desa: {
-            id: desa.id,
-            nama: desa.nama,
-            nama: desa.kecamatans?.nama,
+            id_desa: desa.id_desa,
+            nama_desa: desa.nama_desa,
+            nama_kecamatan: desa.kecamatans?.nama_kecamatan,
             status_pemerintahan: desa.status_pemerintahan
           },
           kelembagaan: {
@@ -636,7 +636,7 @@ class KelembagaanController {
       const { id } = req.params;
       const rws = await prisma.rws.findMany({
         where: { desa_id: parseInt(id) },
-        include: { desas: { select: { nama: true, id: true, kecamatans: { select: { nama: true } } } } },
+        include: { desas: { select: { nama_desa: true, id_kecamatan: true, kecamatans: { select: { nama_kecamatan: true } } } } },
         orderBy: { nomor: 'asc' }
       });
 
@@ -648,7 +648,7 @@ class KelembagaanController {
           nama_ketua: rw.nama_ketua,
           status_kelembagaan: rw.status_kelembagaan,
           jumlah_rt: rw.jumlah_rt,
-          desa: { id: rw.desas.id, nama: rw.desas.nama, kecamatan: rw.desas.kecamatans.nama }
+          desa: { id_desa: rw.desas.id_desa, nama_desa: rw.desas.nama_desa, kecamatan: rw.desas.kecamatans.nama_kecamatan }
         }))
       });
     } catch (error) {
@@ -663,7 +663,7 @@ class KelembagaanController {
       const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
       const rts = await prisma.rts.findMany({
         where,
-        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } }, rws: { select: { nomor: true } } },
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } }, rws: { select: { nomor: true } } },
         orderBy: [{ desa_id: 'asc' }, { nomor: 'asc' }]
       });
 
@@ -676,7 +676,7 @@ class KelembagaanController {
           status_kelembagaan: rt.status_kelembagaan,
           jumlah_kk: rt.jumlah_kk,
           rw: rt.rws ? rt.rws.nomor : null,
-          desa: { id: rt.desas.id, nama: rt.desas.nama, kecamatan: rt.desas.kecamatans.nama }
+          desa: { id_desa: rt.desas.id_desa, nama_desa: rt.desas.nama_desa, kecamatan: rt.desas.kecamatans.nama_kecamatan }
         }))
       });
     } catch (error) {
@@ -691,7 +691,7 @@ class KelembagaanController {
       const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
       const posyandus = await prisma.posyandus.findMany({
         where,
-        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } },
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } },
         orderBy: { nama: 'asc' }
       });
 
@@ -703,7 +703,7 @@ class KelembagaanController {
           nama_ketua: p.nama_ketua,
           status_kelembagaan: p.status_kelembagaan,
           jumlah_kader: p.jumlah_kader,
-          desa: { id: p.desas.id, nama: p.desas.nama, kecamatan: p.desas.kecamatans.nama }
+          desa: { id_desa: p.desas.id_desa, nama_desa: p.desas.nama_desa, kecamatan: p.desas.kecamatans.nama_kecamatan }
         }))
       });
     } catch (error) {
@@ -718,7 +718,7 @@ class KelembagaanController {
       const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
       const karangTarunas = await prisma.karang_tarunas.findMany({
         where,
-        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } },
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } },
         orderBy: { nama: 'asc' }
       });
 
@@ -730,7 +730,7 @@ class KelembagaanController {
           nama_ketua: kt.nama_ketua,
           status_kelembagaan: kt.status_kelembagaan,
           jumlah_anggota: kt.jumlah_anggota,
-          desa: { id: kt.desas.id, nama: kt.desas.nama, kecamatan: kt.desas.kecamatans.nama }
+          desa: { id_desa: kt.desas.id_desa, nama_desa: kt.desas.nama_desa, kecamatan: kt.desas.kecamatans.nama_kecamatan }
         }))
       });
     } catch (error) {
@@ -745,7 +745,7 @@ class KelembagaanController {
       const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
       const lpms = await prisma.lpms.findMany({
         where,
-        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } },
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } },
         orderBy: { nama: 'asc' }
       });
 
@@ -757,7 +757,7 @@ class KelembagaanController {
           nama_ketua: lpm.nama_ketua,
           status_kelembagaan: lpm.status_kelembagaan,
           jumlah_anggota: lpm.jumlah_anggota,
-          desa: { id: lpm.desas.id, nama: lpm.desas.nama, kecamatan: lpm.desas.kecamatans.nama }
+          desa: { id_desa: lpm.desas.id_desa, nama_desa: lpm.desas.nama_desa, kecamatan: lpm.desas.kecamatans.nama_kecamatan }
         }))
       });
     } catch (error) {
@@ -772,7 +772,7 @@ class KelembagaanController {
       const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
       const satlinmas = await prisma.satlinmas.findMany({
         where,
-        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } },
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } },
         orderBy: { nama: 'asc' }
       });
 
@@ -784,7 +784,7 @@ class KelembagaanController {
           nama_ketua: s.nama_ketua,
           status_kelembagaan: s.status_kelembagaan,
           jumlah_anggota: s.jumlah_anggota,
-          desa: { id: s.desas.id, nama: s.desas.nama, kecamatan: s.desas.kecamatans.nama }
+          desa: { id_desa: s.desas.id_desa, nama_desa: s.desas.nama_desa, kecamatan: s.desas.kecamatans.nama_kecamatan }
         }))
       });
     } catch (error) {
@@ -799,7 +799,7 @@ class KelembagaanController {
       const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
       const pkks = await prisma.pkks.findMany({
         where,
-        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } },
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } },
         orderBy: { nama: 'asc' }
       });
 
@@ -811,7 +811,7 @@ class KelembagaanController {
           nama_ketua: pkk.nama_ketua,
           status_kelembagaan: pkk.status_kelembagaan,
           jumlah_anggota: pkk.jumlah_anggota,
-          desa: { id: pkk.desas.id, nama: pkk.desas.nama, kecamatan: pkk.desas.kecamatans.nama }
+          desa: { id_desa: pkk.desas.id_desa, nama_desa: pkk.desas.nama_desa, kecamatan: pkk.desas.kecamatans.nama_kecamatan }
         }))
       });
     } catch (error) {
@@ -826,7 +826,7 @@ class KelembagaanController {
       const rw = await prisma.rws.findUnique({
         where: { id: parseInt(id) },
         include: {
-          desas: { select: { id: true, nama: true, kecamatans: { select: { nama: true } } } },
+          desas: { select: { id_desa: true, nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } },
           rts: { select: { id: true, nomor: true, nama_ketua: true, status_kelembagaan: true }, orderBy: { nomor: 'asc' } }
         }
       });
@@ -844,7 +844,7 @@ class KelembagaanController {
           status_kelembagaan: rw.status_kelembagaan,
           jumlah_rt: rw.jumlah_rt,
           alamat: rw.alamat,
-          desa: { id: rw.desas.id, nama: rw.desas.nama, kecamatan: rw.desas.kecamatans.nama },
+          desa: { id_desa: rw.desas.id_desa, nama_desa: rw.desas.nama_desa, kecamatan: rw.desas.kecamatans.nama_kecamatan },
           rt_list: rw.rts.map(rt => ({...rt, nomor_rt: rt.nomor}))
         }
       });
@@ -860,7 +860,7 @@ class KelembagaanController {
       const rt = await prisma.rts.findUnique({
         where: { id: parseInt(id) },
         include: {
-          desas: { select: { nama: true, kecamatans: { select: { nama: true } } } },
+          desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } },
           rws: { select: { nomor: true } }
         }
       });
@@ -879,7 +879,7 @@ class KelembagaanController {
           jumlah_kk: rt.jumlah_kk,
           alamat: rt.alamat,
           rw: rt.rws ? rt.rws.nomor : null,
-          desa: { id: rt.desas.id, nama: rt.desas.nama, kecamatan: rt.desas.kecamatans.nama }
+          desa: { id_desa: rt.desas.id_desa, nama_desa: rt.desas.nama_desa, kecamatan: rt.desas.kecamatans.nama_kecamatan }
         }
       });
     } catch (error) {
@@ -893,7 +893,7 @@ class KelembagaanController {
       const { id } = req.params;
       const posyandu = await prisma.posyandus.findUnique({
         where: { id: parseInt(id) },
-        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } }
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } }
       });
 
       if (!posyandu) {
@@ -909,7 +909,7 @@ class KelembagaanController {
           status_kelembagaan: posyandu.status_kelembagaan,
           jumlah_kader: posyandu.jumlah_kader,
           alamat: posyandu.alamat,
-          desa: { id: posyandu.desas.id, nama: posyandu.desas.nama, kecamatan: posyandu.desas.kecamatans.nama }
+          desa: { id_desa: posyandu.desas.id_desa, nama_desa: posyandu.desas.nama_desa, kecamatan: posyandu.desas.kecamatans.nama_kecamatan }
         }
       });
     } catch (error) {
@@ -923,7 +923,7 @@ class KelembagaanController {
       const { id } = req.params;
       const karangTaruna = await prisma.karang_tarunas.findUnique({
         where: { id: parseInt(id) },
-        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } }
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } }
       });
 
       if (!karangTaruna) {
@@ -939,7 +939,7 @@ class KelembagaanController {
           status_kelembagaan: karangTaruna.status_kelembagaan,
           jumlah_anggota: karangTaruna.jumlah_anggota,
           alamat: karangTaruna.alamat,
-          desa: { id: karangTaruna.desas.id, nama: karangTaruna.desas.nama, kecamatan: karangTaruna.desas.kecamatans.nama }
+          desa: { id_desa: karangTaruna.desas.id_desa, nama_desa: karangTaruna.desas.nama_desa, kecamatan: karangTaruna.desas.kecamatans.nama_kecamatan }
         }
       });
     } catch (error) {
@@ -953,7 +953,7 @@ class KelembagaanController {
       const { id } = req.params;
       const lpm = await prisma.lpms.findUnique({
         where: { id: parseInt(id) },
-        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } }
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } }
       });
 
       if (!lpm) {
@@ -969,7 +969,7 @@ class KelembagaanController {
           status_kelembagaan: lpm.status_kelembagaan,
           jumlah_anggota: lpm.jumlah_anggota,
           alamat: lpm.alamat,
-          desa: { id: lpm.desas.id, nama: lpm.desas.nama, kecamatan: lpm.desas.kecamatans.nama }
+          desa: { id_desa: lpm.desas.id_desa, nama_desa: lpm.desas.nama_desa, kecamatan: lpm.desas.kecamatans.nama_kecamatan }
         }
       });
     } catch (error) {
@@ -983,7 +983,7 @@ class KelembagaanController {
       const { id } = req.params;
       const satlinmas = await prisma.satlinmas.findUnique({
         where: { id: parseInt(id) },
-        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } }
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } }
       });
 
       if (!satlinmas) {
@@ -999,7 +999,7 @@ class KelembagaanController {
           status_kelembagaan: satlinmas.status_kelembagaan,
           jumlah_anggota: satlinmas.jumlah_anggota,
           alamat: satlinmas.alamat,
-          desa: { id: satlinmas.desas.id, nama: satlinmas.desas.nama, kecamatan: satlinmas.desas.kecamatans.nama }
+          desa: { id_desa: satlinmas.desas.id_desa, nama_desa: satlinmas.desas.nama_desa, kecamatan: satlinmas.desas.kecamatans.nama_kecamatan }
         }
       });
     } catch (error) {
@@ -1013,7 +1013,7 @@ class KelembagaanController {
       const { id } = req.params;
       const pkk = await prisma.pkks.findUnique({
         where: { id: parseInt(id) },
-        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } }
+        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } }
       });
 
       if (!pkk) {
@@ -1029,7 +1029,7 @@ class KelembagaanController {
           status_kelembagaan: pkk.status_kelembagaan,
           jumlah_anggota: pkk.jumlah_anggota,
           alamat: pkk.alamat,
-          desa: { id: pkk.desas.id, nama: pkk.desas.nama, kecamatan: pkk.desas.kecamatans.nama }
+          desa: { id_desa: pkk.desas.id_desa, nama_desa: pkk.desas.nama_desa, kecamatan: pkk.desas.kecamatans.nama_kecamatan }
         }
       });
     } catch (error) {

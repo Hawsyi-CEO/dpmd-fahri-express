@@ -143,12 +143,12 @@ const allDesaIds = kecamatans.flatMap(k => k.desas.map(d => d.id)); // ✅ BENAR
 
 ## 🎯 Action Items
 
-- [ ] Update `src/controllers/kelembagaan.controller.js`:
-  - Ganti `id_desa` → `id`
-  - Ganti `nama_desa` → `nama`  
-  - Ganti `kode_desa` → `kode`
-  - Ganti `id_kecamatan` → `id`
-  - Ganti `nama_kecamatan` → `nama`
+- [x] Update `src/controllers/kelembagaan.controller.js`: ✅ **SELESAI** (19 Nov 2025)
+  - Ganti `id_desa` → `id` ✅
+  - Ganti `nama_desa` → `nama` ✅
+  - Ganti `kode_desa` → `kode` ✅
+  - Ganti `id_kecamatan` → `id` ✅
+  - Ganti `nama_kecamatan` → `nama` ✅
 
 - [ ] Test semua endpoint kelembagaan setelah perubahan:
   - GET `/api/kelembagaan`
