@@ -23,6 +23,9 @@ router.post('/', auth, userController.createUser);
 // Update user
 router.put('/:id', auth, userController.updateUser);
 
+// Reset user password
+router.put('/:id/reset-password', auth, userController.resetPassword);
+
 // Delete user
 router.delete('/:id', auth, userController.deleteUser);
 

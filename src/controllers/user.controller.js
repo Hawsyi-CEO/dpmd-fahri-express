@@ -208,30 +208,22 @@ class UserController {
           desa_id: desa_id ? BigInt(desa_id) : null,
           dinas_id: dinas_id ? parseInt(dinas_id) : null
         },
-        include: {
-          bidangs: {
-            select: { id: true, nama: true }
-          },
-          desas: {
-            select: { 
-              id: true, 
-              nama: true,
-              kecamatans: {
-                select: { id: true, nama: true }
-              }
-            }
-          },
-          kecamatans: {
-            select: { id: true, nama: true }
-          },
-          dinas: {
-            select: { id: true, nama: true }
-          }
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          bidang_id: true,
+          kecamatan_id: true,
+          desa_id: true,
+          dinas_id: true,
+          created_at: true,
+          updated_at: true
         }
       });
 
-      // Remove password from response
-      const { password: _, ...userWithoutPassword } = newUser;
+      // Return user without password
+      const userWithoutPassword = newUser;
 
       res.status(201).json({
         success: true,
@@ -315,30 +307,22 @@ class UserController {
       const updatedUser = await prisma.users.update({
         where: { id: parseInt(id) },
         data: updateData,
-        include: {
-          bidangs: {
-            select: { id: true, nama: true }
-          },
-          desas: {
-            select: { 
-              id: true, 
-              nama: true,
-              kecamatans: {
-                select: { id: true, nama: true }
-              }
-            }
-          },
-          kecamatans: {
-            select: { id: true, nama: true }
-          },
-          dinas: {
-            select: { id: true, nama: true }
-          }
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          bidang_id: true,
+          kecamatan_id: true,
+          desa_id: true,
+          dinas_id: true,
+          created_at: true,
+          updated_at: true
         }
       });
 
-      // Remove password from response
-      const { password: _, ...userWithoutPassword } = updatedUser;
+      // Return user without password
+      const userWithoutPassword = updatedUser;
 
       res.json({
         success: true,
@@ -402,6 +386,57 @@ class UserController {
       res.status(500).json({
         success: false,
         message: 'Failed to delete user',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Reset user password
+   */
+  async resetPassword(req, res) {
+    try {
+      const { id } = req.params;
+      const { password } = req.body;
+
+      // Validate password
+      if (!password) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password is required'
+        });
+      }
+
+      // Check if user exists
+      const existingUser = await prisma.users.findUnique({
+        where: { id: parseInt(id) }
+      });
+
+      if (!existingUser) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      // Hash new password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Update password
+      await prisma.users.update({
+        where: { id: parseInt(id) },
+        data: { password: hashedPassword }
+      });
+
+      res.json({
+        success: true,
+        message: 'Password reset successfully'
+      });
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to reset password',
         error: error.message
       });
     }
