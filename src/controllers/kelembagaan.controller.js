@@ -611,8 +611,9 @@ class KelembagaanController {
         data: {
           desa: {
             id: desa.id,
-            nama: desa.nama,
-            nama: desa.kecamatans?.nama,
+            nama: desa.nama,        
+            nama_kecamatan: desa.kecamatans?.nama || null,
+            kecamatan_id: desa.kecamatan_id,
             status_pemerintahan: desa.status_pemerintahan
           },
           kelembagaan: {
