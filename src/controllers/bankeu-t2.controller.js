@@ -1,11 +1,11 @@
-// src/controllers/bankeu.controller.js
+// src/controllers/bankeu-t2.controller.js
 const fs = require('fs').promises;
 const path = require('path');
 
 /**
- * Upload and replace bankeu2025.json file
+ * Upload and replace bankeu-tahap2.json file
  */
-const uploadBankeuData = async (req, res) => {
+const uploadBankeuT2Data = async (req, res) => {
   try {
     // Check if file exists in request
     if (!req.file) {
@@ -66,7 +66,7 @@ const uploadBankeuData = async (req, res) => {
 
     // Backup old file (optional, with timestamp)
     const publicDir = path.join(__dirname, '../../public');
-    const targetFile = path.join(publicDir, 'bankeu2025.json');
+    const targetFile = path.join(publicDir, 'bankeu-tahap2.json');
     const backupDir = path.join(publicDir, 'backups');
     
     // Create backups directory if not exists
@@ -80,14 +80,14 @@ const uploadBankeuData = async (req, res) => {
     try {
       await fs.access(targetFile);
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
-      const backupFile = path.join(backupDir, `bankeu2025_backup_${timestamp}.json`);
+      const backupFile = path.join(backupDir, `bankeu-tahap2_backup_${timestamp}.json`);
       await fs.copyFile(targetFile, backupFile);
     } catch (error) {
       // File doesn't exist, skip backup
       console.log('No existing file to backup');
     }
 
-    // Move uploaded file to replace bankeu2025.json
+    // Move uploaded file to replace bankeu-tahap2.json
     await fs.copyFile(req.file.path, targetFile);
     
     // Remove temp uploaded file
@@ -114,26 +114,20 @@ const uploadBankeuData = async (req, res) => {
     });
     const uniqueDesa = Object.keys(desaMap).length;
 
-    // Count tahap 1 & tahap 2
-    const tahap1Count = validData.filter(item => item.sts === 'Dana Telah Dicairkan').length;
-    const tahap2Count = validData.filter(item => item.sts !== 'Dana Telah Dicairkan').length;
-
     res.json({
       success: true,
-      message: 'Data Bantuan Keuangan berhasil diupdate',
+      message: 'Data Bantuan Keuangan Tahap 2 berhasil diupdate',
       data: {
         totalRows,
         validRows,
         uniqueDesa,
-        tahap1Count,
-        tahap2Count,
         uploadedAt: new Date().toISOString(),
         uploadedBy: req.user?.nama || req.user?.email || 'System'
       }
     });
 
   } catch (error) {
-    console.error('Error uploading bankeu data:', error);
+    console.error('Error uploading bankeu tahap 2 data:', error);
     
     // Clean up uploaded file if exists
     if (req.file && req.file.path) {
@@ -153,12 +147,12 @@ const uploadBankeuData = async (req, res) => {
 };
 
 /**
- * Get bankeu data (JSON content)
+ * Get bankeu tahap 2 data (JSON content)
  */
-const getBankeuData = async (req, res) => {
+const getBankeuT2Data = async (req, res) => {
   try {
     const publicDir = path.join(__dirname, '../../public');
-    const targetFile = path.join(publicDir, 'bankeu2025.json');
+    const targetFile = path.join(publicDir, 'bankeu-tahap2.json');
 
     // Check if file exists
     try {
@@ -166,7 +160,7 @@ const getBankeuData = async (req, res) => {
     } catch {
       return res.status(404).json({
         success: false,
-        message: 'File data Bantuan Keuangan tidak ditemukan'
+        message: 'File data Bantuan Keuangan Tahap 2 tidak ditemukan'
       });
     }
 
@@ -180,22 +174,22 @@ const getBankeuData = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error getting bankeu data:', error);
+    console.error('Error getting bankeu tahap 2 data:', error);
     res.status(500).json({
       success: false,
-      message: 'Gagal membaca data Bantuan Keuangan',
+      message: 'Gagal membaca data Bantuan Keuangan Tahap 2',
       error: error.message
     });
   }
 };
 
 /**
- * Get current bankeu data info
+ * Get current bankeu tahap 2 data info
  */
-const getBankeuInfo = async (req, res) => {
+const getBankeuT2Info = async (req, res) => {
   try {
     const publicDir = path.join(__dirname, '../../public');
-    const targetFile = path.join(publicDir, 'bankeu2025.json');
+    const targetFile = path.join(publicDir, 'bankeu-tahap2.json');
 
     // Check if file exists
     try {
@@ -203,7 +197,7 @@ const getBankeuInfo = async (req, res) => {
     } catch {
       return res.status(404).json({
         success: false,
-        message: 'File data Bantuan Keuangan tidak ditemukan'
+        message: 'File data Bantuan Keuangan Tahap 2 tidak ditemukan'
       });
     }
 
@@ -231,7 +225,7 @@ const getBankeuInfo = async (req, res) => {
     res.json({
       success: true,
       data: {
-        fileName: 'bankeu2025.json',
+        fileName: 'bankeu-tahap2.json',
         fileSize: stats.size,
         lastModified: stats.mtime,
         totalRows: jsonData.length,
@@ -241,7 +235,7 @@ const getBankeuInfo = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error getting bankeu info:', error);
+    console.error('Error getting bankeu tahap 2 info:', error);
     res.status(500).json({
       success: false,
       message: 'Terjadi kesalahan saat mengambil info data',
@@ -253,7 +247,7 @@ const getBankeuInfo = async (req, res) => {
 /**
  * Get list of backup files
  */
-const getBackupList = async (req, res) => {
+const getBankeuT2BackupList = async (req, res) => {
   try {
     const publicDir = path.join(__dirname, '../../public');
     const backupDir = path.join(publicDir, 'backups');
@@ -270,7 +264,7 @@ const getBackupList = async (req, res) => {
 
     // Read backup directory
     const files = await fs.readdir(backupDir);
-    const backupFiles = files.filter(file => file.startsWith('bankeu2025_backup_'));
+    const backupFiles = files.filter(file => file.startsWith('bankeu-tahap2_backup_'));
 
     // Get file stats for each backup
     const backups = await Promise.all(
@@ -305,8 +299,8 @@ const getBackupList = async (req, res) => {
 };
 
 module.exports = {
-  uploadBankeuData,
-  getBankeuData,
-  getBankeuInfo,
-  getBackupList
+  uploadBankeuT2Data,
+  getBankeuT2Data,
+  getBankeuT2Info,
+  getBankeuT2BackupList
 };
