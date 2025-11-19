@@ -127,15 +127,15 @@ model bumdes {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model desas {
-  id_desa             BigInt                    @id @default(autoincrement()) @map("id") @db.UnsignedBigInt
-  id_kecamatan        BigInt                    @map("kecamatan_id") @db.UnsignedBigInt
-  kode_desa           String                    @unique(map: "desas_kode_unique") @map("kode") @db.VarChar(255)
-  nama_desa           String                    @map("nama") @db.VarChar(255)
+  id                  BigInt                    @id @default(autoincrement()) @db.UnsignedBigInt
+  kecamatan_id        BigInt                    @db.UnsignedBigInt
+  kode                String                    @unique(map: "desas_kode_unique") @db.VarChar(255)
+  nama                String                    @db.VarChar(255)
   status_pemerintahan desas_status_pemerintahan @default(desa)
   is_musdesus_target  Boolean                   @default(false)
   created_at          DateTime?                 @db.Timestamp(0)
   updated_at          DateTime?                 @db.Timestamp(0)
-  kecamatans          kecamatans                @relation(fields: [id_kecamatan], references: [id_kecamatan], onDelete: Cascade, onUpdate: NoAction, map: "desas_kecamatan_id_foreign")
+  kecamatans          kecamatans                @relation(fields: [kecamatan_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "desas_kecamatan_id_foreign")
   karang_tarunas      karang_tarunas[]
   lpms                lpms[]
   pengurus            pengurus[]
@@ -148,7 +148,7 @@ model desas {
   rws                 rws[]
   satlinmas           satlinmas[]
 
-  @@index([id_kecamatan], map: "desas_kecamatan_id_foreign")
+  @@index([kecamatan_id], map: "desas_kecamatan_id_foreign")
 }
 
 model dinas {
@@ -177,15 +177,15 @@ model karang_tarunas {
   status_verifikasi  karang_tarunas_status_verifikasi?  @default(unverified)
   created_at         DateTime?                          @default(now()) @db.Timestamp(0)
   updated_at         DateTime?                          @default(now()) @db.Timestamp(0)
-  desas              desas                              @relation(fields: [desa_id], references: [id_desa], onDelete: Cascade, onUpdate: NoAction, map: "karang_tarunas_desa_id_foreign")
+  desas              desas                              @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "karang_tarunas_desa_id_foreign")
 
   @@index([desa_id], map: "karang_tarunas_desa_id_foreign")
 }
 
 model kecamatans {
-  id_kecamatan       BigInt               @id @default(autoincrement()) @map("id") @db.UnsignedBigInt
-  kode_kecamatan     String               @unique(map: "kecamatans_kode_unique") @map("kode") @db.VarChar(255)
-  nama_kecamatan     String               @map("nama") @db.VarChar(255)
+  id                 BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
+  kode               String               @unique(map: "kecamatans_kode_unique") @db.VarChar(255)
+  nama               String               @db.VarChar(255)
   created_at         DateTime?            @db.Timestamp(0)
   updated_at         DateTime?            @db.Timestamp(0)
   desas              desas[]
@@ -239,7 +239,7 @@ model lpms {
   status_verifikasi  lpms_status_verifikasi?  @default(unverified)
   created_at         DateTime?                @default(now()) @db.Timestamp(0)
   updated_at         DateTime?                @default(now()) @db.Timestamp(0)
-  desas              desas                    @relation(fields: [desa_id], references: [id_desa], onDelete: Cascade, onUpdate: NoAction, map: "lpms_desa_id_foreign")
+  desas              desas                    @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "lpms_desa_id_foreign")
 
   @@index([desa_id], map: "lpms_desa_id_foreign")
 }
@@ -268,7 +268,7 @@ model pengurus {
   avatar                String?                     @db.VarChar(255)
   created_at            DateTime?                   @default(now()) @db.Timestamp(0)
   updated_at            DateTime?                   @default(now()) @db.Timestamp(0)
-  desas                 desas                       @relation(fields: [desa_id], references: [id_desa], onDelete: Cascade, onUpdate: NoAction, map: "pengurus_desa_id_foreign")
+  desas                 desas                       @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pengurus_desa_id_foreign")
 
   @@index([pengurusable_type, pengurusable_id], map: "idx_pengurusable")
   @@index([status_jabatan], map: "idx_status_jabatan")
@@ -296,8 +296,8 @@ model petugas_monitoring {
   is_active      Boolean     @default(true)
   created_at     DateTime?   @db.Timestamp(0)
   updated_at     DateTime?   @db.Timestamp(0)
-  desas          desas?      @relation(fields: [desa_id], references: [id_desa], onUpdate: NoAction, map: "petugas_monitoring_desa_id_foreign")
-  kecamatans     kecamatans? @relation(fields: [kecamatan_id], references: [id_kecamatan], onUpdate: NoAction, map: "petugas_monitoring_kecamatan_id_foreign")
+  desas          desas?      @relation(fields: [desa_id], references: [id], onUpdate: NoAction, map: "petugas_monitoring_desa_id_foreign")
+  kecamatans     kecamatans? @relation(fields: [kecamatan_id], references: [id], onUpdate: NoAction, map: "petugas_monitoring_kecamatan_id_foreign")
 
   @@index([desa_id, kecamatan_id], map: "petugas_monitoring_desa_id_kecamatan_id_index")
   @@index([kecamatan_id], map: "petugas_monitoring_kecamatan_id_foreign")
@@ -312,7 +312,7 @@ model pkks {
   status_verifikasi  pkks_status_verifikasi?  @default(unverified)
   created_at         DateTime?                @default(now()) @db.Timestamp(0)
   updated_at         DateTime?                @default(now()) @db.Timestamp(0)
-  desas              desas                    @relation(fields: [desa_id], references: [id_desa], onDelete: Cascade, onUpdate: NoAction, map: "pkks_desa_id_foreign")
+  desas              desas                    @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pkks_desa_id_foreign")
 
   @@index([desa_id], map: "pkks_desa_id_foreign")
 }
@@ -326,7 +326,7 @@ model posyandus {
   status_verifikasi  posyandus_status_verifikasi?  @default(unverified)
   created_at         DateTime?                     @default(now()) @db.Timestamp(0)
   updated_at         DateTime?                     @default(now()) @db.Timestamp(0)
-  desas              desas                         @relation(fields: [desa_id], references: [id_desa], onDelete: Cascade, onUpdate: NoAction, map: "posyandus_desa_id_foreign")
+  desas              desas                         @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "posyandus_desa_id_foreign")
 
   @@index([desa_id], map: "posyandus_desa_id_foreign")
 }
@@ -362,7 +362,7 @@ model produk_hukums {
   updated_at                                             DateTime?                      @db.Timestamp(0)
   bumdes_bumdes_produk_hukum_perdes_idToproduk_hukums    bumdes[]                       @relation("bumdes_produk_hukum_perdes_idToproduk_hukums")
   bumdes_bumdes_produk_hukum_sk_bumdes_idToproduk_hukums bumdes[]                       @relation("bumdes_produk_hukum_sk_bumdes_idToproduk_hukums")
-  desas                                                  desas                          @relation(fields: [desa_id], references: [id_desa], onDelete: Cascade, onUpdate: NoAction, map: "produk_hukums_desa_id_foreign")
+  desas                                                  desas                          @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "produk_hukums_desa_id_foreign")
   rws                                                    rws[]
   satlinmas                                              satlinmas[]
 
@@ -391,7 +391,7 @@ model profil_desas {
   longitude             Decimal?  @db.Decimal(10, 7)
   created_at            DateTime? @db.Timestamp(0)
   updated_at            DateTime? @db.Timestamp(0)
-  desas                 desas     @relation(fields: [desa_id], references: [id_desa], onDelete: Cascade, onUpdate: NoAction, map: "profil_desas_desa_id_foreign")
+  desas                 desas     @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "profil_desas_desa_id_foreign")
 }
 
 model rts {
@@ -404,7 +404,7 @@ model rts {
   status_verifikasi  rts_status_verifikasi?  @default(unverified)
   created_at         DateTime?               @default(now()) @db.Timestamp(0)
   updated_at         DateTime?               @default(now()) @db.Timestamp(0)
-  desas              desas                   @relation(fields: [desa_id], references: [id_desa], onDelete: Cascade, onUpdate: NoAction, map: "rts_desa_id_foreign")
+  desas              desas                   @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "rts_desa_id_foreign")
   rws                rws                     @relation(fields: [rw_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "rts_rw_id_foreign")
 
   @@unique([rw_id, nomor], map: "unique_rw_nomor")
@@ -422,7 +422,7 @@ model rws {
   updated_at         DateTime?              @db.Timestamp(0)
   produk_hukum_id    String?                @db.Char(36)
   rts                rts[]
-  desas              desas                  @relation(fields: [desa_id], references: [id_desa], onDelete: Cascade, onUpdate: NoAction, map: "rws_desa_id_foreign")
+  desas              desas                  @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "rws_desa_id_foreign")
   produk_hukums      produk_hukums?         @relation(fields: [produk_hukum_id], references: [id], onUpdate: NoAction, map: "rws_produk_hukum_id_foreign")
 
   @@unique([desa_id, nomor], map: "rws_desa_id_nomor_unique")
@@ -439,7 +439,7 @@ model satlinmas {
   created_at         DateTime?                    @db.Timestamp(0)
   updated_at         DateTime?                    @db.Timestamp(0)
   produk_hukum_id    String?                      @db.Char(36)
-  desas              desas                        @relation(fields: [desa_id], references: [id_desa], onDelete: Cascade, onUpdate: NoAction, map: "satlinmas_desa_id_foreign")
+  desas              desas                        @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "satlinmas_desa_id_foreign")
   produk_hukums      produk_hukums?               @relation(fields: [produk_hukum_id], references: [id], onUpdate: NoAction, map: "satlinmas_produk_hukum_id_foreign")
 
   @@index([desa_id], map: "satlinmas_desa_id_foreign")

@@ -16,6 +16,7 @@ const errorHandler = require('./middlewares/errorHandler');
 
 // Import routes
 const authRoutes = require('./routes/auth.routes');
+const userRoutes = require('./routes/user.routes');
 const bumdesRoutes = require('./routes/bumdes.routes');
 const musdesusRoutes = require('./routes/musdesus.routes');
 const perjalananDinasRoutes = require('./routes/perjalananDinas.routes');
@@ -126,6 +127,7 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/public', publicRoutes); // Public endpoints (no auth)
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes); // User management routes
 app.use('/api', locationRoutes); // Kecamatan & Desa routes
 app.use('/api/desa/bumdes', bumdesRoutes);
 app.use('/api/bumdes', bumdesRoutes); // Admin routes
