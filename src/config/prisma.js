@@ -9,7 +9,7 @@ const logger = require('../utils/logger');
 // Buat Prisma Client instance
 const prisma = new PrismaClient({
   log: process.env.NODE_ENV === 'development' 
-    ? ['query', 'info', 'warn', 'error']
+    ? ['info', 'warn', 'error']  // Removed 'query' to reduce log noise
     : ['warn', 'error'],
 });
 

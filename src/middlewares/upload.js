@@ -11,6 +11,7 @@ const uploadDirs = [
   'storage/uploads/perjalanan_dinas',
   'storage/uploads/hero-gallery',
   'storage/uploads/surat-masuk',
+  'storage/uploads/aparatur_desa_files',
   'storage/produk_hukum'
 ];
 
@@ -255,6 +256,43 @@ const uploadSuratMasuk = multer({
   }
 });
 
+// Storage configuration for APARATUR DESA
+const storageAparaturDesa = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'storage/uploads/aparatur_desa_files');
+  },
+  filename: function (req, file, cb) {
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    const nameWithoutExt = path.basename(file.originalname, ext);
+    const sanitizedName = nameWithoutExt.replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `${sanitizedName}_${timestamp}${ext}`;
+    
+    cb(null, filename);
+  }
+});
+
+// File filter for Aparatur Desa (PDF, JPG, JPEG, PNG)
+const aparaturDesaFileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png'];
+  const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+  
+  if (allowedExtensions.includes(ext) && allowedMimeTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Hanya file PDF, JPG, JPEG, dan PNG yang diperbolehkan'), false);
+  }
+};
+
+const uploadAparaturDesa = multer({
+  storage: storageAparaturDesa,
+  fileFilter: aparaturDesaFileFilter,
+  limits: {
+    fileSize: 2 * 1024 * 1024 // 2MB for files
+  }
+});
+
 module.exports = {
   uploadBumdes,
   uploadMusdesus,
@@ -262,5 +300,6 @@ module.exports = {
   uploadHeroGallery,
   uploadBerita,
   uploadProdukHukum,
-  uploadSuratMasuk
+  uploadSuratMasuk,
+  uploadAparaturDesa
 };

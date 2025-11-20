@@ -26,6 +26,7 @@ const locationRoutes = require('./routes/location.routes');
 const kepalaDinasRoutes = require('./routes/kepalaDinas.routes');
 const kelembagaanRoutes = require('./routes/kelembagaan.routes');
 const desaKelembagaanRoutes = require('./routes/desa.kelembagaan.routes');
+const aparaturDesaRoutes = require('./routes/aparatur-desa.routes');
 const produkHukumRoutes = require('./routes/produkHukum.routes');
 const bankeuT1Routes = require('./routes/bankeu-t1.routes');
 const bankeuT2Routes = require('./routes/bankeu-t2.routes');
@@ -167,6 +168,8 @@ app.use('/api/bumdes', bumdesRoutes); // Admin routes
 app.use('/api/desa/musdesus', musdesusRoutes);
 app.use('/api/musdesus', musdesusRoutes); // Admin routes
 app.use('/api/desa', desaKelembagaanRoutes); // Desa kelembagaan routes (RW, RT, Posyandu, etc.)
+app.use('/api/desa/aparatur-desa', aparaturDesaRoutes); // Aparatur Desa routes
+app.use('/api/desa/produk-hukum', produkHukumRoutes); // Produk Hukum routes (desa alias)
 app.use('/api/perjalanan-dinas', perjalananDinasRoutes);
 app.use('/api/perjadin', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/kegiatan', perjalananDinasRoutes); // Alias for perjadin
