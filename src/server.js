@@ -30,12 +30,16 @@ const produkHukumRoutes = require('./routes/produkHukum.routes');
 const bankeuT1Routes = require('./routes/bankeu-t1.routes');
 const bankeuT2Routes = require('./routes/bankeu-t2.routes');
 const addRoutes = require('./routes/add.routes');
+const ddRoutes = require('./routes/dd.routes');
 const ddEarmarkedT1Routes = require('./routes/dd-earmarked-t1.routes');
 const ddEarmarkedT2Routes = require('./routes/dd-earmarked-t2.routes');
 const ddNonEarmarkedT1Routes = require('./routes/dd-nonearmarked-t1.routes');
 const ddNonEarmarkedT2Routes = require('./routes/dd-nonearmarked-t2.routes');
 const insentifDdRoutes = require('./routes/insentif-dd.routes');
 const bhprdRoutes = require('./routes/bhprd.routes');
+const bhprdT1Routes = require('./routes/bhprd-t1.routes');
+const bhprdT2Routes = require('./routes/bhprd-t2.routes');
+const bhprdT3Routes = require('./routes/bhprd-t3.routes');
 
 const app = express();
 
@@ -147,12 +151,16 @@ app.use('/api/produk-hukum', produkHukumRoutes); // Produk Hukum routes
 app.use('/api/bankeu-t1', bankeuT1Routes); // Bantuan Keuangan Tahap 1
 app.use('/api/bankeu-t2', bankeuT2Routes); // Bantuan Keuangan Tahap 2
 app.use('/api/add', addRoutes); // ADD (Alokasi Dana Desa) routes
+app.use('/api/dd', ddRoutes); // DD (Dana Desa) routes
 app.use('/api/dd-earmarked-t1', ddEarmarkedT1Routes); // DD Earmarked Tahap 1
 app.use('/api/dd-earmarked-t2', ddEarmarkedT2Routes); // DD Earmarked Tahap 2
 app.use('/api/dd-nonearmarked-t1', ddNonEarmarkedT1Routes); // DD Non-Earmarked Tahap 1
 app.use('/api/dd-nonearmarked-t2', ddNonEarmarkedT2Routes); // DD Non-Earmarked Tahap 2
 app.use('/api/insentif-dd', insentifDdRoutes); // Insentif DD
 app.use('/api/bhprd', bhprdRoutes); // BHPRD (Bagi Hasil Pajak dan Retribusi Daerah) routes
+app.use('/api/bhprd-t1', bhprdT1Routes); // BHPRD Tahap 1
+app.use('/api/bhprd-t2', bhprdT2Routes); // BHPRD Tahap 2
+app.use('/api/bhprd-t3', bhprdT3Routes); // BHPRD Tahap 3
 
 // 404 handler
 app.use((req, res) => {

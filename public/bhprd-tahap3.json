@@ -1,0 +1,9 @@
+[
+{"sts":"Sedang di Proses oleh Kecamatan","id_status":"1","Realisasi":"1,792,596,120"},
+{"sts":"Review DPMD","id_status":"2","Realisasi":"384,832,396"},
+{"sts":"Proses SPP,SPM,SP2D di  BPKAD","id_status":"4","Realisasi":"2,413,336,625"},
+{"sts":"Dikembalikan ke Kecamatan","id_status":"5","Realisasi":"188,654,861"},
+{"sts":"Dikembalikan ke Desa","id_status":"6","Realisasi":"106,013,952"},
+{"sts":"Proses Pencairan Dana Oleh Bank","id_status":"7","Realisasi":"2,664,807,547"},
+{"sts":"Dana Telah Dicairkan","id_status":"8","Realisasi":"62,402,112,714"}
+]

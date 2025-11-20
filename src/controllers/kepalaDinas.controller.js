@@ -333,9 +333,12 @@ class KepalaDinasController {
     }
   }
 
-  // Get trend data (last 6 months) - Simplified version
+  // Get trend data (last 6 months) - Enhanced with all statistics
   async getTrendData() {
     try {
+      const fs = require('fs');
+      const path = require('path');
+      
       // Simple approach: get last 6 months data
       const result = [];
       const months = [];
@@ -362,10 +365,58 @@ class KepalaDinasController {
           WHERE DATE_FORMAT(tanggal_mulai, '%Y-%m') = '${month}'
         `);
 
+        // Read JSON data files for ADD, BHPRD, DD, and Bankeu
+        const addPath = path.join(__dirname, '../../public/add2025.json');
+        const bhprdPath = path.join(__dirname, '../../public/bhprd2025.json');
+        const ddPath = path.join(__dirname, '../../public/dd2025.json');
+        const bankeuPath = path.join(__dirname, '../../public/bankeu2025.json');
+        
+        let addCount = 0, bhprdCount = 0, ddCount = 0, bankeuCount = 0;
+        
+        try {
+          if (fs.existsSync(addPath)) {
+            const addData = JSON.parse(fs.readFileSync(addPath, 'utf8'));
+            addCount = addData.data ? addData.data.length : 0;
+          }
+        } catch (err) {
+          logger.warn(`Error reading ADD data: ${err.message}`);
+        }
+        
+        try {
+          if (fs.existsSync(bhprdPath)) {
+            const bhprdData = JSON.parse(fs.readFileSync(bhprdPath, 'utf8'));
+            bhprdCount = bhprdData.data ? bhprdData.data.length : 0;
+          }
+        } catch (err) {
+          logger.warn(`Error reading BHPRD data: ${err.message}`);
+        }
+        
+        try {
+          if (fs.existsSync(ddPath)) {
+            const ddData = JSON.parse(fs.readFileSync(ddPath, 'utf8'));
+            ddCount = ddData.data ? ddData.data.length : 0;
+          }
+        } catch (err) {
+          logger.warn(`Error reading DD data: ${err.message}`);
+        }
+        
+        try {
+          if (fs.existsSync(bankeuPath)) {
+            const bankeuData = JSON.parse(fs.readFileSync(bankeuPath, 'utf8'));
+            bankeuCount = bankeuData.data ? bankeuData.data.length : 0;
+          }
+        } catch (err) {
+          logger.warn(`Error reading Bankeu data: ${err.message}`);
+        }
+
         result.push({
           month: month,
           bumdes_count: parseInt(bumdesCount[0]?.count) || 0,
-          perjadin_count: parseInt(perjadinCount[0]?.count) || 0
+          perjadin_count: parseInt(perjadinCount[0]?.count) || 0,
+          add_count: addCount,
+          bhprd_count: bhprdCount,
+          dd_count: ddCount,
+          bankeu_count: bankeuCount
         });
       }
 
