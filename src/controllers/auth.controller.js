@@ -329,8 +329,108 @@ const checkVpnAccess = async (req, res) => {
   }
 };
 
+/**
+ * Check Tailscale VPN - Strict verification for VPN access
+ * HYBRID APPROACH: Check both IP range AND secret key
+ * - If from Tailscale IP: Auto-grant access
+ * - If from public IP but has valid secret: Grant access (for Cloudflare/proxy cases)
+ */
+const checkTailscaleVpn = async (req, res) => {
+  try {
+    // Get all possible IP sources
+    const forwardedFor = req.headers['x-forwarded-for'];
+    const realIP = req.headers['x-real-ip'];
+    const remoteAddr = req.connection.remoteAddress || req.socket.remoteAddress;
+    
+    // Get VPN secret key from query or header
+    const vpnSecret = req.query.secret || req.headers['x-vpn-secret'];
+    const expectedSecret = process.env.VPN_SECRET_KEY || 'DPMD-INTERNAL-2025'; // Set in .env
+    
+    // Parse forwarded IPs (take first one = original client)
+    let clientIP = remoteAddr;
+    
+    if (forwardedFor) {
+      const ips = forwardedFor.split(',').map(ip => ip.trim());
+      clientIP = ips[0];
+    } else if (realIP) {
+      clientIP = realIP;
+    }
+
+    logger.info(`🔐 Tailscale VPN Check:`, {
+      ip: clientIP,
+      hasSecret: !!vpnSecret,
+      secretMatch: vpnSecret === expectedSecret,
+      headers: {
+        'x-forwarded-for': forwardedFor,
+        'x-real-ip': realIP,
+        'host': req.headers.host
+      }
+    });
+
+    // Function to check if IP is in Tailscale range (100.64.0.0/10)
+    const isIPInTailscaleRange = (ip) => {
+      // Allow localhost for development
+      if (ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1') {
+        logger.info('✅ Tailscale Check: Localhost detected (development mode)');
+        return true;
+      }
+
+      // Remove IPv6 prefix if present
+      const cleanIP = ip.replace('::ffff:', '');
+      
+      // Check Tailscale range: 100.64.0.0 to 100.127.255.255
+      const parts = cleanIP.split('.');
+      if (parts.length !== 4) return false;
+      
+      const firstOctet = parseInt(parts[0]);
+      const secondOctet = parseInt(parts[1]);
+      
+      // Tailscale uses 100.64.0.0/10
+      return firstOctet === 100 && secondOctet >= 64 && secondOctet <= 127;
+    };
+
+    const isVpnIP = isIPInTailscaleRange(clientIP);
+    const hasValidSecret = vpnSecret && vpnSecret === expectedSecret;
+
+    // ✅ GRANT ACCESS IF: Tailscale IP OR valid secret key
+    if (isVpnIP || hasValidSecret) {
+      const accessMethod = isVpnIP ? 'tailscale-ip' : 'secret-key';
+      logger.info(`✅ VPN ACCESS GRANTED via ${accessMethod}: IP=${clientIP}`);
+      
+      return res.status(200).json({
+        success: true,
+        data: {
+          isVpn: true,
+          ip: clientIP,
+          accessMethod,
+          message: 'VPN access verified'
+        }
+      });
+    }
+
+    // ❌ DENY ACCESS
+    logger.warn(`🚫 VPN ACCESS BLOCKED: IP=${clientIP}, InvalidSecret=${!!vpnSecret && !hasValidSecret}`);
+    return res.status(403).json({
+      success: false,
+      message: 'VPN connection or valid secret key required',
+      data: {
+        isVpn: false,
+        ip: clientIP,
+        reason: 'Not connected via Tailscale VPN and no valid secret provided'
+      }
+    });
+  } catch (error) {
+    logger.error('Tailscale VPN check error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
 module.exports = {
   login,
   verifyToken,
-  checkVpnAccess
+  checkVpnAccess,
+  checkTailscaleVpn
 };
