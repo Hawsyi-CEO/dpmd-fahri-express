@@ -128,4 +128,68 @@ const generateToken = (user) => {
   );
 };
 
-module.exports = { auth, checkRole, generateToken };
+// VPN IP-based authentication (no token required)
+const vpnAuth = async (req, res, next) => {
+  try {
+    // Get client IP address
+    const clientIP = req.headers['x-forwarded-for']?.split(',')[0].trim() || 
+                     req.headers['x-real-ip'] || 
+                     req.connection.remoteAddress || 
+                     req.socket.remoteAddress;
+
+    logger.info(`VPN Auth Check - Client IP: ${clientIP}`);
+
+    // Function to check if IP is in Tailscale range (100.64.0.0/10)
+    const isIPInTailscaleRange = (ip) => {
+      // Allow localhost for development
+      if (ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1') {
+        logger.info('✅ VPN Auth: Localhost detected (development mode)');
+        return true;
+      }
+
+      // Remove IPv6 prefix if present
+      const cleanIP = ip.replace('::ffff:', '');
+      
+      // Check Tailscale range: 100.64.0.0 to 100.127.255.255
+      const parts = cleanIP.split('.');
+      if (parts.length !== 4) return false;
+      
+      const firstOctet = parseInt(parts[0]);
+      const secondOctet = parseInt(parts[1]);
+      
+      // Tailscale uses 100.64.0.0/10 (100.64.0.0 - 100.127.255.255)
+      const isInRange = firstOctet === 100 && secondOctet >= 64 && secondOctet <= 127;
+      
+      return isInRange;
+    };
+
+    if (!isIPInTailscaleRange(clientIP)) {
+      logger.warn(`❌ VPN Auth failed: IP ${clientIP} not in VPN range`);
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied - VPN connection required',
+        ip: clientIP
+      });
+    }
+
+    logger.info(`✅ VPN Auth successful: IP ${clientIP} is in VPN range`);
+    
+    // Set a dummy user for VPN access
+    req.user = {
+      id: 'vpn-user',
+      name: 'VPN User',
+      email: 'vpn@internal',
+      role: 'vpn_access'
+    };
+    
+    next();
+  } catch (error) {
+    logger.error('VPN Authentication failed:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'VPN authentication failed'
+    });
+  }
+};
+
+module.exports = { auth, checkRole, generateToken, vpnAuth };

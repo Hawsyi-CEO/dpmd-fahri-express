@@ -40,6 +40,8 @@ const bhprdRoutes = require('./routes/bhprd.routes');
 const bhprdT1Routes = require('./routes/bhprd-t1.routes');
 const bhprdT2Routes = require('./routes/bhprd-t2.routes');
 const bhprdT3Routes = require('./routes/bhprd-t3.routes');
+const vpnDashboardRoutes = require('./routes/vpnDashboard.routes');
+const vpnCoreDashboardRoutes = require('./routes/vpnCoreDashboard.routes');
 
 const app = express();
 
@@ -161,6 +163,8 @@ app.use('/api/bhprd', bhprdRoutes); // BHPRD (Bagi Hasil Pajak dan Retribusi Dae
 app.use('/api/bhprd-t1', bhprdT1Routes); // BHPRD Tahap 1
 app.use('/api/bhprd-t2', bhprdT2Routes); // BHPRD Tahap 2
 app.use('/api/bhprd-t3', bhprdT3Routes); // BHPRD Tahap 3
+app.use('/api/vpn-dashboard', vpnDashboardRoutes); // VPN Dashboard (IP restricted)
+app.use('/api/vpn-core', vpnCoreDashboardRoutes); // VPN Core Dashboard Access (IP restricted, no auth token)
 
 // 404 handler
 app.use((req, res) => {

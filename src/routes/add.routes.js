@@ -34,12 +34,12 @@ const upload = multer({
 /**
  * @route   POST /api/add/upload
  * @desc    Upload and replace add2025.json file
- * @access  Private - superadmin, sarana_prasarana only
+ * @access  Private - superadmin, sarana_prasarana, kekayaan_keuangan
  */
 router.post(
   '/upload',
   auth,
-  checkRole('superadmin', 'sarana_prasarana'),
+  checkRole('superadmin', 'sarana_prasarana', 'kekayaan_keuangan'),
   upload.single('file'),
   addController.uploadAddData
 );

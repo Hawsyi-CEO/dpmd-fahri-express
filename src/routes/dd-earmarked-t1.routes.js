@@ -34,7 +34,7 @@ const upload = multer({
 router.post(
   '/upload',
   auth,
-  checkRole('superadmin', 'sarana_prasarana'),
+  checkRole('superadmin', 'sarana_prasarana', 'kekayaan_keuangan'),
   upload.single('file'),
   ddEarmarkedT1Controller.uploadDdEarmarkedT1Data
 );

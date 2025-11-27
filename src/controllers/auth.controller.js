@@ -236,7 +236,101 @@ const verifyToken = async (req, res) => {
   }
 };
 
+/**
+ * Check VPN Access - Detect if request is from Tailscale VPN
+ * SECURITY: Multi-layer VPN detection for production environment
+ */
+const checkVpnAccess = async (req, res) => {
+  try {
+    // Get client IP address (handle proxy/forwarded IPs)
+    const clientIP = req.headers['x-forwarded-for']?.split(',')[0].trim() || 
+                     req.headers['x-real-ip'] || 
+                     req.connection.remoteAddress || 
+                     req.socket.remoteAddress;
+
+    logger.info(`VPN Check - Client IP: ${clientIP}, Headers: ${JSON.stringify({
+      'x-forwarded-for': req.headers['x-forwarded-for'],
+      'x-real-ip': req.headers['x-real-ip'],
+      'user-agent': req.headers['user-agent']
+    })}`);
+
+    // Function to check if IP is in Tailscale range (100.64.0.0/10)
+    const isIPInTailscaleRange = (ip) => {
+      // Allow localhost for development
+      if (ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1') {
+        logger.info('✅ VPN Check: Localhost detected (development mode)');
+        return true;
+      }
+
+      // Remove IPv6 prefix if present
+      const cleanIP = ip.replace('::ffff:', '');
+      
+      // Check Tailscale range: 100.64.0.0 to 100.127.255.255
+      const parts = cleanIP.split('.');
+      if (parts.length !== 4) return false;
+      
+      const firstOctet = parseInt(parts[0]);
+      const secondOctet = parseInt(parts[1]);
+      
+      // Tailscale uses 100.64.0.0/10 (100.64.0.0 - 100.127.255.255)
+      const isInRange = firstOctet === 100 && secondOctet >= 64 && secondOctet <= 127;
+      
+      if (isInRange) {
+        logger.info(`✅ VPN Check: Tailscale IP detected - ${cleanIP}`);
+      } else {
+        logger.info(`❌ VPN Check: Non-VPN IP - ${cleanIP}`);
+      }
+      
+      return isInRange;
+    };
+
+    // SECURITY ENHANCEMENT: Check if request is directly to VPS Tailscale IP
+    const requestHost = req.headers.host || req.hostname;
+    const isTailscaleDirectAccess = requestHost.startsWith('100.107.112.30'); // VPS Tailscale IP
+    
+    if (isTailscaleDirectAccess) {
+      logger.info(`✅ VPN Check: Direct Tailscale access detected via ${requestHost}`);
+      return res.status(200).json({
+        success: true,
+        data: {
+          isVpn: true,
+          ip: clientIP,
+          accessType: 'direct-tailscale',
+          message: 'VPN connection detected (Direct Tailscale Access)'
+        }
+      });
+    }
+
+    // Standard IP range check (for VPN users accessing via public domain)
+    const isVpn = isIPInTailscaleRange(clientIP);
+
+    // Additional security: Log VPN access attempts for audit
+    if (isVpn) {
+      logger.info(`🔐 VPN ACCESS GRANTED: IP=${clientIP}, Host=${requestHost}`);
+    } else {
+      logger.warn(`⚠️ VPN ACCESS DENIED: IP=${clientIP}, Host=${requestHost}`);
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        isVpn,
+        ip: clientIP,
+        accessType: isVpn ? 'vpn-range' : 'public',
+        message: isVpn ? 'VPN connection detected' : 'Not connected via VPN'
+      }
+    });
+  } catch (error) {
+    logger.error('Check VPN error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
 module.exports = {
   login,
-  verifyToken
+  verifyToken,
+  checkVpnAccess
 };
