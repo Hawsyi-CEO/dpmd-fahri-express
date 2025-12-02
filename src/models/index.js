@@ -4,7 +4,7 @@ const sequelize = require('../config/database');
 const PerjalananDinas = require('./PerjalananDinas');
 const KegiatanBidang = require('./KegiatanBidang');
 const Bidang = require('./Bidang');
-const Personil = require('./Personil');
+const Pegawai = require('./Pegawai');
 
 // Setup associations
 PerjalananDinas.hasMany(KegiatanBidang, { 
@@ -27,12 +27,12 @@ Bidang.hasMany(KegiatanBidang, {
   as: 'kegiatan_details' 
 });
 
-Bidang.hasMany(Personil, {
+Bidang.hasMany(Pegawai, {
   foreignKey: 'id_bidang',
-  as: 'personil'
+  as: 'pegawai'
 });
 
-Personil.belongsTo(Bidang, {
+Pegawai.belongsTo(Bidang, {
   foreignKey: 'id_bidang',
   as: 'bidang'
 });
@@ -42,5 +42,5 @@ module.exports = {
   PerjalananDinas,
   KegiatanBidang,
   Bidang,
-  Personil
+  Pegawai
 };

@@ -316,7 +316,7 @@ exports.getPerjadinStats = async (req, res) => {
     startOfWeek.setDate(now.getDate() - now.getDay());
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     
-    const [totalKegiatan, kegiatanMingguIni, kegiatanBulanIni, totalPersonil, kegiatanPerBidang] = await Promise.all([
+    const [totalKegiatan, kegiatanMingguIni, kegiatanBulanIni, totalPegawai, kegiatanPerBidang] = await Promise.all([
       prisma.kegiatan.count(),
       prisma.kegiatan.count({
         where: {
@@ -328,7 +328,7 @@ exports.getPerjadinStats = async (req, res) => {
           tanggal_mulai: { gte: startOfMonth }
         }
       }),
-      prisma.personil.count(),
+      prisma.pegawai.count(),
       // Fixed: bidangs table has 'id' field, not 'id_bidang', and 'nama' not 'nama_bidang'
       prisma.$queryRaw`
         SELECT b.id, b.nama, COUNT(DISTINCT kb.id_kegiatan) as total_kegiatan
@@ -344,7 +344,7 @@ exports.getPerjadinStats = async (req, res) => {
         total_kegiatan: totalKegiatan,
         kegiatan_minggu_ini: kegiatanMingguIni,
         kegiatan_bulan_ini: kegiatanBulanIni,
-        total_personil: totalPersonil,
+        total_pegawai: totalPegawai,
         kegiatan_per_bidang: kegiatanPerBidang.map(b => ({
           id_bidang: Number(b.id),
           nama_bidang: b.nama,
@@ -405,8 +405,8 @@ exports.getPerjadinKegiatan = async (req, res) => {
       details: k.kegiatan_bidang.map(kb => ({
         id_bidang: kb.id_bidang,
         nama_bidang: kb.bidangs?.nama, // Fixed: bidangs has 'nama', not 'nama_bidang'
-        // Note: personil is stored as TEXT field, not separate junction table
-        personil_text: kb.personil
+        // Note: pegawai is stored as TEXT field, not separate junction table
+        pegawai_text: kb.pegawai
       }))
     }));
     

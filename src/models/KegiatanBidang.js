@@ -18,10 +18,10 @@ const KegiatanBidang = sequelize.define('KegiatanBidang', {
     allowNull: false,
     comment: 'ID bidang (foreign key)'
   },
-  personil: {
+  pegawai: {
     type: DataTypes.TEXT,
     allowNull: true,
-    comment: 'Data personil dalam format JSON'
+    comment: 'Data pegawai dalam format JSON'
   },
   created_at: {
     type: DataTypes.DATE,

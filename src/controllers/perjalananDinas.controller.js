@@ -3,7 +3,7 @@ const {
   PerjalananDinas, 
   KegiatanBidang, 
   Bidang, 
-  Personil 
+  Pegawai 
 } = require('../models');
 const logger = require('../utils/logger');
 const { Op } = require('sequelize');
@@ -85,7 +85,7 @@ exports.getAllKegiatan = async (req, res, next) => {
       distinct: true // Count distinct kegiatan, bukan rows yang di-join
     });
 
-    // Format response dengan bidang info dan personil
+    // Format response dengan bidang info dan pegawai
     const formattedRows = await Promise.all(rows.map(async (kegiatan) => {
       const kegiatanData = kegiatan.toJSON();
       
@@ -96,47 +96,61 @@ exports.getAllKegiatan = async (req, res, next) => {
           .filter(nama => nama)
           .join(', ');
         
-        // Process personil for each detail
+        // Process pegawai for each detail
         for (let detail of kegiatanData.details) {
-          let personilList = [];
+          let pegawaiList = [];
           
-          if (detail.personil) {
+          if (detail.pegawai) {
             try {
               // Try to parse as JSON first
-              const personilData = JSON.parse(detail.personil);
-              if (Array.isArray(personilData)) {
-                // Get personil details from database
-                const personilIds = personilData
-                  .map(p => p.id_personil || p)
+              const pegawaiData = JSON.parse(detail.pegawai);
+              if (Array.isArray(pegawaiData)) {
+                // Get pegawai details from database
+                const pegawaiIds = pegawaiData
+                  .map(p => p.id_pegawai || p)
                   .filter(id => id);
                 
-                if (personilIds.length > 0) {
-                  const personilRecords = await Personil.findAll({
-                    where: { id_personil: personilIds },
-                    attributes: ['id_personil', 'nama_personil']
+                if (pegawaiIds.length > 0) {
+                  const pegawaiRecords = await Pegawai.findAll({
+                    where: { id_pegawai: pegawaiIds },
+                    attributes: ['id_pegawai', 'nama_pegawai']
                   });
                   
-                  personilList = personilRecords.map(p => ({
-                    id_personil: p.id_personil,
-                    nama_personil: p.nama_personil
+                  pegawaiList = pegawaiRecords.map(p => ({
+                    id_pegawai: p.id_pegawai,
+                    nama_pegawai: p.nama_pegawai
                   }));
                 }
               }
             } catch (error) {
               // Not JSON, treat as comma-separated TEXT
-              const personilNames = detail.personil
-                .split(',')
-                .map(name => name.trim())
-                .filter(name => name);
+              // First try as single name (might contain comma for degree/title)
+              const singleNameQuery = await Pegawai.findAll({
+                where: { nama_pegawai: detail.pegawai.trim() },
+                attributes: ['id_pegawai', 'nama_pegawai']
+              });
               
-              personilList = personilNames.map(name => ({
-                id_personil: null,
-                nama_personil: name
-              }));
+              if (singleNameQuery.length > 0) {
+                pegawaiList = singleNameQuery.map(p => ({
+                  id_pegawai: p.id_pegawai,
+                  nama_pegawai: p.nama_pegawai
+                }));
+              } else {
+                // Not found as single name, try splitting
+                const pegawaiNames = detail.pegawai
+                  .split(',')
+                  .map(name => name.trim())
+                  .filter(name => name);
+                
+                pegawaiList = pegawaiNames.map(name => ({
+                  id_pegawai: null,
+                  nama_pegawai: name
+                }));
+              }
             }
           }
           
-          detail.personil_list = personilList;
+          detail.pegawai_list = pegawaiList;
         }
       } else {
         kegiatanData.bidang_list = '';
@@ -198,7 +212,7 @@ exports.getKegiatanById = async (req, res, next) => {
       });
     }
 
-    // Format response dengan detail bidang dan personil
+    // Format response dengan detail bidang dan pegawai
     const response = {
       id_kegiatan: kegiatan.id_kegiatan,
       nama_kegiatan: kegiatan.nama_kegiatan,
@@ -212,70 +226,91 @@ exports.getKegiatanById = async (req, res, next) => {
       updated_at: kegiatan.updated_at,
       details: [],
       bidang: [], // Array bidang untuk frontend
-      personil: [] // Array personil untuk frontend
+      pegawai: [] // Array pegawai untuk frontend
     };
 
     // Process kegiatan_bidang details
     if (kegiatan.details && kegiatan.details.length > 0) {
       for (const detail of kegiatan.details) {
-        let personilList = [];
+        let pegawaiList = [];
         
-        // Parse personil - handle both TEXT (comma-separated) and JSON format
-        if (detail.personil) {
+        // Parse pegawai - handle both TEXT (comma-separated) and JSON format
+        if (detail.pegawai) {
           try {
             // Try to parse as JSON first
-            const personilData = JSON.parse(detail.personil);
-            if (Array.isArray(personilData)) {
-              // Get personil details from database
-              const personilIds = personilData
-                .map(p => p.id_personil || p)
+            const pegawaiData = JSON.parse(detail.pegawai);
+            if (Array.isArray(pegawaiData)) {
+              // Get pegawai details from database
+              const pegawaiIds = pegawaiData
+                .map(p => p.id_pegawai || p)
                 .filter(id => id);
               
-              if (personilIds.length > 0) {
-                const personilRecords = await Personil.findAll({
-                  where: { id_personil: personilIds },
-                  attributes: ['id_personil', 'nama_personil', 'id_bidang']
+              if (pegawaiIds.length > 0) {
+                const pegawaiRecords = await Pegawai.findAll({
+                  where: { id_pegawai: pegawaiIds },
+                  attributes: ['id_pegawai', 'nama_pegawai', 'id_bidang']
                 });
                 
-                personilList = personilRecords.map(p => ({
-                  id_personil: p.id_personil,
-                  nama_personil: p.nama_personil,
+                pegawaiList = pegawaiRecords.map(p => ({
+                  id_pegawai: p.id_pegawai,
+                  nama_pegawai: p.nama_pegawai,
                   id_bidang: p.id_bidang
                 }));
               }
             }
           } catch (error) {
             // Not JSON, treat as comma-separated TEXT
-            const personilNames = detail.personil
-              .split(',')
-              .map(name => name.trim())
-              .filter(name => name);
+            // WARNING: This is problematic because names can contain commas (e.g., "John Doe, S.E.")
+            // We should migrate to JSON format for proper handling
             
-            if (personilNames.length > 0) {
-              // Try to find personil by name
-              const personilRecords = await Personil.findAll({
-                where: { 
-                  nama_personil: personilNames 
-                },
-                attributes: ['id_personil', 'nama_personil', 'id_bidang']
-              });
-              
-              personilList = personilRecords.map(p => ({
-                id_personil: p.id_personil,
-                nama_personil: p.nama_personil,
+            // First, try to query as single name (might contain comma for title)
+            const singleNameQuery = await Pegawai.findAll({
+              where: { 
+                nama_pegawai: detail.pegawai.trim()
+              },
+              attributes: ['id_pegawai', 'nama_pegawai', 'id_bidang']
+            });
+            
+            if (singleNameQuery.length > 0) {
+              // Found as single name, use it
+              pegawaiList = singleNameQuery.map(p => ({
+                id_pegawai: p.id_pegawai,
+                nama_pegawai: p.nama_pegawai,
                 id_bidang: p.id_bidang
               }));
+            } else {
+              // Not found as single name, try splitting
+              const pegawaiNames = detail.pegawai
+                .split(',')
+                .map(name => name.trim())
+                .filter(name => name);
               
-              // If some names not found in DB, add them as name-only
-              personilNames.forEach(name => {
-                if (!personilList.find(p => p.nama_personil === name)) {
-                  personilList.push({
-                    id_personil: null,
-                    nama_personil: name,
-                    id_bidang: detail.id_bidang
-                  });
-                }
-              });
+              if (pegawaiNames.length > 0) {
+                // Try to find pegawai by name
+                const pegawaiRecords = await Pegawai.findAll({
+                  where: { 
+                    nama_pegawai: pegawaiNames
+                  },
+                  attributes: ['id_pegawai', 'nama_pegawai', 'id_bidang']
+                });
+                
+                pegawaiList = pegawaiRecords.map(p => ({
+                  id_pegawai: p.id_pegawai,
+                  nama_pegawai: p.nama_pegawai,
+                  id_bidang: p.id_bidang
+                }));
+                
+                // If some names not found in DB, add them as name-only
+                pegawaiNames.forEach(name => {
+                  if (!pegawaiList.find(p => p.nama_pegawai === name)) {
+                    pegawaiList.push({
+                      id_pegawai: null,
+                      nama_pegawai: name,
+                      id_bidang: detail.id_bidang
+                    });
+                  }
+                });
+              }
             }
           }
         }
@@ -285,8 +320,8 @@ exports.getKegiatanById = async (req, res, next) => {
           id_kegiatan_bidang: detail.id_kegiatan_bidang,
           id_bidang: detail.id_bidang,
           nama_bidang: detail.bidang ? detail.bidang.nama : null,
-          personil: personilList.map(p => p.nama_personil).join(', '),
-          personil_list: personilList
+          pegawai: pegawaiList.map(p => p.nama_pegawai).join(', '),
+          pegawai_list: pegawaiList
         });
 
         // Add bidang to bidang array (for frontend)
@@ -298,11 +333,11 @@ exports.getKegiatanById = async (req, res, next) => {
           });
         }
 
-        // Add personil to personil array (for frontend)
-        personilList.forEach(p => {
-          response.personil.push({
-            id_personil: p.id_personil,
-            nama: p.nama_personil,
+        // Add pegawai to pegawai array (for frontend)
+        pegawaiList.forEach(p => {
+          response.pegawai.push({
+            id_pegawai: p.id_pegawai,
+            nama: p.nama_pegawai,
             bidang: detail.bidang ? detail.bidang.nama : 'Tidak diketahui'
           });
         });
@@ -325,27 +360,27 @@ exports.getKegiatanById = async (req, res, next) => {
 };
 
 /**
- * Check if personil has conflict with existing kegiatan
+ * Check if pegawai has conflict with existing kegiatan
  */
-const checkPersonilConflict = async (personilIds, tanggalMulai, tanggalSelesai, excludeKegiatanId = null) => {
-  if (!personilIds || personilIds.length === 0) {
+const checkPegawaiConflict = async (pegawaiIds, tanggalMulai, tanggalSelesai, excludeKegiatanId = null) => {
+  if (!pegawaiIds || pegawaiIds.length === 0) {
     return { hasConflict: false, conflicts: [] };
   }
   
-  // Query untuk cek personil yang sudah ada di kegiatan lain pada tanggal yang overlap
+  // Query untuk cek pegawai yang sudah ada di kegiatan lain pada tanggal yang overlap
   const query = `
     SELECT DISTINCT
       k.id_kegiatan,
       k.nama_kegiatan,
       k.tanggal_mulai,
       k.tanggal_selesai,
-      kb.personil,
+      kb.pegawai,
       kb.id_bidang
     FROM kegiatan k
     INNER JOIN kegiatan_bidang kb ON k.id_kegiatan = kb.id_kegiatan
-    WHERE kb.personil IS NOT NULL
-      AND kb.personil != ''
-      AND kb.personil != '[]'
+    WHERE kb.pegawai IS NOT NULL
+      AND kb.pegawai != ''
+      AND kb.pegawai != '[]'
       ${excludeKegiatanId ? `AND k.id_kegiatan != ${excludeKegiatanId}` : ''}
       AND (
         (k.tanggal_mulai BETWEEN ? AND ?)
@@ -363,17 +398,17 @@ const checkPersonilConflict = async (personilIds, tanggalMulai, tanggalSelesai, 
   
   for (const kegiatan of existingKegiatan) {
     try {
-      const existingPersonil = JSON.parse(kegiatan.personil || '[]');
-      const existingPersonilIds = existingPersonil.map(p => parseInt(p.id_personil));
+      const existingPegawai = JSON.parse(kegiatan.pegawai || '[]');
+      const existingPegawaiIds = existingPegawai.map(p => parseInt(p.id_pegawai));
       
-      // Cek apakah ada personil yang sama
-      const conflictPersonil = personilIds.filter(id => existingPersonilIds.includes(parseInt(id)));
+      // Cek apakah ada pegawai yang sama
+      const conflictPegawai = pegawaiIds.filter(id => existingPegawaiIds.includes(parseInt(id)));
       
-      if (conflictPersonil.length > 0) {
-        // Get nama personil yang conflict
-        const personilData = await Personil.findAll({
-          where: { id_personil: conflictPersonil },
-          attributes: ['id_personil', 'nama_personil']
+      if (conflictPegawai.length > 0) {
+        // Get nama pegawai yang conflict
+        const pegawaiData = await Pegawai.findAll({
+          where: { id_pegawai: conflictPegawai },
+          attributes: ['id_pegawai', 'nama_pegawai']
         });
         
         conflicts.push({
@@ -381,14 +416,14 @@ const checkPersonilConflict = async (personilIds, tanggalMulai, tanggalSelesai, 
           nama_kegiatan: kegiatan.nama_kegiatan,
           tanggal_mulai: kegiatan.tanggal_mulai,
           tanggal_selesai: kegiatan.tanggal_selesai,
-          personil_conflict: personilData.map(p => ({
-            id_personil: p.id_personil,
-            nama_personil: p.nama_personil
+          pegawai_conflict: pegawaiData.map(p => ({
+            id_pegawai: p.id_pegawai,
+            nama_pegawai: p.nama_pegawai
           }))
         });
       }
     } catch (e) {
-      logger.error('Error parsing personil JSON:', e);
+      logger.error('Error parsing pegawai JSON:', e);
     }
   }
 
@@ -416,12 +451,12 @@ exports.checkPersonnelConflict = async (req, res, next) => {
       });
     }
 
-    // Find personil by name
-    const personil = await Personil.findOne({
-      where: { nama_personil: personnel_name }
+    // Find pegawai by name
+    const pegawai = await Pegawai.findOne({
+      where: { nama_pegawai: personnel_name }
     });
 
-    if (!personil) {
+    if (!pegawai) {
       return res.json({
         status: 'success',
         conflicts: []
@@ -429,8 +464,8 @@ exports.checkPersonnelConflict = async (req, res, next) => {
     }
 
     // Check conflict using the helper function
-    const conflictCheck = await checkPersonilConflict(
-      [personil.id_personil],
+    const conflictCheck = await checkPegawaiConflict(
+      [pegawai.id_pegawai],
       start_date,
       end_date,
       exclude_id ? parseInt(exclude_id) : null
@@ -458,7 +493,7 @@ exports.createKegiatan = async (req, res, next) => {
       tanggal_selesai,
       lokasi,
       keterangan,
-      personil_bidang_list
+      pegawai_bidang_list
     } = req.body;
 
     // Validation
@@ -478,24 +513,24 @@ exports.createKegiatan = async (req, res, next) => {
       });
     }
 
-    // Extract all personil IDs from bidang list untuk validasi conflict
-    const allPersonilIds = [];
-    if (personil_bidang_list && Array.isArray(personil_bidang_list)) {
-      personil_bidang_list.forEach(bidang => {
-        if (bidang.personil && Array.isArray(bidang.personil)) {
-          bidang.personil.forEach(personilName => {
-            if (personilName && typeof personilName === 'object' && personilName.id_personil) {
-              allPersonilIds.push(parseInt(personilName.id_personil));
+    // Extract all pegawai IDs from bidang list untuk validasi conflict
+    const allPegawaiIds = [];
+    if (pegawai_bidang_list && Array.isArray(pegawai_bidang_list)) {
+      pegawai_bidang_list.forEach(bidang => {
+        if (bidang.pegawai && Array.isArray(bidang.pegawai)) {
+          bidang.pegawai.forEach(pegawaiName => {
+            if (pegawaiName && typeof pegawaiName === 'object' && pegawaiName.id_pegawai) {
+              allPegawaiIds.push(parseInt(pegawaiName.id_pegawai));
             }
           });
         }
       });
     }
 
-    // Check conflict personil
-    if (allPersonilIds.length > 0) {
-      const conflictCheck = await checkPersonilConflict(
-        allPersonilIds,
+    // Check conflict pegawai
+    if (allPegawaiIds.length > 0) {
+      const conflictCheck = await checkPegawaiConflict(
+        allPegawaiIds,
         tanggal_mulai,
         tanggal_selesai
       );
@@ -503,7 +538,7 @@ exports.createKegiatan = async (req, res, next) => {
       if (conflictCheck.hasConflict) {
         return res.status(409).json({
           status: 'error',
-          message: 'Terdapat personil yang sudah memiliki kegiatan pada tanggal yang sama',
+          message: 'Terdapat pegawai yang sudah memiliki kegiatan pada tanggal yang sama',
           conflicts: conflictCheck.conflicts
         });
       }
@@ -518,25 +553,25 @@ exports.createKegiatan = async (req, res, next) => {
       keterangan: keterangan || null
     });
 
-    // Save bidang and personil details
-    if (personil_bidang_list && Array.isArray(personil_bidang_list)) {
-      for (const bidangData of personil_bidang_list) {
+    // Save bidang and pegawai details
+    if (pegawai_bidang_list && Array.isArray(pegawai_bidang_list)) {
+      for (const bidangData of pegawai_bidang_list) {
         if (bidangData.id_bidang) {
-          // Prepare personil data
-          let personilJson = [];
-          if (bidangData.personil && Array.isArray(bidangData.personil)) {
-            personilJson = bidangData.personil
+          // Prepare pegawai data
+          let pegawaiJson = [];
+          if (bidangData.pegawai && Array.isArray(bidangData.pegawai)) {
+            pegawaiJson = bidangData.pegawai
               .filter(p => p) // Remove empty values
               .map(p => {
-                // Handle both object {id_personil, nama_personil} and string format
-                if (typeof p === 'object' && p.id_personil && p.nama_personil) {
+                // Handle both object {id_pegawai, nama_pegawai} and string format
+                if (typeof p === 'object' && p.id_pegawai && p.nama_pegawai) {
                   return {
-                    id_personil: p.id_personil,
-                    nama_personil: p.nama_personil
+                    id_pegawai: p.id_pegawai,
+                    nama_pegawai: p.nama_pegawai
                   };
                 } else if (typeof p === 'string' && p.trim()) {
-                  // If string, try to find matching personil
-                  return { nama_personil: p.trim() };
+                  // If string, try to find matching pegawai
+                  return { nama_pegawai: p.trim() };
                 }
                 return null;
               })
@@ -547,7 +582,7 @@ exports.createKegiatan = async (req, res, next) => {
           await KegiatanBidang.create({
             id_kegiatan: kegiatan.id_kegiatan,
             id_bidang: parseInt(bidangData.id_bidang),
-            personil: JSON.stringify(personilJson)
+            pegawai: JSON.stringify(pegawaiJson)
           });
         }
       }
@@ -583,7 +618,7 @@ exports.updateKegiatan = async (req, res, next) => {
       tanggal_selesai,
       lokasi,
       keterangan,
-      personil_bidang_list
+      pegawai_bidang_list
     } = req.body;
 
     const kegiatan = await PerjalananDinas.findByPk(id);
@@ -603,24 +638,24 @@ exports.updateKegiatan = async (req, res, next) => {
       });
     }
 
-    // Extract all personil IDs dari bidang list untuk validasi conflict
-    const allPersonilIds = [];
-    if (personil_bidang_list && Array.isArray(personil_bidang_list)) {
-      personil_bidang_list.forEach(bidang => {
-        if (bidang.personil && Array.isArray(bidang.personil)) {
-          bidang.personil.forEach(personilName => {
-            if (personilName && typeof personilName === 'object' && personilName.id_personil) {
-              allPersonilIds.push(parseInt(personilName.id_personil));
+    // Extract all pegawai IDs dari bidang list untuk validasi conflict
+    const allPegawaiIds = [];
+    if (pegawai_bidang_list && Array.isArray(pegawai_bidang_list)) {
+      pegawai_bidang_list.forEach(bidang => {
+        if (bidang.pegawai && Array.isArray(bidang.pegawai)) {
+          bidang.pegawai.forEach(pegawaiName => {
+            if (pegawaiName && typeof pegawaiName === 'object' && pegawaiName.id_pegawai) {
+              allPegawaiIds.push(parseInt(pegawaiName.id_pegawai));
             }
           });
         }
       });
     }
 
-    // Check conflict personil (exclude current kegiatan)
-    if (allPersonilIds.length > 0) {
-      const conflictCheck = await checkPersonilConflict(
-        allPersonilIds,
+    // Check conflict pegawai (exclude current kegiatan)
+    if (allPegawaiIds.length > 0) {
+      const conflictCheck = await checkPegawaiConflict(
+        allPegawaiIds,
         tanggal_mulai || kegiatan.tanggal_mulai,
         tanggal_selesai || kegiatan.tanggal_selesai,
         parseInt(id) // exclude current kegiatan from conflict check
@@ -629,7 +664,7 @@ exports.updateKegiatan = async (req, res, next) => {
       if (conflictCheck.hasConflict) {
         return res.status(409).json({
           status: 'error',
-          message: 'Terdapat personil yang sudah memiliki kegiatan pada tanggal yang sama',
+          message: 'Terdapat pegawai yang sudah memiliki kegiatan pada tanggal yang sama',
           conflicts: conflictCheck.conflicts
         });
       }
@@ -645,30 +680,30 @@ exports.updateKegiatan = async (req, res, next) => {
 
     await kegiatan.save();
 
-    // Update bidang and personil details
-    if (personil_bidang_list && Array.isArray(personil_bidang_list)) {
+    // Update bidang and pegawai details
+    if (pegawai_bidang_list && Array.isArray(pegawai_bidang_list)) {
       // Delete existing kegiatan_bidang records
       await KegiatanBidang.destroy({
         where: { id_kegiatan: parseInt(id) }
       });
 
       // Create new records
-      for (const bidangData of personil_bidang_list) {
+      for (const bidangData of pegawai_bidang_list) {
         if (bidangData.id_bidang) {
-          // Prepare personil data
-          let personilJson = [];
-          if (bidangData.personil && Array.isArray(bidangData.personil)) {
-            personilJson = bidangData.personil
+          // Prepare pegawai data
+          let pegawaiJson = [];
+          if (bidangData.pegawai && Array.isArray(bidangData.pegawai)) {
+            pegawaiJson = bidangData.pegawai
               .filter(p => p) // Remove empty values
               .map(p => {
-                // Handle both object {id_personil, nama_personil} and string format
-                if (typeof p === 'object' && p.id_personil && p.nama_personil) {
+                // Handle both object {id_pegawai, nama_pegawai} and string format
+                if (typeof p === 'object' && p.id_pegawai && p.nama_pegawai) {
                   return {
-                    id_personil: p.id_personil,
-                    nama_personil: p.nama_personil
+                    id_pegawai: p.id_pegawai,
+                    nama_pegawai: p.nama_pegawai
                   };
                 } else if (typeof p === 'string' && p.trim()) {
-                  return { nama_personil: p.trim() };
+                  return { nama_pegawai: p.trim() };
                 }
                 return null;
               })
@@ -679,7 +714,7 @@ exports.updateKegiatan = async (req, res, next) => {
           await KegiatanBidang.create({
             id_kegiatan: parseInt(id),
             id_bidang: parseInt(bidangData.id_bidang),
-            personil: JSON.stringify(personilJson)
+            pegawai: JSON.stringify(pegawaiJson)
           });
         }
       }
@@ -942,36 +977,35 @@ exports.getAllBidang = async (req, res, next) => {
 };
 
 /**
- * Get personil by bidang ID
+ * Get pegawai by bidang ID
  */
-exports.getPersonilByBidang = async (req, res, next) => {
+exports.getPegawaiByBidang = async (req, res, next) => {
   try {
     const { id_bidang } = req.params;
-    const Personil = require('../models/Personil');
     
-    const personil = await Personil.findAll({
+    const pegawai = await Pegawai.findAll({
       where: { id_bidang },
-      order: [['nama_personil', 'ASC']]
+      order: [['nama_pegawai', 'ASC']]
     });
 
-    logger.info('Perjalanan Dinas - Get Personil by Bidang', {
+    logger.info('Perjalanan Dinas - Get Pegawai by Bidang', {
       user_id: req.user.id,
       id_bidang,
-      total: personil.length
+      total: pegawai.length
     });
 
     res.json({
       status: 'success',
-      data: personil.map(p => ({
-        id_personil: p.id_personil,
+      data: pegawai.map(p => ({
+        id_pegawai: p.id_pegawai,
         id_bidang: p.id_bidang,
-        nama_personil: p.nama_personil,
+        nama_pegawai: p.nama_pegawai,
         created_at: p.created_at,
         updated_at: p.updated_at
       }))
     });
   } catch (error) {
-    logger.error('Perjalanan Dinas - Get Personil by Bidang Error:', error);
+    logger.error('Perjalanan Dinas - Get Pegawai by Bidang Error:', error);
     next(error);
   }
 };

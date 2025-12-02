@@ -45,10 +45,10 @@ router.get(
 );
 
 router.get(
-  '/personil/:id_bidang',
+  '/pegawai/:id_bidang',
   auth,
   checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
-  perjadinController.getPersonilByBidang
+  perjadinController.getPegawaiByBidang
 );
 
 // ======================
