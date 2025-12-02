@@ -1,0 +1,65 @@
+/**
+ * Bidang Routes
+ */
+
+const express = require('express');
+const router = express.Router();
+const prisma = require('../config/prisma');
+const { auth } = require('../middlewares/auth');
+
+// Get all bidang
+router.get('/', auth, async (req, res) => {
+  try {
+    const bidangs = await prisma.bidangs.findMany({
+      orderBy: {
+        nama: 'asc'
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Bidangs retrieved successfully',
+      data: bidangs
+    });
+  } catch (error) {
+    console.error('Error fetching bidangs:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch bidangs',
+      error: error.message
+    });
+  }
+});
+
+// Get bidang by ID
+router.get('/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const bidang = await prisma.bidangs.findUnique({
+      where: { id: BigInt(id) }
+    });
+
+    if (!bidang) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bidang not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Bidang retrieved successfully',
+      data: bidang
+    });
+  } catch (error) {
+    console.error('Error fetching bidang:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch bidang',
+      error: error.message
+    });
+  }
+});
+
+module.exports = router;

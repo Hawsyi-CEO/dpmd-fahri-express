@@ -3,6 +3,7 @@
  * Mengatasi masalah nama dengan koma (gelar) yang ter-split
  */
 
+require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 

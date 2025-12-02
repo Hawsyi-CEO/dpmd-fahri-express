@@ -170,7 +170,9 @@ class UserController {
         bidang_id, 
         kecamatan_id, 
         desa_id,
-        dinas_id
+        dinas_id,
+        pegawai_id,
+        is_active
       } = req.body;
 
       // Validate required fields
@@ -203,20 +205,24 @@ class UserController {
           email,
           password: hashedPassword,
           role,
+          is_active: is_active !== undefined ? is_active : true,
           bidang_id: bidang_id ? parseInt(bidang_id) : null,
           kecamatan_id: kecamatan_id ? parseInt(kecamatan_id) : null,
           desa_id: desa_id ? BigInt(desa_id) : null,
-          dinas_id: dinas_id ? parseInt(dinas_id) : null
+          dinas_id: dinas_id ? parseInt(dinas_id) : null,
+          pegawai_id: pegawai_id ? BigInt(pegawai_id) : null
         },
         select: {
           id: true,
           name: true,
           email: true,
           role: true,
+          is_active: true,
           bidang_id: true,
           kecamatan_id: true,
           desa_id: true,
           dinas_id: true,
+          pegawai_id: true,
           created_at: true,
           updated_at: true
         }
@@ -254,7 +260,9 @@ class UserController {
         bidang_id, 
         kecamatan_id, 
         desa_id,
-        dinas_id
+        dinas_id,
+        pegawai_id,
+        is_active
       } = req.body;
 
       // Check if user exists
@@ -293,10 +301,12 @@ class UserController {
       if (name !== undefined) updateData.name = name;
       if (email !== undefined) updateData.email = email;
       if (role !== undefined) updateData.role = role;
+      if (is_active !== undefined) updateData.is_active = is_active;
       if (bidang_id !== undefined) updateData.bidang_id = bidang_id ? parseInt(bidang_id) : null;
       if (kecamatan_id !== undefined) updateData.kecamatan_id = kecamatan_id ? parseInt(kecamatan_id) : null;
       if (desa_id !== undefined) updateData.desa_id = desa_id ? BigInt(desa_id) : null;
       if (dinas_id !== undefined) updateData.dinas_id = dinas_id ? parseInt(dinas_id) : null;
+      if (pegawai_id !== undefined) updateData.pegawai_id = pegawai_id ? BigInt(pegawai_id) : null;
 
       // Hash password if provided
       if (password) {
@@ -312,10 +322,12 @@ class UserController {
           name: true,
           email: true,
           role: true,
+          is_active: true,
           bidang_id: true,
           kecamatan_id: true,
           desa_id: true,
           dinas_id: true,
+          pegawai_id: true,
           created_at: true,
           updated_at: true
         }

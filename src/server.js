@@ -42,8 +42,13 @@ const bhprdT2Routes = require('./routes/bhprd-t2.routes');
 const bhprdT3Routes = require('./routes/bhprd-t3.routes');
 const vpnDashboardRoutes = require('./routes/vpnDashboard.routes');
 const vpnCoreDashboardRoutes = require('./routes/vpnCoreDashboard.routes');
+const pegawaiRoutes = require('./routes/pegawai.routes');
+const bidangRoutes = require('./routes/bidang.routes');
 
 const app = express();
+
+// Trust proxy for Nginx reverse proxy (fixes X-Forwarded-For header issues)
+app.set('trust proxy', true);
 
 // Security middleware
 app.use(helmet());
@@ -135,6 +140,8 @@ app.get('/health', (req, res) => {
 app.use('/api/public', publicRoutes); // Public endpoints (no auth)
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes); // User management routes
+app.use('/api/pegawai', pegawaiRoutes); // Pegawai routes
+app.use('/api/bidang', bidangRoutes); // Bidang routes
 app.use('/api', locationRoutes); // Kecamatan & Desa routes
 app.use('/api/desa/bumdes', bumdesRoutes);
 app.use('/api/bumdes', bumdesRoutes); // Admin routes
