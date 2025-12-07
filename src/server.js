@@ -143,6 +143,11 @@ app.use('/api/users', userRoutes); // User management routes
 app.use('/api/pegawai', pegawaiRoutes); // Pegawai routes
 app.use('/api/bidang', bidangRoutes); // Bidang routes
 app.use('/api', locationRoutes); // Kecamatan & Desa routes
+
+// Disposisi Surat routes
+app.use('/api/surat-masuk', require('./routes/surat.routes'));
+app.use('/api/disposisi', require('./routes/disposisi.routes'));
+
 app.use('/api/desa/bumdes', bumdesRoutes);
 app.use('/api/bumdes', bumdesRoutes); // Admin routes
 app.use('/api/desa/musdesus', musdesusRoutes);

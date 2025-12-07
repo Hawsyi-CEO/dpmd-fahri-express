@@ -10,6 +10,7 @@ const uploadDirs = [
   'storage/uploads/musdesus',
   'storage/uploads/perjalanan_dinas',
   'storage/uploads/hero-gallery',
+  'storage/uploads/surat-masuk',
   'storage/produk_hukum'
 ];
 
@@ -217,11 +218,49 @@ const uploadProdukHukum = multer({
   }
 });
 
+// Storage configuration for SURAT MASUK (PDF, JPG, PNG)
+const storageSuratMasuk = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'storage/uploads/surat-masuk');
+  },
+  filename: function (req, file, cb) {
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname).toLowerCase();
+    const nameWithoutExt = path.basename(file.originalname, ext);
+    const sanitizedName = nameWithoutExt.replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `${sanitizedName}_${timestamp}${ext}`;
+    
+    cb(null, filename);
+  }
+});
+
+// File filter for PDF and Images
+const documentImageFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const allowedExts = ['.pdf', '.jpg', '.jpeg', '.png'];
+  const allowedMimes = ['application/pdf', 'image/jpeg', 'image/png'];
+  
+  if (allowedExts.includes(ext) && allowedMimes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Hanya file PDF, JPG, JPEG, dan PNG yang diperbolehkan'), false);
+  }
+};
+
+const uploadSuratMasuk = multer({
+  storage: storageSuratMasuk,
+  fileFilter: documentImageFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB
+  }
+});
+
 module.exports = {
   uploadBumdes,
   uploadMusdesus,
   uploadPerjadinDinas,
   uploadHeroGallery,
   uploadBerita,
-  uploadProdukHukum
+  uploadProdukHukum,
+  uploadSuratMasuk
 };

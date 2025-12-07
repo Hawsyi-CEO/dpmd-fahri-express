@@ -448,22 +448,26 @@ model satlinmas {
 }
 
 model users {
-  id                BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
-  name              String     @db.VarChar(255)
-  email             String     @unique(map: "users_email_unique") @db.VarChar(255)
-  email_verified_at DateTime?  @db.Timestamp(0)
-  password          String     @db.VarChar(255)
-  is_active         Boolean    @default(true)
-  role              users_role @default(desa)
-  kecamatan_id      Int?       @db.UnsignedInt
-  desa_id           BigInt?    @db.UnsignedBigInt
-  bidang_id         Int?       @db.UnsignedInt
-  pegawai_id        BigInt?    @db.UnsignedBigInt
-  dinas_id          Int?       @db.UnsignedInt
-  remember_token    String?    @db.VarChar(100)
-  created_at        DateTime?  @db.Timestamp(0)
-  updated_at        DateTime?  @db.Timestamp(0)
-  pegawai           pegawai?   @relation(fields: [pegawai_id], references: [id_pegawai], onDelete: Cascade, onUpdate: NoAction, map: "users_pegawai_id_foreign")
+  id                BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
+  name              String          @db.VarChar(255)
+  email             String          @unique(map: "users_email_unique") @db.VarChar(255)
+  email_verified_at DateTime?       @db.Timestamp(0)
+  password          String          @db.VarChar(255)
+  is_active         Boolean         @default(true)
+  role              users_role      @default(desa)
+  kecamatan_id      Int?            @db.UnsignedInt
+  desa_id           BigInt?         @db.UnsignedBigInt
+  bidang_id         Int?            @db.UnsignedInt
+  pegawai_id        BigInt?         @db.UnsignedBigInt
+  dinas_id          Int?            @db.UnsignedInt
+  remember_token    String?         @db.VarChar(100)
+  created_at        DateTime?       @db.Timestamp(0)
+  updated_at        DateTime?       @db.Timestamp(0)
+  pegawai           pegawai?        @relation(fields: [pegawai_id], references: [id_pegawai], onDelete: Cascade, onUpdate: NoAction, map: "users_pegawai_id_foreign")
+  surat_created     surat_masuk[]   @relation("SuratCreatedBy")
+  disposisi_dari    disposisi[]     @relation("DisposisiDari")
+  disposisi_ke      disposisi[]     @relation("DisposisiKe")
+  lampiran_uploaded lampiran_surat[]
 
   @@index([pegawai_id], map: "users_pegawai_id_index")
 }
@@ -608,4 +612,101 @@ enum produk_hukums_status_peraturan {
 enum pengurus_jenis_kelamin {
   Laki_laki @map("Laki-laki")
   Perempuan
+}
+
+model surat_masuk {
+  id            BigInt              @id @default(autoincrement()) @db.UnsignedBigInt
+  nomor_surat   String              @unique @db.VarChar(100)
+  tanggal_surat DateTime            @db.Date
+  tanggal_terima DateTime?         @default(now()) @db.DateTime(0)
+  pengirim      String              @db.VarChar(255)
+  perihal       String              @db.Text
+  jenis_surat   surat_jenis?        @default(biasa)
+  file_path     String?             @db.VarChar(500)
+  keterangan    String?             @db.Text
+  status        surat_status?       @default(draft)
+  created_by    BigInt              @db.UnsignedBigInt
+  created_at    DateTime?           @default(now()) @db.Timestamp(0)
+  updated_at    DateTime?           @default(now()) @db.Timestamp(0)
+  creator       users               @relation("SuratCreatedBy", fields: [created_by], references: [id], onDelete: Restrict)
+  disposisi     disposisi[]
+  lampiran      lampiran_surat[]
+
+  @@index([tanggal_surat], map: "idx_tanggal_surat")
+  @@index([status], map: "idx_status")
+  @@index([created_by], map: "idx_created_by")
+  @@index([status, tanggal_surat(sort: Desc)], map: "idx_surat_status_tanggal")
+}
+
+model disposisi {
+  id                BigInt             @id @default(autoincrement()) @db.UnsignedBigInt
+  surat_id          BigInt             @db.UnsignedBigInt
+  dari_user_id      BigInt             @db.UnsignedBigInt
+  ke_user_id        BigInt             @db.UnsignedBigInt
+  catatan           String?            @db.Text
+  instruksi         disposisi_instruksi? @default(biasa)
+  status            disposisi_status?  @default(pending)
+  level_disposisi   Int                @db.UnsignedTinyInt
+  tanggal_disposisi DateTime?          @default(now()) @db.DateTime(0)
+  tanggal_dibaca    DateTime?          @db.DateTime(0)
+  tanggal_selesai   DateTime?          @db.DateTime(0)
+  created_at        DateTime?          @default(now()) @db.Timestamp(0)
+  updated_at        DateTime?          @default(now()) @db.Timestamp(0)
+  surat             surat_masuk        @relation(fields: [surat_id], references: [id], onDelete: Cascade)
+  dari_user         users              @relation("DisposisiDari", fields: [dari_user_id], references: [id], onDelete: Restrict)
+  ke_user           users              @relation("DisposisiKe", fields: [ke_user_id], references: [id], onDelete: Restrict)
+
+  @@index([surat_id], map: "idx_surat_id")
+  @@index([dari_user_id], map: "idx_dari_user")
+  @@index([ke_user_id], map: "idx_ke_user")
+  @@index([status], map: "idx_status")
+  @@index([level_disposisi], map: "idx_level")
+  @@index([ke_user_id, status], map: "idx_disposisi_ke_status")
+  @@index([surat_id, level_disposisi], map: "idx_disposisi_surat_level")
+}
+
+model lampiran_surat {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  surat_id    BigInt   @db.UnsignedBigInt
+  nama_file   String   @db.VarChar(255)
+  file_path   String   @db.VarChar(500)
+  ukuran_file Int?     @db.UnsignedInt
+  tipe_file   String?  @db.VarChar(50)
+  uploaded_by BigInt   @db.UnsignedBigInt
+  created_at  DateTime? @default(now()) @db.Timestamp(0)
+  surat       surat_masuk @relation(fields: [surat_id], references: [id], onDelete: Cascade)
+  uploader    users    @relation(fields: [uploaded_by], references: [id], onDelete: Restrict)
+
+  @@index([surat_id], map: "idx_surat_id")
+}
+
+enum surat_jenis {
+  biasa
+  penting
+  segera
+  rahasia
+}
+
+enum surat_status {
+  draft
+  dikirim
+  selesai
+}
+
+enum disposisi_instruksi {
+  segera
+  penting
+  biasa
+  koordinasi
+  teliti_lapor
+  edarkan
+  simpan
+}
+
+enum disposisi_status {
+  pending
+  dibaca
+  proses
+  selesai
+  teruskan
 }
