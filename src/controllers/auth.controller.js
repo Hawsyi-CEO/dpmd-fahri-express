@@ -340,20 +340,45 @@ const checkTailscaleVpn = async (req, res) => {
     // Get all possible IP sources
     const forwardedFor = req.headers['x-forwarded-for'];
     const realIP = req.headers['x-real-ip'];
+    const cfConnectingIP = req.headers['cf-connecting-ip']; // Cloudflare
     const remoteAddr = req.connection.remoteAddress || req.socket.remoteAddress;
+    
+    // 🔥 DEBUG: Log ALL IP headers
+    logger.info('🌐 IP Detection Debug:', {
+      'X-Forwarded-For': forwardedFor,
+      'X-Real-IP': realIP,
+      'CF-Connecting-IP': cfConnectingIP,
+      'Remote Address': remoteAddr,
+      'All Headers': JSON.stringify(req.headers, null, 2)
+    });
     
     // Get VPN secret key from query or header
     const vpnSecret = req.query.secret || req.headers['x-vpn-secret'];
     const expectedSecret = process.env.VPN_SECRET_KEY || 'DPMD-INTERNAL-2025'; // Set in .env
     
-    // Parse forwarded IPs (take first one = original client)
+    // Parse forwarded IPs - Try multiple sources in priority order
     let clientIP = remoteAddr;
     
-    if (forwardedFor) {
+    // Priority 1: Cloudflare connecting IP (most reliable)
+    if (cfConnectingIP) {
+      clientIP = cfConnectingIP.trim();
+      logger.info('🔍 Using CF-Connecting-IP:', clientIP);
+    }
+    // Priority 2: X-Real-IP (common with Nginx)
+    else if (realIP) {
+      clientIP = realIP.trim();
+      logger.info('🔍 Using X-Real-IP:', clientIP);
+    }
+    // Priority 3: X-Forwarded-For (take LAST IP = closest to server)
+    else if (forwardedFor) {
       const ips = forwardedFor.split(',').map(ip => ip.trim());
-      clientIP = ips[0];
-    } else if (realIP) {
-      clientIP = realIP;
+      // For Tailscale, the LAST IP is usually the real client IP
+      clientIP = ips[ips.length - 1];
+      logger.info('🔍 Using X-Forwarded-For (last IP):', clientIP, 'from chain:', ips);
+    }
+    // Priority 4: Direct connection
+    else {
+      logger.info('🔍 Using remoteAddress:', clientIP);
     }
 
     logger.info(`🔐 Tailscale VPN Check:`, {
