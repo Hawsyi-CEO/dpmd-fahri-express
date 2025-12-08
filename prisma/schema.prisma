@@ -549,6 +549,12 @@ enum users_role {
   kecamatan
   dinas
   kepala_dinas
+  sekretaris_dinas
+  kabid_sekretariat
+  kabid_pemerintahan_desa
+  kabid_spked
+  kabid_kekayaan_keuangan_desa
+  kabid_pemberdayaan_masyarakat_desa
   sarpras
   sekretariat
   sarana_prasarana

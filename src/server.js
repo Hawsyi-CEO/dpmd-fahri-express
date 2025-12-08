@@ -50,8 +50,22 @@ const app = express();
 // Trust proxy for Nginx reverse proxy (fixes X-Forwarded-For header issues)
 app.set('trust proxy', true);
 
-// Security middleware
-app.use(helmet());
+// Security middleware - Configure helmet to allow PDF embedding via object tag
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      frameAncestors: ["'self'", "http://localhost:5173", "https://dpmd.bogorkab.go.id"],
+      objectSrc: ["'self'", "data:", "blob:"],
+      frameSrc: ["'self'", "data:", "blob:"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:"],
+    }
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 
 // CORS Configuration - Use environment variable or fallback to defaults
 const allowedOrigins = process.env.CORS_ORIGIN 

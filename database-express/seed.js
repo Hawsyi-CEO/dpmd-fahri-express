@@ -25,17 +25,39 @@ async function runSeeders() {
 
     const seedersDir = path.join(__dirname, 'seeders');
     const files = fs.readdirSync(seedersDir)
-      .filter(file => file.endsWith('.js'))
+      .filter(file => file.endsWith('.js') || file.endsWith('.sql'))
       .sort();
 
     for (const file of files) {
       console.log(`📄 Running seeder: ${file}`);
-      const seeder = require(path.join(seedersDir, file));
       
-      if (seeder.up && typeof seeder.up === 'function') {
-        await seeder.up(connection);
+      if (file.endsWith('.sql')) {
+        // Run SQL seeder
+        const sql = fs.readFileSync(path.join(seedersDir, file), 'utf8');
+        
+        // Split by INSERT statements and run them separately to avoid timeout
+        const statements = sql.split(';\n').filter(s => s.trim().length > 0);
+        
+        for (let i = 0; i < statements.length; i++) {
+          try {
+            await connection.query(statements[i]);
+            if ((i + 1) % 100 === 0) {
+              console.log(`   Processed ${i + 1}/${statements.length} statements...`);
+            }
+          } catch (error) {
+            console.error(`   ⚠️  Error in statement ${i + 1}:`, error.message.substring(0, 100));
+          }
+        }
+        console.log(`✅ Completed ${statements.length} statements`);
       } else {
-        console.warn(`⚠️  Seeder ${file} has no up() function`);
+        // Run JS seeder
+        const seeder = require(path.join(seedersDir, file));
+        
+        if (seeder.up && typeof seeder.up === 'function') {
+          await seeder.up(connection);
+        } else {
+          console.warn(`⚠️  Seeder ${file} has no up() function`);
+        }
       }
       console.log('');
     }

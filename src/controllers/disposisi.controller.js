@@ -1,6 +1,49 @@
 const prisma = require('../models/prisma');
 
 /**
+ * Helper function: Get role hierarchy level
+ * Level 1 = Kepala Dinas
+ * Level 2 = Sekretaris Dinas  
+ * Level 3 = Kepala Bidang (kabid_*)
+ * Level 4+ = Staff/Pegawai
+ */
+const getRoleLevel = (role) => {
+  if (role === 'kepala_dinas') return 1;
+  if (role === 'sekretaris_dinas') return 2;
+  if (role.startsWith('kabid_')) return 3;
+  if (role === 'pegawai' || role === 'sekretariat') return 4;
+  return 5; // Other roles
+};
+
+/**
+ * Helper function: Validate workflow transition
+ */
+const validateWorkflowTransition = (fromRole, toRole) => {
+  const fromLevel = getRoleLevel(fromRole);
+  const toLevel = getRoleLevel(toRole);
+
+  // Workflow rules:
+  // Level 1 (Kepala Dinas) → can only send to Level 2 (Sekretaris Dinas)
+  // Level 2 (Sekretaris Dinas) → can only send to Level 3 (Kepala Bidang)
+  // Level 3 (Kepala Bidang) → can send to Level 4+ (Staff/Pegawai)
+  // Level 4+ can send anywhere
+
+  if (fromLevel === 1 && toLevel !== 2) {
+    return { valid: false, message: 'Kepala Dinas hanya bisa mendisposisi ke Sekretaris Dinas' };
+  }
+
+  if (fromLevel === 2 && toLevel !== 3) {
+    return { valid: false, message: 'Sekretaris Dinas hanya bisa mendisposisi ke Kepala Bidang' };
+  }
+
+  if (fromLevel === 3 && toLevel < 4) {
+    return { valid: false, message: 'Kepala Bidang hanya bisa mendisposisi ke Staff/Pegawai' };
+  }
+
+  return { valid: true };
+};
+
+/**
  * @route POST /api/disposisi
  * @desc Create disposisi (disposisi ke level berikutnya)
  */
@@ -15,6 +58,7 @@ exports.createDisposisi = async (req, res, next) => {
     } = req.body;
 
     const dari_user_id = req.user.id;
+    const dari_user_role = req.user.role;
 
     // Validate ke_user exists
     const keUser = await prisma.users.findUnique({
@@ -25,6 +69,15 @@ exports.createDisposisi = async (req, res, next) => {
       return res.status(404).json({
         success: false,
         message: 'User tujuan tidak ditemukan',
+      });
+    }
+
+    // Validate workflow hierarchy
+    const workflowValidation = validateWorkflowTransition(dari_user_role, keUser.role);
+    if (!workflowValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: workflowValidation.message,
       });
     }
 
@@ -406,6 +459,76 @@ exports.getStatistik = async (req, res, next) => {
           total: totalKeluar,
         },
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @route GET /api/disposisi/available-users
+ * @desc Get users yang boleh menerima disposisi berdasarkan workflow hierarchy
+ */
+exports.getAvailableUsers = async (req, res, next) => {
+  try {
+    const userRole = req.user.role;
+    const fromLevel = getRoleLevel(userRole);
+
+    let roleFilter = [];
+
+    // Kepala Dinas (level 1) → only Sekretaris Dinas
+    if (fromLevel === 1) {
+      roleFilter = ['sekretaris_dinas'];
+    }
+    // Sekretaris Dinas (level 2) → only Kepala Bidang
+    else if (fromLevel === 2) {
+      roleFilter = [
+        'kabid_sekretariat',
+        'kabid_pemerintahan_desa',
+        'kabid_spked',
+        'kabid_kekayaan_keuangan_desa',
+        'kabid_pemberdayaan_masyarakat_desa'
+      ];
+    }
+    // Kepala Bidang (level 3) → Staff/Pegawai
+    else if (fromLevel === 3) {
+      roleFilter = ['pegawai', 'sekretariat'];
+    }
+    // Others → all users except self
+    else {
+      const allUsers = await prisma.users.findMany({
+        where: {
+          id: { not: BigInt(req.user.id) },
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      });
+
+      return res.json({
+        success: true,
+        data: allUsers,
+      });
+    }
+
+    const users = await prisma.users.findMany({
+      where: {
+        role: { in: roleFilter },
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+      },
+    });
+
+    res.json({
+      success: true,
+      data: users,
     });
   } catch (error) {
     next(error);

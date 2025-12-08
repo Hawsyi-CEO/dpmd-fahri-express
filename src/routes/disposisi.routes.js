@@ -83,4 +83,14 @@ router.put(
   disposisiController.updateStatus
 );
 
+/**
+ * @route GET /api/disposisi/available-users
+ * @access All authenticated users
+ */
+router.get(
+  '/available-users',
+  auth,
+  disposisiController.getAvailableUsers
+);
+
 module.exports = router;
