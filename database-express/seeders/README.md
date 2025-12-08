@@ -1,76 +1,151 @@
 # Database Seeders
 
-Folder ini berisi file seeder untuk mengisi data awal database.
+Panduan untuk menjalankan seeders database DPMD Express Backend.
 
-## Daftar Seeders
+## Prerequisites
 
-### JavaScript Seeders (Format Standard - Dijalankan oleh npm run db:seed)
+- Node.js sudah terinstall
+- MySQL database sudah dibuat
+- File `.env` sudah dikonfigurasi dengan benar
+- Prisma sudah di-generate: `npx prisma generate`
 
-1. **bidangs_seeder.js** (~2 KB)
-   - 8 bidang utama DPMD
-   - Termasuk: Sekretariat, Sarana Prasarana, Kekayaan & Keuangan, Pemberdayaan Masyarakat, Pemerintahan Desa, dll
+## Struktur Seeder
 
-2. **desas_seeder.js** (~117 KB)
-   - 435 data desa lengkap dengan foreign key ke kecamatans
-
-3. **kecamatans_seeder.js** (~7 KB)
-   - 40 kecamatan di Kabupaten Bogor
-
-4. **personil_seeder.js** (~15 KB)
-   - 98 data personil/pegawai
-   - Foreign key ke bidangs
-   - Semua data embedded di file JS
-
-5. **users_seeder.js** (~48 KB)
-   - 492 user accounts dengan berbagai role
-   - Foreign keys ke desas, kecamatans, bidangs, dinas
-
-### SQL Seeders (Manual Import - Untuk data besar)
-
-6. **bumdes.sql** (~800 KB)
-   - 188 data BUMDes dari seluruh desa
-   - Data lengkap 75 kolom termasuk pengurus, keuangan, dokumen, dll
-   - **Manual import:** `mysql -u root dpmd < seeders/bumdes.sql`
-
-## Cara Menggunakan
-
-### 1. JavaScript Seeders (Otomatis via npm)
-
-Jalankan semua JS seeders sekaligus:
-
-```bash
-cd dpmd-express-backend
-npm run db:seed
+```
+database-express/seeders/
+├── README.md                    # File ini
+├── seed-users.js               # Seeder untuk users (kepala dinas, sekretaris, kabid) ⭐
+├── seed-pegawai.js             # Seeder untuk pegawai ⭐
+├── pegawai-data.json           # Data pegawai (98 records) ⭐
+├── seed-kepala-bidang.js       # Seeder alternatif untuk kepala bidang
+├── fix-sekretaris-dinas.js     # Fix script untuk struktur organisasi
+└── clear_and_seed_wilayah.js   # Seeder untuk data wilayah
 ```
 
-Atau jalankan manual satu per satu:
+⭐ = File penting untuk fresh installation
+
+## Cara Menjalankan Seeder
+
+### 1. Seeder Users (Kepala Dinas, Sekretaris, Kepala Bidang)
+
+Membuat 7 users:
+- 1 Kepala Dinas
+- 1 Sekretaris Dinas  
+- 5 Kepala Bidang (Sekretariat, Pemerintahan Desa, SPKED, KKD, Pemberdayaan Masyarakat Desa)
+
+**Password default untuk semua user: `password`**
 
 ```bash
-node database-express/seeders/kecamatans_seeder.js
-node database-express/seeders/desas_seeder.js
-node database-express/seeders/bidangs_seeder.js
-node database-express/seeders/personil_seeder.js
-node database-express/seeders/users_seeder.js
+# Dari root project (dpmd-express-backend)
+node database-express/seeders/seed-users.js
 ```
 
-### 2. SQL Seeders (Manual Import)
+**Akun yang dibuat:**
+- `kepaladinas@dpmd.bogorkab.go.id` - Kepala Dinas
+- `sekretaris@dpmd.bogorkab.go.id` - Sekretaris Dinas
+- `subag.umpeg@dpmd.bogorkab.go.id` - Kepala Bidang Sekretariat
+- `kabid.pemdes@dpmd.bogorkab.go.id` - Kepala Bidang Pemerintahan Desa
+- `kabid.spked@dpmd.bogorkab.go.id` - Kepala Bidang SPKED
+- `kabid.kkd@dpmd.bogorkab.go.id` - Kepala Bidang Kekayaan dan Keuangan Desa
+- `kabid.pm@dpmd.bogorkab.go.id` - Kepala Bidang Pemberdayaan Masyarakat Desa
 
-Untuk data besar seperti BUMDes, import manual via mysql:
+### 2. Seeder Pegawai
 
-```bash
-# Dari PowerShell/CMD
-mysql -u root dpmd < database-express/seeders/bumdes.sql
+Membuat 98 data pegawai dari file `pegawai-data.json`.
 
-# Atau dari MySQL CLI
-USE dpmd;
-SOURCE C:/laragon/www/dpmd/dpmd-express-backend/database-express/seeders/bumdes.sql;
+⚠️ **PERHATIAN:** Seeder ini akan **menghapus semua data pegawai yang sudah ada** sebelum insert data baru. 
+
+Jika tidak ingin menghapus data lama, comment baris berikut di `seed-pegawai.js`:
+```javascript
+// await prisma.pegawai.deleteMany({});
 ```
 
-## Urutan Import untuk Fresh Database
+```bash
+# Dari root project (dpmd-express-backend)
+node database-express/seeders/seed-pegawai.js
+```
 
-**PENTING**: Ikuti urutan ini untuk menghindari foreign key constraint errors:
+### 3. Seeder Wilayah (Kecamatan & Desa)
+
+Untuk seed data wilayah Kabupaten Bogor:
 
 ```bash
+node database-express/seeders/clear_and_seed_wilayah.js
+```
+
+## Urutan Seeding (Recommended)
+
+Untuk fresh installation, jalankan seeder dalam urutan ini:
+
+```bash
+# 1. Generate Prisma Client
+npx prisma generate
+
+# 2. Push schema ke database (jika belum)
+npx prisma db push
+
+# 3. Seed users (WAJIB)
+node database-express/seeders/seed-users.js
+
+# 4. Seed pegawai (WAJIB)
+node database-express/seeders/seed-pegawai.js
+
+# 5. Seed wilayah (optional)
+node database-express/seeders/clear_and_seed_wilayah.js
+```
+
+## Export Data Pegawai (Untuk Developer)
+
+Jika perlu export data pegawai terbaru dari database:
+
+```bash
+node scripts/export-pegawai.js
+```
+
+Output akan tersimpan di `database-express/seeders/pegawai-data.json`.
+
+## Troubleshooting
+
+### Error: PrismaClientValidationError
+
+Pastikan:
+- Prisma client sudah di-generate: `npx prisma generate`
+- Schema Prisma sudah sesuai dengan database
+- File `.env` sudah benar
+
+### Error: BigInt serialization
+
+Sudah di-handle di script export. Semua BigInt di-convert ke string untuk JSON.
+
+### Error: Cannot connect to database
+
+Cek:
+- MySQL service sudah running
+- Kredensial database di `.env` sudah benar
+- Database sudah dibuat
+
+## Data Summary
+
+### Users (seed-users.js)
+- **Total**: 7 users
+- **Roles**: kepala_dinas, sekretaris_dinas, kabid_*
+- **Password**: `password` (semua user)
+
+### Pegawai (seed-pegawai.js)
+- **Total**: 98 pegawai
+- **Source**: pegawai-data.json
+- **Bidang**: Sekretariat, Pemerintahan Desa, SPKED, KKD, Pemberdayaan Masyarakat Desa
+
+## Notes
+
+- Semua seeder menggunakan `upsert` untuk users agar tidak error jika data sudah ada
+- Seeder pegawai menggunakan `deleteMany` untuk clear data lama (bisa di-comment jika tidak diperlukan)
+- BigInt ID di-handle dengan benar untuk compatibility
+- Timestamps (created_at, updated_at) di-preserve dari data asli atau dibuat baru
+
+## Contact
+
+Jika ada masalah, hubungi team developer atau cek dokumentasi di `README.md` utama project.
 cd dpmd-express-backend
 
 # 1. Run migrations first

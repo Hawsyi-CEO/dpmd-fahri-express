@@ -16,38 +16,33 @@ const { auth, checkRole } = require('../middlewares/auth');
 router.get(
   '/dashboard',
   auth,
-  checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getDashboardStats
 );
 
 router.get(
   '/dashboard/weekly-schedule',
   auth,
-  checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getWeeklySchedule
 );
 
 router.get(
   '/statistik',
   auth,
-  checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getStatistik
 );
 
 // ======================
-// MASTER DATA ROUTES (Read-only access for dinas)
+// MASTER DATA ROUTES (Accessible by all authenticated users)
 // ======================
 router.get(
   '/bidang',
   auth,
-  checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getAllBidang
 );
 
 router.get(
   '/pegawai/:id_bidang',
   auth,
-  checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getPegawaiByBidang
 );
 
@@ -62,29 +57,17 @@ router.get(
 );
 
 // ======================
-// STATISTIK ROUTES
-// ======================
-router.get(
-  '/statistik',
-  auth,
-  checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
-  perjadinController.getStatistik
-);
-
-// ======================
-// KEGIATAN ROUTES (Read access for dinas, full access for superadmin and pemberdayaan_masyarakat)
+// KEGIATAN ROUTES (Read access for all, write access restricted)
 // ======================
 router.get(
   '/kegiatan',
   auth,
-  checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getAllKegiatan
 );
 
 router.get(
   '/kegiatan/:id',
   auth,
-  checkRole('superadmin', 'dinas', 'kepala_dinas', 'pemberdayaan_masyarakat'),
   perjadinController.getKegiatanById
 );
 

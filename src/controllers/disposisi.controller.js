@@ -472,39 +472,64 @@ exports.getStatistik = async (req, res, next) => {
 exports.getAvailableUsers = async (req, res, next) => {
   try {
     const userRole = req.user.role;
+    const userId = req.user.id;
     const fromLevel = getRoleLevel(userRole);
 
-    let roleFilter = [];
+    let whereClause = {};
 
     // Kepala Dinas (level 1) → only Sekretaris Dinas
     if (fromLevel === 1) {
-      roleFilter = ['sekretaris_dinas'];
+      whereClause = {
+        role: 'sekretaris_dinas'
+      };
     }
     // Sekretaris Dinas (level 2) → only Kepala Bidang
     else if (fromLevel === 2) {
-      roleFilter = [
-        'kabid_sekretariat',
-        'kabid_pemerintahan_desa',
-        'kabid_spked',
-        'kabid_kekayaan_keuangan_desa',
-        'kabid_pemberdayaan_masyarakat_desa'
-      ];
+      whereClause = {
+        role: {
+          in: [
+            'kabid_sekretariat',
+            'kabid_pemerintahan_desa',
+            'kabid_spked',
+            'kabid_kekayaan_keuangan_desa',
+            'kabid_pemberdayaan_masyarakat_desa'
+          ]
+        }
+      };
     }
-    // Kepala Bidang (level 3) → Staff/Pegawai
+    // Kepala Bidang (level 3) → Staff/Pegawai DALAM BIDANG YANG SAMA
     else if (fromLevel === 3) {
-      roleFilter = ['pegawai', 'sekretariat'];
+      // Get current user's bidang_id
+      const currentUser = await prisma.users.findUnique({
+        where: { id: BigInt(userId) },
+        select: { bidang_id: true }
+      });
+
+      if (!currentUser || !currentUser.bidang_id) {
+        return res.status(400).json({
+          success: false,
+          message: 'Kepala Bidang harus terdaftar dalam bidang tertentu'
+        });
+      }
+
+      // Filter pegawai/sekretariat dalam bidang yang sama
+      whereClause = {
+        role: { in: ['pegawai', 'sekretariat'] },
+        bidang_id: currentUser.bidang_id
+      };
     }
     // Others → all users except self
     else {
       const allUsers = await prisma.users.findMany({
         where: {
-          id: { not: BigInt(req.user.id) },
+          id: { not: BigInt(userId) },
         },
         select: {
           id: true,
           name: true,
           email: true,
           role: true,
+          bidang_id: true,
         },
       });
 
@@ -515,14 +540,13 @@ exports.getAvailableUsers = async (req, res, next) => {
     }
 
     const users = await prisma.users.findMany({
-      where: {
-        role: { in: roleFilter },
-      },
+      where: whereClause,
       select: {
         id: true,
         name: true,
         email: true,
         role: true,
+        bidang_id: true,
       },
     });
 
