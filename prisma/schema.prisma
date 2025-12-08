@@ -136,6 +136,7 @@ model desas {
   created_at          DateTime?                 @db.Timestamp(0)
   updated_at          DateTime?                 @db.Timestamp(0)
   kecamatans          kecamatans                @relation(fields: [kecamatan_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "desas_kecamatan_id_foreign")
+  aparatur_desa       aparatur_desa[]
   karang_tarunas      karang_tarunas[]
   lpms                lpms[]
   pengurus            pengurus[]
@@ -149,6 +150,44 @@ model desas {
   satlinmas           satlinmas[]
 
   @@index([kecamatan_id], map: "desas_kecamatan_id_foreign")
+}
+
+model aparatur_desa {
+  id                           String                      @id @db.Char(36)
+  desa_id                      BigInt                      @db.UnsignedBigInt
+  nama_lengkap                 String                      @db.VarChar(255)
+  jabatan                      String                      @db.VarChar(255)
+  nipd                         String?                     @db.VarChar(255)
+  niap                         String?                     @db.VarChar(255)
+  tempat_lahir                 String                      @db.VarChar(255)
+  tanggal_lahir                DateTime                    @db.Date
+  jenis_kelamin                aparatur_desa_jenis_kelamin
+  pendidikan_terakhir          String                      @db.VarChar(255)
+  agama                        String                      @db.VarChar(255)
+  pangkat_golongan             String?                     @db.VarChar(255)
+  tanggal_pengangkatan         DateTime                    @db.Date
+  nomor_sk_pengangkatan        String                      @db.VarChar(255)
+  tanggal_pemberhentian        DateTime?                   @db.Date
+  nomor_sk_pemberhentian       String?                     @db.VarChar(255)
+  keterangan                   String?                     @db.VarChar(255)
+  status                       aparatur_desa_status        @default(Aktif)
+  produk_hukum_id              String?                     @db.Char(36)
+  bpjs_kesehatan_nomor         String?                     @db.VarChar(255)
+  bpjs_ketenagakerjaan_nomor   String?                     @db.VarChar(255)
+  file_bpjs_kesehatan          String?                     @db.VarChar(255)
+  file_bpjs_ketenagakerjaan    String?                     @db.VarChar(255)
+  file_pas_foto                String?                     @db.VarChar(255)
+  file_ktp                     String?                     @db.VarChar(255)
+  file_kk                      String?                     @db.VarChar(255)
+  file_akta_kelahiran          String?                     @db.VarChar(255)
+  file_ijazah_terakhir         String?                     @db.VarChar(255)
+  created_at                   DateTime?                   @db.Timestamp(0)
+  updated_at                   DateTime?                   @db.Timestamp(0)
+  desas                        desas                       @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "aparatur_desa_desa_id_foreign")
+  produk_hukums                produk_hukums?              @relation(fields: [produk_hukum_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "aparatur_desa_produk_hukum_id_foreign")
+
+  @@index([desa_id], map: "aparatur_desa_desa_id_foreign")
+  @@index([produk_hukum_id], map: "aparatur_desa_produk_hukum_id_foreign")
 }
 
 model dinas {
@@ -361,6 +400,7 @@ model produk_hukums {
   file                                                   String                         @db.VarChar(255)
   created_at                                             DateTime?                      @db.Timestamp(0)
   updated_at                                             DateTime?                      @db.Timestamp(0)
+  aparatur_desa                                          aparatur_desa[]
   bumdes_bumdes_produk_hukum_perdes_idToproduk_hukums    bumdes[]                       @relation("bumdes_produk_hukum_perdes_idToproduk_hukums")
   bumdes_bumdes_produk_hukum_sk_bumdes_idToproduk_hukums bumdes[]                       @relation("bumdes_produk_hukum_sk_bumdes_idToproduk_hukums")
   desas                                                  desas                          @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "produk_hukums_desa_id_foreign")
@@ -715,4 +755,14 @@ enum disposisi_status {
   proses
   selesai
   teruskan
+}
+
+enum aparatur_desa_jenis_kelamin {
+  Laki_laki @map("Laki-laki")
+  Perempuan
+}
+
+enum aparatur_desa_status {
+  Aktif        @map("Aktif")
+  Tidak_Aktif  @map("Tidak Aktif")
 }
