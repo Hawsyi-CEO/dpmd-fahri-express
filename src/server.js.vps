@@ -49,8 +49,7 @@ const bidangRoutes = require('./routes/bidang.routes');
 const app = express();
 
 // Trust proxy for Nginx reverse proxy (fixes X-Forwarded-For header issues)
-// Use 1 for single reverse proxy (Nginx), not true to avoid rate-limit bypass
-app.set('trust proxy', 1);
+app.set('trust proxy', true);
 
 // Security middleware - Configure helmet to allow PDF embedding via object tag
 app.use(helmet({
@@ -93,6 +92,7 @@ const limiter = rateLimit({
   message: 'Terlalu banyak request dari IP ini, silakan coba lagi nanti.',
   standardHeaders: true,
   legacyHeaders: false,
+  trust: true, // Fix: Allow trust proxy for rate limiting with Nginx
 });
 
 // Only apply rate limiting in production
@@ -164,9 +164,6 @@ app.use('/api', locationRoutes); // Kecamatan & Desa routes
 app.use('/api/surat-masuk', require('./routes/surat.routes'));
 app.use('/api/disposisi', require('./routes/disposisi.routes'));
 
-// Push Notifications routes
-app.use('/api/push-notifications', require('./routes/pushNotifications.routes'));
-
 app.use('/api/desa/bumdes', bumdesRoutes);
 app.use('/api/bumdes', bumdesRoutes); // Admin routes
 app.use('/api/desa/musdesus', musdesusRoutes);
@@ -198,6 +195,7 @@ app.use('/api/bhprd-t2', bhprdT2Routes); // BHPRD Tahap 2
 app.use('/api/bhprd-t3', bhprdT3Routes); // BHPRD Tahap 3
 app.use('/api/vpn-dashboard', vpnDashboardRoutes); // VPN Dashboard (IP restricted)
 app.use('/api/vpn-core', vpnCoreDashboardRoutes); // VPN Core Dashboard Access (IP restricted, no auth token)
+app.use('/api/push-notifications', require('./routes/pushNotifications.routes')); // Push Notifications
 
 // 404 handler
 app.use((req, res) => {

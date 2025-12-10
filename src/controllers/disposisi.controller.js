@@ -1,4 +1,5 @@
 const prisma = require('../models/prisma');
+const { sendDisposisiNotification } = require('./pushNotifications.controller');
 
 /**
  * Helper function: Get role hierarchy level
@@ -26,7 +27,12 @@ const validateWorkflowTransition = (fromRole, toRole) => {
   // Level 1 (Kepala Dinas) → can only send to Level 2 (Sekretaris Dinas)
   // Level 2 (Sekretaris Dinas) → can only send to Level 3 (Kepala Bidang)
   // Level 3 (Kepala Bidang) → can send to Level 4+ (Staff/Pegawai)
-  // Level 4+ can send anywhere
+  // Level 4+ (Pegawai/Staff) → CANNOT create disposisi
+
+  // Block pegawai/staff from creating disposisi
+  if (fromLevel >= 4) {
+    return { valid: false, message: 'Pegawai/Staff tidak memiliki akses untuk membuat disposisi' };
+  }
 
   if (fromLevel === 1 && toLevel !== 2) {
     return { valid: false, message: 'Kepala Dinas hanya bisa mendisposisi ke Sekretaris Dinas' };
@@ -59,6 +65,15 @@ exports.createDisposisi = async (req, res, next) => {
 
     const dari_user_id = req.user.id;
     const dari_user_role = req.user.role;
+
+    // Block pegawai/staff from creating disposisi
+    const userLevel = getRoleLevel(dari_user_role);
+    if (userLevel >= 4) {
+      return res.status(403).json({
+        success: false,
+        message: 'Anda tidak memiliki akses untuk membuat disposisi. Hanya Kepala Dinas, Sekretaris Dinas, dan Kepala Bidang yang dapat membuat disposisi.',
+      });
+    }
 
     // Validate ke_user exists
     const keUser = await prisma.users.findUnique({
@@ -110,6 +125,14 @@ exports.createDisposisi = async (req, res, next) => {
         },
       },
     });
+
+    // Send push notification to recipient
+    try {
+      await sendDisposisiNotification(disposisi);
+    } catch (notifError) {
+      console.error('Error sending push notification:', notifError);
+      // Don't fail the request if notification fails
+    }
 
     res.status(201).json({
       success: true,

@@ -503,11 +503,12 @@ model users {
   remember_token    String?         @db.VarChar(100)
   created_at        DateTime?       @db.Timestamp(0)
   updated_at        DateTime?       @db.Timestamp(0)
-  pegawai           pegawai?        @relation(fields: [pegawai_id], references: [id_pegawai], onDelete: Cascade, onUpdate: NoAction, map: "users_pegawai_id_foreign")
-  surat_created     surat_masuk[]   @relation("SuratCreatedBy")
-  disposisi_dari    disposisi[]     @relation("DisposisiDari")
-  disposisi_ke      disposisi[]     @relation("DisposisiKe")
-  lampiran_uploaded lampiran_surat[]
+  pegawai              pegawai?             @relation(fields: [pegawai_id], references: [id_pegawai], onDelete: Cascade, onUpdate: NoAction, map: "users_pegawai_id_foreign")
+  surat_created        surat_masuk[]        @relation("SuratCreatedBy")
+  disposisi_dari       disposisi[]          @relation("DisposisiDari")
+  disposisi_ke         disposisi[]          @relation("DisposisiKe")
+  lampiran_uploaded    lampiran_surat[]
+  push_subscriptions   push_subscriptions[]
 
   @@index([pegawai_id], map: "users_pegawai_id_index")
 }
@@ -765,4 +766,17 @@ enum aparatur_desa_jenis_kelamin {
 enum aparatur_desa_status {
   Aktif        @map("Aktif")
   Tidak_Aktif  @map("Tidak Aktif")
+}
+
+model push_subscriptions {
+  id           BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id      BigInt    @db.UnsignedBigInt
+  endpoint     String    @db.Text
+  subscription Json
+  created_at   DateTime? @default(now()) @db.Timestamp(0)
+  updated_at   DateTime? @default(now()) @updatedAt @db.Timestamp(0)
+
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id], map: "push_subscriptions_user_id_index")
 }

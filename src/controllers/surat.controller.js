@@ -1,6 +1,7 @@
 const prisma = require('../models/prisma');
 const path = require('path');
 const fs = require('fs').promises;
+const { sendDisposisiNotification } = require('./pushNotifications.controller');
 
 /**
  * @route POST /api/surat-masuk
@@ -340,6 +341,9 @@ exports.kirimKeKepalaDinas = async (req, res, next) => {
         ke_user: {
           select: { id: true, name: true, email: true },
         },
+        surat: {
+          select: { id: true, nomor_surat: true, perihal: true, pengirim: true },
+        },
       },
     });
 
@@ -348,6 +352,23 @@ exports.kirimKeKepalaDinas = async (req, res, next) => {
       where: { id: BigInt(id) },
       data: { status: 'dikirim' },
     });
+
+    // Send push notification to recipient
+    try {
+      // Convert BigInt to string for notification function
+      const notifData = {
+        ...disposisi,
+        id: disposisi.id.toString(),
+        ke_user_id: disposisi.ke_user_id.toString(),
+        dari_user_id: disposisi.dari_user_id.toString(),
+        surat_id: disposisi.surat_id.toString()
+      };
+      await sendDisposisiNotification(notifData);
+      console.log('✅ Push notification sent to Kepala Dinas');
+    } catch (notifError) {
+      console.error('Error sending push notification:', notifError);
+      // Don't fail the request if notification fails
+    }
 
     res.status(201).json({
       success: true,
