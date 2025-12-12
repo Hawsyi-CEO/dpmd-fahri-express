@@ -23,6 +23,12 @@ pids
 # Storage (uploaded files)
 storage/uploads/*
 !storage/uploads/.gitkeep
+storage/produk_hukum/*
+!storage/produk_hukum/.gitkeep
+storage/backups/
+
+# Public backups
+public/backups/
 
 # OS
 .DS_Store
