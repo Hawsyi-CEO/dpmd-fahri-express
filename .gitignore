@@ -66,9 +66,10 @@ scripts/migrate-*.js
 database-express/seeders/*-data.json
 !database-express/seeders/pegawai-data.json
 
-# SQL dumps dan migrations manual
+# SQL dumps dan migrations manual (kecuali migrations dan seeders)
 *.sql
 !database-express/migrations/*.sql
+!database-express/seeders/*.sql
 !database-express/seeders/bumdes.sql
 !database-express/seeders/001_data.sql
 *.tmp
