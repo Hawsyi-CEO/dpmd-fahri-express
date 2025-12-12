@@ -6,6 +6,7 @@
 
 const prisma = require('../config/prisma');
 const { v4: uuidv4 } = require('uuid');
+const { logKelembagaanActivity, ACTIVITY_TYPES, ENTITY_TYPES } = require('../utils/kelembagaanActivityLogger');
 
 /**
  * Helper function to get statistics for desa or kelurahan
@@ -1338,6 +1339,23 @@ class KelembagaanController {
         }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'rw',
+        kelembagaanId: item.id,
+        kelembagaanNama: `RW ${item.nomor}`,
+        desaId: item.desa_id,
+        activityType: ACTIVITY_TYPES.CREATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: item.id,
+        entityName: `RW ${item.nomor}`,
+        oldValue: null,
+        newValue: item,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.status(201).json({ success: true, data: item });
     } catch (error) {
       console.error('Error in createRW:', error);
@@ -1373,6 +1391,23 @@ class KelembagaanController {
           alamat: alamat !== undefined ? alamat : item.alamat,
           status_kelembagaan: status_kelembagaan || item.status_kelembagaan
         }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'rw',
+        kelembagaanId: updated.id,
+        kelembagaanNama: `RW ${updated.nomor}`,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: `RW ${updated.nomor}`,
+        oldValue: item,
+        newValue: updated,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });
@@ -1436,6 +1471,23 @@ class KelembagaanController {
       const updated = await prisma.rws.update({
         where: { id: String(req.params.id) },
         data: { status_kelembagaan }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'rw',
+        kelembagaanId: updated.id,
+        kelembagaanNama: `RW ${updated.nomor}`,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.TOGGLE_STATUS,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: `RW ${updated.nomor}`,
+        oldValue: { status_kelembagaan: item.status_kelembagaan },
+        newValue: { status_kelembagaan: updated.status_kelembagaan },
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });
@@ -1521,6 +1573,23 @@ class KelembagaanController {
         }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'rt',
+        kelembagaanId: item.id,
+        kelembagaanNama: `RT ${item.nomor}`,
+        desaId: item.desa_id,
+        activityType: ACTIVITY_TYPES.CREATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: item.id,
+        entityName: `RT ${item.nomor}`,
+        oldValue: null,
+        newValue: item,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.status(201).json({ success: true, data: item });
     } catch (error) {
       console.error('Error in createRT:', error);
@@ -1553,6 +1622,23 @@ class KelembagaanController {
           alamat: alamat !== undefined ? alamat : item.alamat,
           status_kelembagaan: status_kelembagaan || item.status_kelembagaan
         }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'rt',
+        kelembagaanId: updated.id,
+        kelembagaanNama: `RT ${updated.nomor}`,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: `RT ${updated.nomor}`,
+        oldValue: item,
+        newValue: updated,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });
@@ -1608,6 +1694,23 @@ class KelembagaanController {
       const updated = await prisma.rts.update({
         where: { id: String(req.params.id) },
         data: { status_kelembagaan }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'rt',
+        kelembagaanId: updated.id,
+        kelembagaanNama: `RT ${updated.nomor}`,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.TOGGLE_STATUS,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: `RT ${updated.nomor}`,
+        oldValue: { status_kelembagaan: item.status_kelembagaan },
+        newValue: { status_kelembagaan: updated.status_kelembagaan },
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });
@@ -1683,6 +1786,23 @@ class KelembagaanController {
         }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'posyandu',
+        kelembagaanId: item.id,
+        kelembagaanNama: item.nama,
+        desaId: item.desa_id,
+        activityType: ACTIVITY_TYPES.CREATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: item.id,
+        entityName: item.nama,
+        oldValue: null,
+        newValue: item,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.status(201).json({ success: true, data: item });
     } catch (error) {
       console.error('Error in createPosyandu:', error);
@@ -1714,6 +1834,23 @@ class KelembagaanController {
           alamat: alamat !== undefined ? alamat : item.alamat,
           status_kelembagaan: status_kelembagaan || item.status_kelembagaan
         }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'posyandu',
+        kelembagaanId: updated.id,
+        kelembagaanNama: updated.nama,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: updated.nama,
+        oldValue: item,
+        newValue: updated,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });
@@ -1769,6 +1906,23 @@ class KelembagaanController {
       const updated = await prisma.posyandus.update({
         where: { id: String(req.params.id) },
         data: { status_kelembagaan }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'posyandu',
+        kelembagaanId: updated.id,
+        kelembagaanNama: updated.nama,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.TOGGLE_STATUS,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: updated.nama,
+        oldValue: { status_kelembagaan: item.status_kelembagaan },
+        newValue: { status_kelembagaan: updated.status_kelembagaan },
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });
@@ -1852,6 +2006,23 @@ class KelembagaanController {
         }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'karang_taruna',
+        kelembagaanId: item.id,
+        kelembagaanNama: item.nama,
+        desaId: item.desa_id,
+        activityType: ACTIVITY_TYPES.CREATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: item.id,
+        entityName: item.nama,
+        oldValue: null,
+        newValue: item,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.status(201).json({ success: true, data: item });
     } catch (error) {
       console.error('Error in createKarangTaruna:', error);
@@ -1883,6 +2054,23 @@ class KelembagaanController {
           alamat: alamat !== undefined ? alamat : item.alamat,
           status_kelembagaan: status_kelembagaan || item.status_kelembagaan
         }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'karang_taruna',
+        kelembagaanId: updated.id,
+        kelembagaanNama: updated.nama,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: updated.nama,
+        oldValue: item,
+        newValue: updated,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });
@@ -2023,6 +2211,23 @@ class KelembagaanController {
         }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'lpm',
+        kelembagaanId: item.id,
+        kelembagaanNama: item.nama,
+        desaId: item.desa_id,
+        activityType: ACTIVITY_TYPES.CREATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: item.id,
+        entityName: item.nama,
+        oldValue: null,
+        newValue: item,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.status(201).json({ success: true, data: item });
     } catch (error) {
       console.error('Error in createLPM:', error);
@@ -2054,6 +2259,23 @@ class KelembagaanController {
           alamat: alamat !== undefined ? alamat : item.alamat,
           status_kelembagaan: status_kelembagaan || item.status_kelembagaan
         }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'lpm',
+        kelembagaanId: updated.id,
+        kelembagaanNama: updated.nama,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: updated.nama,
+        oldValue: item,
+        newValue: updated,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });
@@ -2194,6 +2416,23 @@ class KelembagaanController {
         }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'satlinmas',
+        kelembagaanId: item.id,
+        kelembagaanNama: item.nama,
+        desaId: item.desa_id,
+        activityType: ACTIVITY_TYPES.CREATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: item.id,
+        entityName: item.nama,
+        oldValue: null,
+        newValue: item,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.status(201).json({ success: true, data: item });
     } catch (error) {
       console.error('Error in createSatlinmas:', error);
@@ -2225,6 +2464,23 @@ class KelembagaanController {
           alamat: alamat !== undefined ? alamat : item.alamat,
           status_kelembagaan: status_kelembagaan || item.status_kelembagaan
         }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'satlinmas',
+        kelembagaanId: updated.id,
+        kelembagaanNama: updated.nama,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: updated.nama,
+        oldValue: item,
+        newValue: updated,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });
@@ -2365,6 +2621,23 @@ class KelembagaanController {
         }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'pkk',
+        kelembagaanId: item.id,
+        kelembagaanNama: item.nama,
+        desaId: item.desa_id,
+        activityType: ACTIVITY_TYPES.CREATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: item.id,
+        entityName: item.nama,
+        oldValue: null,
+        newValue: item,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.status(201).json({ success: true, data: item });
     } catch (error) {
       console.error('Error in createPKK:', error);
@@ -2396,6 +2669,23 @@ class KelembagaanController {
           alamat: alamat !== undefined ? alamat : item.alamat,
           status_kelembagaan: status_kelembagaan || item.status_kelembagaan
         }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'pkk',
+        kelembagaanId: updated.id,
+        kelembagaanNama: updated.nama,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: updated.nama,
+        oldValue: item,
+        newValue: updated,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });

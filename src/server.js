@@ -181,6 +181,7 @@ app.use('/api/hero-gallery', heroGalleryRoutes);
 app.use('/api/kepala-dinas', kepalaDinasRoutes); // Kepala Dinas dashboard
 app.use('/api/berita', require('./routes/berita.routes')); // Berita routes
 app.use('/api/kelembagaan', kelembagaanRoutes); // Kelembagaan routes (admin/global)
+app.use('/api/kelembagaan/activity-logs', require('./routes/kelembagaanActivityLogs.routes')); // Activity logs
 app.use('/api/admin', kelembagaanRoutes); // Admin alias for kelembagaan
 app.use('/api/produk-hukum', produkHukumRoutes); // Produk Hukum routes
 app.use('/api/bankeu-t1', bankeuT1Routes); // Bantuan Keuangan Tahap 1

@@ -148,6 +148,7 @@ model desas {
   rts                 rts[]
   rws                 rws[]
   satlinmas           satlinmas[]
+  kelembagaan_activity_logs kelembagaan_activity_logs[]
 
   @@index([kecamatan_id], map: "desas_kecamatan_id_foreign")
 }
@@ -509,6 +510,7 @@ model users {
   disposisi_ke         disposisi[]          @relation("DisposisiKe")
   lampiran_uploaded    lampiran_surat[]
   push_subscriptions   push_subscriptions[]
+  kelembagaan_activity_logs kelembagaan_activity_logs[]
 
   @@index([pegawai_id], map: "users_pegawai_id_index")
 }
@@ -779,4 +781,33 @@ model push_subscriptions {
   users users @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id], map: "push_subscriptions_user_id_index")
+}
+
+model kelembagaan_activity_logs {
+  id                  String    @id @db.Char(36)
+  kelembagaan_type    String    @db.VarChar(50)
+  kelembagaan_id      String    @db.Char(36)
+  kelembagaan_nama    String?   @db.VarChar(255)
+  desa_id             BigInt    @db.UnsignedBigInt
+  activity_type       String    @db.VarChar(50)
+  entity_type         String    @db.VarChar(50)
+  entity_id           String?   @db.Char(36)
+  entity_name         String?   @db.VarChar(255)
+  action_description  String    @db.Text
+  old_value           Json?
+  new_value           Json?
+  user_id             BigInt    @db.UnsignedBigInt
+  user_name           String?   @db.VarChar(255)
+  user_role           String?   @db.VarChar(50)
+  created_at          DateTime? @default(now()) @db.Timestamp(0)
+  
+  desas               desas     @relation(fields: [desa_id], references: [id], onDelete: Cascade, map: "kelembagaan_logs_desa_id_foreign")
+  users               users     @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "kelembagaan_logs_user_id_foreign")
+
+  @@index([kelembagaan_type, kelembagaan_id], map: "idx_kelembagaan_type_id")
+  @@index([entity_type], map: "idx_entity_type")
+  @@index([desa_id], map: "idx_desa_id")
+  @@index([activity_type], map: "idx_activity_type")
+  @@index([created_at], map: "idx_created_at")
+  @@index([user_id], map: "idx_user_id")
 }
