@@ -6,6 +6,7 @@
 
 const prisma = require('../config/prisma');
 const { v4: uuidv4 } = require('uuid');
+const { logKelembagaanActivity, ACTIVITY_TYPES, ENTITY_TYPES } = require('../utils/kelembagaanActivityLogger');
 
 /**
  * Helper function to get statistics for desa or kelurahan
@@ -503,8 +504,8 @@ class KelembagaanController {
       res.json({
         success: true,
         data: {
-          id_kecamatan: kecamatan.id_kecamatan,
-          nama_kecamatan: kecamatan.nama_kecamatan,
+          id: kecamatan.id,
+          nama: kecamatan.nama,
           jumlah_desa: kecamatan.desas.length,
           desas: kecamatan.desas,
           kelembagaan: { rw: rwCount, rt: rtCount, posyandu: posyanduCount, karang_taruna: karangTarunaCount, lpm: lpmCount, satlinmas: satlinmasCount, pkk: pkkCount }
@@ -519,7 +520,7 @@ class KelembagaanController {
   async summaryByDesa(req, res) {
     try {
       const { id } = req.params;
-      const desa = await prisma.desas.findUnique({ where: { id_desa: parseInt(id) } });
+      const desa = await prisma.desas.findUnique({ where: { id: parseInt(id) } });
 
       if (!desa) {
         return res.status(404).json({ success: false, message: 'Desa tidak ditemukan' });
@@ -538,7 +539,7 @@ class KelembagaanController {
       res.json({
         success: true,
         data: {
-          desa: { id_desa: desa.id_desa, nama_desa: desa.nama_desa, status_pemerintahan: desa.status_pemerintahan },
+          desa: { id: desa.id, nama: desa.nama, status_pemerintahan: desa.status_pemerintahan },
           kelembagaan: { rw: rwCount, rt: rtCount, posyandu: posyanduCount, karang_taruna: karangTarunaCount, lpm: lpmCount, satlinmas: satlinmasCount, pkk: pkkCount, total: rwCount + rtCount + posyanduCount + karangTarunaCount + lpmCount + satlinmasCount + pkkCount }
         }
       });
@@ -553,10 +554,10 @@ class KelembagaanController {
     try {
       const { id } = req.params;
       const desa = await prisma.desas.findUnique({ 
-        where: { id_desa: parseInt(id) },
+        where: { id: parseInt(id) },
         include: {
           kecamatans: {
-            select: { id_kecamatan: true, nama_kecamatan: true }
+            select: { id: true, nama: true }
           }
         }
       });
@@ -601,6 +602,8 @@ class KelembagaanController {
         nomor: rw.nomor,
         alamat: rw.alamat,
         desa_id: rw.desa_id,
+        status_kelembagaan: rw.status_kelembagaan,
+        status_verifikasi: rw.status_verifikasi,
         rt_count: rw.rts.length,
         created_at: rw.created_at,
         updated_at: rw.updated_at
@@ -610,9 +613,10 @@ class KelembagaanController {
         success: true,
         data: {
           desa: {
-            id_desa: desa.id_desa,
-            nama_desa: desa.nama_desa,
-            nama_kecamatan: desa.kecamatans?.nama_kecamatan,
+            id: desa.id,
+            nama: desa.nama,        
+            nama_kecamatan: desa.kecamatans?.nama || null,
+            kecamatan_id: desa.kecamatan_id,
             status_pemerintahan: desa.status_pemerintahan
           },
           kelembagaan: {
@@ -636,7 +640,7 @@ class KelembagaanController {
       const { id } = req.params;
       const rws = await prisma.rws.findMany({
         where: { desa_id: parseInt(id) },
-        include: { desas: { select: { nama_desa: true, id_kecamatan: true, kecamatans: { select: { nama_kecamatan: true } } } } },
+        include: { desas: { select: { nama: true, id: true, kecamatans: { select: { nama: true } } } } },
         orderBy: { nomor: 'asc' }
       });
 
@@ -648,7 +652,7 @@ class KelembagaanController {
           nama_ketua: rw.nama_ketua,
           status_kelembagaan: rw.status_kelembagaan,
           jumlah_rt: rw.jumlah_rt,
-          desa: { id_desa: rw.desas.id_desa, nama_desa: rw.desas.nama_desa, kecamatan: rw.desas.kecamatans.nama_kecamatan }
+          desa: { id: rw.desas.id, nama: rw.desas.nama, kecamatan: rw.desas.kecamatans.nama }
         }))
       });
     } catch (error) {
@@ -663,7 +667,7 @@ class KelembagaanController {
       const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
       const rts = await prisma.rts.findMany({
         where,
-        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } }, rws: { select: { nomor: true } } },
+        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } }, rws: { select: { nomor: true } } },
         orderBy: [{ desa_id: 'asc' }, { nomor: 'asc' }]
       });
 
@@ -676,7 +680,7 @@ class KelembagaanController {
           status_kelembagaan: rt.status_kelembagaan,
           jumlah_kk: rt.jumlah_kk,
           rw: rt.rws ? rt.rws.nomor : null,
-          desa: { id_desa: rt.desas.id_desa, nama_desa: rt.desas.nama_desa, kecamatan: rt.desas.kecamatans.nama_kecamatan }
+          desa: { id: rt.desas.id, nama: rt.desas.nama, kecamatan: rt.desas.kecamatans.nama }
         }))
       });
     } catch (error) {
@@ -691,7 +695,7 @@ class KelembagaanController {
       const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
       const posyandus = await prisma.posyandus.findMany({
         where,
-        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } },
+        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } },
         orderBy: { nama: 'asc' }
       });
 
@@ -703,7 +707,7 @@ class KelembagaanController {
           nama_ketua: p.nama_ketua,
           status_kelembagaan: p.status_kelembagaan,
           jumlah_kader: p.jumlah_kader,
-          desa: { id_desa: p.desas.id_desa, nama_desa: p.desas.nama_desa, kecamatan: p.desas.kecamatans.nama_kecamatan }
+          desa: { id: p.desas.id, nama: p.desas.nama, kecamatan: p.desas.kecamatans.nama }
         }))
       });
     } catch (error) {
@@ -718,7 +722,7 @@ class KelembagaanController {
       const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
       const karangTarunas = await prisma.karang_tarunas.findMany({
         where,
-        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } },
+        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } },
         orderBy: { nama: 'asc' }
       });
 
@@ -730,7 +734,7 @@ class KelembagaanController {
           nama_ketua: kt.nama_ketua,
           status_kelembagaan: kt.status_kelembagaan,
           jumlah_anggota: kt.jumlah_anggota,
-          desa: { id_desa: kt.desas.id_desa, nama_desa: kt.desas.nama_desa, kecamatan: kt.desas.kecamatans.nama_kecamatan }
+          desa: { id: kt.desas.id, nama: kt.desas.nama, kecamatan: kt.desas.kecamatans.nama }
         }))
       });
     } catch (error) {
@@ -745,7 +749,7 @@ class KelembagaanController {
       const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
       const lpms = await prisma.lpms.findMany({
         where,
-        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } },
+        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } },
         orderBy: { nama: 'asc' }
       });
 
@@ -757,7 +761,7 @@ class KelembagaanController {
           nama_ketua: lpm.nama_ketua,
           status_kelembagaan: lpm.status_kelembagaan,
           jumlah_anggota: lpm.jumlah_anggota,
-          desa: { id_desa: lpm.desas.id_desa, nama_desa: lpm.desas.nama_desa, kecamatan: lpm.desas.kecamatans.nama_kecamatan }
+          desa: { id: lpm.desas.id, nama: lpm.desas.nama, kecamatan: lpm.desas.kecamatans.nama }
         }))
       });
     } catch (error) {
@@ -772,7 +776,7 @@ class KelembagaanController {
       const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
       const satlinmas = await prisma.satlinmas.findMany({
         where,
-        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } },
+        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } },
         orderBy: { nama: 'asc' }
       });
 
@@ -784,7 +788,7 @@ class KelembagaanController {
           nama_ketua: s.nama_ketua,
           status_kelembagaan: s.status_kelembagaan,
           jumlah_anggota: s.jumlah_anggota,
-          desa: { id_desa: s.desas.id_desa, nama_desa: s.desas.nama_desa, kecamatan: s.desas.kecamatans.nama_kecamatan }
+          desa: { id: s.desas.id, nama: s.desas.nama, kecamatan: s.desas.kecamatans.nama }
         }))
       });
     } catch (error) {
@@ -799,7 +803,7 @@ class KelembagaanController {
       const where = desa_id ? { desa_id: parseInt(desa_id) } : {};
       const pkks = await prisma.pkks.findMany({
         where,
-        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } },
+        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } },
         orderBy: { nama: 'asc' }
       });
 
@@ -811,7 +815,7 @@ class KelembagaanController {
           nama_ketua: pkk.nama_ketua,
           status_kelembagaan: pkk.status_kelembagaan,
           jumlah_anggota: pkk.jumlah_anggota,
-          desa: { id_desa: pkk.desas.id_desa, nama_desa: pkk.desas.nama_desa, kecamatan: pkk.desas.kecamatans.nama_kecamatan }
+          desa: { id: pkk.desas.id, nama: pkk.desas.nama, kecamatan: pkk.desas.kecamatans.nama }
         }))
       });
     } catch (error) {
@@ -824,10 +828,13 @@ class KelembagaanController {
     try {
       const { id } = req.params;
       const rw = await prisma.rws.findUnique({
-        where: { id: parseInt(id) },
+        where: { id: id }, // id is UUID string, not integer
         include: {
-          desas: { select: { id_desa: true, nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } },
-          rts: { select: { id: true, nomor: true, nama_ketua: true, status_kelembagaan: true }, orderBy: { nomor: 'asc' } }
+          desas: { select: { id: true, nama: true, kecamatans: { select: { nama: true } } } },
+          rts: { 
+            select: { id: true, nomor: true, status_kelembagaan: true, alamat: true }, 
+            orderBy: { nomor: 'asc' } 
+          }
         }
       });
 
@@ -839,13 +846,19 @@ class KelembagaanController {
         success: true,
         data: {
           id: rw.id,
-          nomor_rw: rw.nomor,
-          nama_ketua: rw.nama_ketua,
+          nomor: rw.nomor, // Frontend expects 'nomor', not 'nomor_rw'
           status_kelembagaan: rw.status_kelembagaan,
-          jumlah_rt: rw.jumlah_rt,
+          status_verifikasi: rw.status_verifikasi,
+          jumlah_rt: rw.rts.length, // Calculate from rts array
           alamat: rw.alamat,
-          desa: { id_desa: rw.desas.id_desa, nama_desa: rw.desas.nama_desa, kecamatan: rw.desas.kecamatans.nama_kecamatan },
-          rt_list: rw.rts.map(rt => ({...rt, nomor_rt: rt.nomor}))
+          produk_hukum_id: rw.produk_hukum_id,
+          desa: { id: rw.desas.id, nama: rw.desas.nama, kecamatan: rw.desas.kecamatans.nama },
+          rt_list: rw.rts.map(rt => ({
+            id: rt.id,
+            nomor: rt.nomor, // Frontend expects 'nomor', not 'nomor_rt'
+            status_kelembagaan: rt.status_kelembagaan,
+            alamat: rt.alamat
+          }))
         }
       });
     } catch (error) {
@@ -858,10 +871,10 @@ class KelembagaanController {
     try {
       const { id } = req.params;
       const rt = await prisma.rts.findUnique({
-        where: { id: parseInt(id) },
+        where: { id: id }, // id is UUID string, not integer
         include: {
-          desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } },
-          rws: { select: { nomor: true } }
+          desas: { select: { id: true, nama: true, kecamatans: { select: { nama: true } } } },
+          rws: { select: { id: true, nomor: true } }
         }
       });
 
@@ -873,13 +886,13 @@ class KelembagaanController {
         success: true,
         data: {
           id: rt.id,
-          nomor_rt: rt.nomor,
-          nama_ketua: rt.nama_ketua,
+          nomor: rt.nomor, // Frontend expects 'nomor', not 'nomor_rt'
           status_kelembagaan: rt.status_kelembagaan,
-          jumlah_kk: rt.jumlah_kk,
+          status_verifikasi: rt.status_verifikasi,
           alamat: rt.alamat,
-          rw: rt.rws ? rt.rws.nomor : null,
-          desa: { id_desa: rt.desas.id_desa, nama_desa: rt.desas.nama_desa, kecamatan: rt.desas.kecamatans.nama_kecamatan }
+          rw_id: rt.rw_id,
+          rw: rt.rws ? { id: rt.rws.id, nomor: rt.rws.nomor } : null,
+          desa: { id: rt.desas.id, nama: rt.desas.nama, kecamatan: rt.desas.kecamatans.nama }
         }
       });
     } catch (error) {
@@ -892,8 +905,8 @@ class KelembagaanController {
     try {
       const { id } = req.params;
       const posyandu = await prisma.posyandus.findUnique({
-        where: { id: parseInt(id) },
-        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } }
+        where: { id: id }, // id is UUID string, not integer
+        include: { desas: { select: { id: true, nama: true, kecamatans: { select: { nama: true } } } } }
       });
 
       if (!posyandu) {
@@ -904,12 +917,11 @@ class KelembagaanController {
         success: true,
         data: {
           id: posyandu.id,
-          nama_posyandu: posyandu.nama_posyandu,
-          nama_ketua: posyandu.nama_ketua,
+          nama: posyandu.nama, // Field name is 'nama', not 'nama_posyandu'
           status_kelembagaan: posyandu.status_kelembagaan,
-          jumlah_kader: posyandu.jumlah_kader,
+          status_verifikasi: posyandu.status_verifikasi,
           alamat: posyandu.alamat,
-          desa: { id_desa: posyandu.desas.id_desa, nama_desa: posyandu.desas.nama_desa, kecamatan: posyandu.desas.kecamatans.nama_kecamatan }
+          desa: { id: posyandu.desas.id, nama: posyandu.desas.nama, kecamatan: posyandu.desas.kecamatans.nama }
         }
       });
     } catch (error) {
@@ -923,7 +935,7 @@ class KelembagaanController {
       const { id } = req.params;
       const karangTaruna = await prisma.karang_tarunas.findUnique({
         where: { id: parseInt(id) },
-        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } }
+        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } }
       });
 
       if (!karangTaruna) {
@@ -939,7 +951,7 @@ class KelembagaanController {
           status_kelembagaan: karangTaruna.status_kelembagaan,
           jumlah_anggota: karangTaruna.jumlah_anggota,
           alamat: karangTaruna.alamat,
-          desa: { id_desa: karangTaruna.desas.id_desa, nama_desa: karangTaruna.desas.nama_desa, kecamatan: karangTaruna.desas.kecamatans.nama_kecamatan }
+          desa: { id: karangTaruna.desas.id, nama: karangTaruna.desas.nama, kecamatan: karangTaruna.desas.kecamatans.nama }
         }
       });
     } catch (error) {
@@ -953,7 +965,7 @@ class KelembagaanController {
       const { id } = req.params;
       const lpm = await prisma.lpms.findUnique({
         where: { id: parseInt(id) },
-        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } }
+        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } }
       });
 
       if (!lpm) {
@@ -969,7 +981,7 @@ class KelembagaanController {
           status_kelembagaan: lpm.status_kelembagaan,
           jumlah_anggota: lpm.jumlah_anggota,
           alamat: lpm.alamat,
-          desa: { id_desa: lpm.desas.id_desa, nama_desa: lpm.desas.nama_desa, kecamatan: lpm.desas.kecamatans.nama_kecamatan }
+          desa: { id: lpm.desas.id, nama: lpm.desas.nama, kecamatan: lpm.desas.kecamatans.nama }
         }
       });
     } catch (error) {
@@ -983,7 +995,7 @@ class KelembagaanController {
       const { id } = req.params;
       const satlinmas = await prisma.satlinmas.findUnique({
         where: { id: parseInt(id) },
-        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } }
+        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } }
       });
 
       if (!satlinmas) {
@@ -999,7 +1011,7 @@ class KelembagaanController {
           status_kelembagaan: satlinmas.status_kelembagaan,
           jumlah_anggota: satlinmas.jumlah_anggota,
           alamat: satlinmas.alamat,
-          desa: { id_desa: satlinmas.desas.id_desa, nama_desa: satlinmas.desas.nama_desa, kecamatan: satlinmas.desas.kecamatans.nama_kecamatan }
+          desa: { id: satlinmas.desas.id, nama: satlinmas.desas.nama, kecamatan: satlinmas.desas.kecamatans.nama }
         }
       });
     } catch (error) {
@@ -1013,7 +1025,7 @@ class KelembagaanController {
       const { id } = req.params;
       const pkk = await prisma.pkks.findUnique({
         where: { id: parseInt(id) },
-        include: { desas: { select: { nama_desa: true, kecamatans: { select: { nama_kecamatan: true } } } } }
+        include: { desas: { select: { nama: true, kecamatans: { select: { nama: true } } } } }
       });
 
       if (!pkk) {
@@ -1029,7 +1041,7 @@ class KelembagaanController {
           status_kelembagaan: pkk.status_kelembagaan,
           jumlah_anggota: pkk.jumlah_anggota,
           alamat: pkk.alamat,
-          desa: { id_desa: pkk.desas.id_desa, nama_desa: pkk.desas.nama_desa, kecamatan: pkk.desas.kecamatans.nama_kecamatan }
+          desa: { id: pkk.desas.id, nama: pkk.desas.nama, kecamatan: pkk.desas.kecamatans.nama }
         }
       });
     } catch (error) {
@@ -1337,6 +1349,23 @@ class KelembagaanController {
         }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'rw',
+        kelembagaanId: item.id,
+        kelembagaanNama: `RW ${item.nomor}`,
+        desaId: item.desa_id,
+        activityType: ACTIVITY_TYPES.CREATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: item.id,
+        entityName: `RW ${item.nomor}`,
+        oldValue: null,
+        newValue: item,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.status(201).json({ success: true, data: item });
     } catch (error) {
       console.error('Error in createRW:', error);
@@ -1372,6 +1401,23 @@ class KelembagaanController {
           alamat: alamat !== undefined ? alamat : item.alamat,
           status_kelembagaan: status_kelembagaan || item.status_kelembagaan
         }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'rw',
+        kelembagaanId: updated.id,
+        kelembagaanNama: `RW ${updated.nomor}`,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: `RW ${updated.nomor}`,
+        oldValue: item,
+        newValue: updated,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });
@@ -1418,12 +1464,15 @@ class KelembagaanController {
   async toggleRWStatus(req, res) {
     try {
       const user = req.user;
-      if (!user || !user.desa_id) {
+      // Use req.desaId from desaContextMiddleware or user.desa_id
+      const desaId = req.desaId || user.desa_id;
+      
+      if (!desaId) {
         return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
       }
 
       const item = await prisma.rws.findFirst({
-        where: { id: String(req.params.id), desa_id: user.desa_id }
+        where: { id: String(req.params.id), desa_id: desaId }
       });
 
       if (!item) {
@@ -1437,10 +1486,80 @@ class KelembagaanController {
         data: { status_kelembagaan }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'rw',
+        kelembagaanId: updated.id,
+        kelembagaanNama: `RW ${updated.nomor}`,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.TOGGLE_STATUS,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: `RW ${updated.nomor}`,
+        oldValue: { status_kelembagaan: item.status_kelembagaan },
+        newValue: { status_kelembagaan: updated.status_kelembagaan },
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.json({ success: true, data: updated });
     } catch (error) {
       console.error('Error in toggleRWStatus:', error);
       res.status(500).json({ success: false, message: 'Gagal mengubah status RW', error: error.message });
+    }
+  }
+
+  /**
+   * Toggle RW verification status
+   * PUT /api/desa/rw/:id/toggle-verification
+   */
+  async toggleRWVerification(req, res) {
+    try {
+      const user = req.user;
+      // Use req.desaId from desaContextMiddleware or user.desa_id
+      const desaId = req.desaId || user.desa_id;
+      
+      if (!desaId) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.rws.findFirst({
+        where: { id: String(req.params.id), desa_id: desaId }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'RW tidak ditemukan' });
+      }
+
+      const { status_verifikasi } = req.body;
+
+      const updated = await prisma.rws.update({
+        where: { id: String(req.params.id) },
+        data: { status_verifikasi }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'rw',
+        kelembagaanId: updated.id,
+        kelembagaanNama: `RW ${updated.nomor}`,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.VERIFY,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: `RW ${updated.nomor}`,
+        oldValue: { status_verifikasi: item.status_verifikasi },
+        newValue: { status_verifikasi: updated.status_verifikasi },
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in toggleRWVerification:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengubah verifikasi RW', error: error.message });
     }
   }
 
@@ -1520,6 +1639,23 @@ class KelembagaanController {
         }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'rt',
+        kelembagaanId: item.id,
+        kelembagaanNama: `RT ${item.nomor}`,
+        desaId: item.desa_id,
+        activityType: ACTIVITY_TYPES.CREATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: item.id,
+        entityName: `RT ${item.nomor}`,
+        oldValue: null,
+        newValue: item,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.status(201).json({ success: true, data: item });
     } catch (error) {
       console.error('Error in createRT:', error);
@@ -1552,6 +1688,23 @@ class KelembagaanController {
           alamat: alamat !== undefined ? alamat : item.alamat,
           status_kelembagaan: status_kelembagaan || item.status_kelembagaan
         }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'rt',
+        kelembagaanId: updated.id,
+        kelembagaanNama: `RT ${updated.nomor}`,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: `RT ${updated.nomor}`,
+        oldValue: item,
+        newValue: updated,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });
@@ -1590,12 +1743,15 @@ class KelembagaanController {
   async toggleRTStatus(req, res) {
     try {
       const user = req.user;
-      if (!user || !user.desa_id) {
+      // Use req.desaId from desaContextMiddleware or user.desa_id
+      const desaId = req.desaId || user.desa_id;
+      
+      if (!desaId) {
         return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
       }
 
       const item = await prisma.rts.findFirst({
-        where: { id: String(req.params.id), desa_id: user.desa_id }
+        where: { id: String(req.params.id), desa_id: desaId }
       });
 
       if (!item) {
@@ -1609,10 +1765,80 @@ class KelembagaanController {
         data: { status_kelembagaan }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'rt',
+        kelembagaanId: updated.id,
+        kelembagaanNama: `RT ${updated.nomor}`,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.TOGGLE_STATUS,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: `RT ${updated.nomor}`,
+        oldValue: { status_kelembagaan: item.status_kelembagaan },
+        newValue: { status_kelembagaan: updated.status_kelembagaan },
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.json({ success: true, data: updated });
     } catch (error) {
       console.error('Error in toggleRTStatus:', error);
       res.status(500).json({ success: false, message: 'Gagal mengubah status RT', error: error.message });
+    }
+  }
+
+  /**
+   * Toggle RT verification status
+   * PUT /api/desa/rt/:id/toggle-verification
+   */
+  async toggleRTVerification(req, res) {
+    try {
+      const user = req.user;
+      // Use req.desaId from desaContextMiddleware or user.desa_id
+      const desaId = req.desaId || user.desa_id;
+      
+      if (!desaId) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.rts.findFirst({
+        where: { id: String(req.params.id), desa_id: desaId }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'RT tidak ditemukan' });
+      }
+
+      const { status_verifikasi } = req.body;
+
+      const updated = await prisma.rts.update({
+        where: { id: String(req.params.id) },
+        data: { status_verifikasi }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'rt',
+        kelembagaanId: updated.id,
+        kelembagaanNama: `RT ${updated.nomor}`,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.VERIFY,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: `RT ${updated.nomor}`,
+        oldValue: { status_verifikasi: item.status_verifikasi },
+        newValue: { status_verifikasi: updated.status_verifikasi },
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in toggleRTVerification:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengubah verifikasi RT', error: error.message });
     }
   }
 
@@ -1682,6 +1908,23 @@ class KelembagaanController {
         }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'posyandu',
+        kelembagaanId: item.id,
+        kelembagaanNama: item.nama,
+        desaId: item.desa_id,
+        activityType: ACTIVITY_TYPES.CREATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: item.id,
+        entityName: item.nama,
+        oldValue: null,
+        newValue: item,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.status(201).json({ success: true, data: item });
     } catch (error) {
       console.error('Error in createPosyandu:', error);
@@ -1713,6 +1956,23 @@ class KelembagaanController {
           alamat: alamat !== undefined ? alamat : item.alamat,
           status_kelembagaan: status_kelembagaan || item.status_kelembagaan
         }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'posyandu',
+        kelembagaanId: updated.id,
+        kelembagaanNama: updated.nama,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: updated.nama,
+        oldValue: item,
+        newValue: updated,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });
@@ -1751,12 +2011,15 @@ class KelembagaanController {
   async togglePosyanduStatus(req, res) {
     try {
       const user = req.user;
-      if (!user || !user.desa_id) {
+      // Use req.desaId from desaContextMiddleware or user.desa_id
+      const desaId = req.desaId || user.desa_id;
+      
+      if (!desaId) {
         return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
       }
 
       const item = await prisma.posyandus.findFirst({
-        where: { id: String(req.params.id), desa_id: user.desa_id }
+        where: { id: String(req.params.id), desa_id: desaId }
       });
 
       if (!item) {
@@ -1770,10 +2033,80 @@ class KelembagaanController {
         data: { status_kelembagaan }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'posyandu',
+        kelembagaanId: updated.id,
+        kelembagaanNama: updated.nama,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.TOGGLE_STATUS,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: updated.nama,
+        oldValue: { status_kelembagaan: item.status_kelembagaan },
+        newValue: { status_kelembagaan: updated.status_kelembagaan },
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.json({ success: true, data: updated });
     } catch (error) {
       console.error('Error in togglePosyanduStatus:', error);
       res.status(500).json({ success: false, message: 'Gagal mengubah status Posyandu', error: error.message });
+    }
+  }
+
+  /**
+   * Toggle Posyandu verification status
+   * PUT /api/desa/posyandu/:id/toggle-verification
+   */
+  async togglePosyanduVerification(req, res) {
+    try {
+      const user = req.user;
+      // Use req.desaId from desaContextMiddleware or user.desa_id
+      const desaId = req.desaId || user.desa_id;
+      
+      if (!desaId) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
+      }
+
+      const item = await prisma.posyandus.findFirst({
+        where: { id: String(req.params.id), desa_id: desaId }
+      });
+
+      if (!item) {
+        return res.status(404).json({ success: false, message: 'Posyandu tidak ditemukan' });
+      }
+
+      const { status_verifikasi } = req.body;
+
+      const updated = await prisma.posyandus.update({
+        where: { id: String(req.params.id) },
+        data: { status_verifikasi }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'posyandu',
+        kelembagaanId: updated.id,
+        kelembagaanNama: updated.nama,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.VERIFY,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: updated.nama,
+        oldValue: { status_verifikasi: item.status_verifikasi },
+        newValue: { status_verifikasi: updated.status_verifikasi },
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error in togglePosyanduVerification:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengubah verifikasi Posyandu', error: error.message });
     }
   }
 
@@ -1851,6 +2184,23 @@ class KelembagaanController {
         }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'karang_taruna',
+        kelembagaanId: item.id,
+        kelembagaanNama: item.nama,
+        desaId: item.desa_id,
+        activityType: ACTIVITY_TYPES.CREATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: item.id,
+        entityName: item.nama,
+        oldValue: null,
+        newValue: item,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.status(201).json({ success: true, data: item });
     } catch (error) {
       console.error('Error in createKarangTaruna:', error);
@@ -1882,6 +2232,23 @@ class KelembagaanController {
           alamat: alamat !== undefined ? alamat : item.alamat,
           status_kelembagaan: status_kelembagaan || item.status_kelembagaan
         }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'karang_taruna',
+        kelembagaanId: updated.id,
+        kelembagaanNama: updated.nama,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: updated.nama,
+        oldValue: item,
+        newValue: updated,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });
@@ -1920,12 +2287,15 @@ class KelembagaanController {
   async toggleKarangTarunaStatus(req, res) {
     try {
       const user = req.user;
-      if (!user || !user.desa_id) {
+      // Use req.desaId from desaContextMiddleware or user.desa_id
+      const desaId = req.desaId || user.desa_id;
+      
+      if (!desaId) {
         return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
       }
 
       const item = await prisma.karang_tarunas.findFirst({
-        where: { id: String(req.params.id), desa_id: user.desa_id }
+        where: { id: String(req.params.id), desa_id: desaId }
       });
 
       if (!item) {
@@ -2022,6 +2392,23 @@ class KelembagaanController {
         }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'lpm',
+        kelembagaanId: item.id,
+        kelembagaanNama: item.nama,
+        desaId: item.desa_id,
+        activityType: ACTIVITY_TYPES.CREATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: item.id,
+        entityName: item.nama,
+        oldValue: null,
+        newValue: item,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.status(201).json({ success: true, data: item });
     } catch (error) {
       console.error('Error in createLPM:', error);
@@ -2053,6 +2440,23 @@ class KelembagaanController {
           alamat: alamat !== undefined ? alamat : item.alamat,
           status_kelembagaan: status_kelembagaan || item.status_kelembagaan
         }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'lpm',
+        kelembagaanId: updated.id,
+        kelembagaanNama: updated.nama,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: updated.nama,
+        oldValue: item,
+        newValue: updated,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });
@@ -2091,12 +2495,15 @@ class KelembagaanController {
   async toggleLPMStatus(req, res) {
     try {
       const user = req.user;
-      if (!user || !user.desa_id) {
+      // Use req.desaId from desaContextMiddleware or user.desa_id
+      const desaId = req.desaId || user.desa_id;
+      
+      if (!desaId) {
         return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
       }
 
       const item = await prisma.lpms.findFirst({
-        where: { id: String(req.params.id), desa_id: user.desa_id }
+        where: { id: String(req.params.id), desa_id: desaId }
       });
 
       if (!item) {
@@ -2193,6 +2600,23 @@ class KelembagaanController {
         }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'satlinmas',
+        kelembagaanId: item.id,
+        kelembagaanNama: item.nama,
+        desaId: item.desa_id,
+        activityType: ACTIVITY_TYPES.CREATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: item.id,
+        entityName: item.nama,
+        oldValue: null,
+        newValue: item,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.status(201).json({ success: true, data: item });
     } catch (error) {
       console.error('Error in createSatlinmas:', error);
@@ -2224,6 +2648,23 @@ class KelembagaanController {
           alamat: alamat !== undefined ? alamat : item.alamat,
           status_kelembagaan: status_kelembagaan || item.status_kelembagaan
         }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'satlinmas',
+        kelembagaanId: updated.id,
+        kelembagaanNama: updated.nama,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: updated.nama,
+        oldValue: item,
+        newValue: updated,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });
@@ -2262,12 +2703,15 @@ class KelembagaanController {
   async toggleSatlinmasStatus(req, res) {
     try {
       const user = req.user;
-      if (!user || !user.desa_id) {
+      // Use req.desaId from desaContextMiddleware or user.desa_id
+      const desaId = req.desaId || user.desa_id;
+      
+      if (!desaId) {
         return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
       }
 
       const item = await prisma.satlinmas.findFirst({
-        where: { id: String(req.params.id), desa_id: user.desa_id }
+        where: { id: String(req.params.id), desa_id: desaId }
       });
 
       if (!item) {
@@ -2364,6 +2808,23 @@ class KelembagaanController {
         }
       });
 
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'pkk',
+        kelembagaanId: item.id,
+        kelembagaanNama: item.nama,
+        desaId: item.desa_id,
+        activityType: ACTIVITY_TYPES.CREATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: item.id,
+        entityName: item.nama,
+        oldValue: null,
+        newValue: item,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
       res.status(201).json({ success: true, data: item });
     } catch (error) {
       console.error('Error in createPKK:', error);
@@ -2395,6 +2856,23 @@ class KelembagaanController {
           alamat: alamat !== undefined ? alamat : item.alamat,
           status_kelembagaan: status_kelembagaan || item.status_kelembagaan
         }
+      });
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: 'pkk',
+        kelembagaanId: updated.id,
+        kelembagaanNama: updated.nama,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.LEMBAGA,
+        entityId: updated.id,
+        entityName: updated.nama,
+        oldValue: item,
+        newValue: updated,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
       });
 
       res.json({ success: true, data: updated });
@@ -2433,12 +2911,15 @@ class KelembagaanController {
   async togglePKKStatus(req, res) {
     try {
       const user = req.user;
-      if (!user || !user.desa_id) {
+      // Use req.desaId from desaContextMiddleware or user.desa_id
+      const desaId = req.desaId || user.desa_id;
+      
+      if (!desaId) {
         return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
       }
 
       const item = await prisma.pkks.findFirst({
-        where: { id: String(req.params.id), desa_id: user.desa_id }
+        where: { id: String(req.params.id), desa_id: desaId }
       });
 
       if (!item) {

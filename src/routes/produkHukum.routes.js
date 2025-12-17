@@ -8,16 +8,18 @@ const router = express.Router();
 const produkHukumController = require('../controllers/produkHukum.controller');
 const { auth } = require('../middlewares/auth');
 const { uploadProdukHukum } = require('../middlewares/upload');
+const desaContextMiddleware = require('../middlewares/desaContext.middleware');
 
 /**
  * @route   GET /api/produk-hukum
  * @desc    Get all produk hukum for authenticated desa with pagination
- * @access  Private (Desa)
+ * @access  Private (Desa/Admin)
  * @query   page - Page number (default: 1)
  * @query   search - Search by judul (optional)
  * @query   all - Get all without pagination (optional)
+ * @query   desa_id - For admin users only (required for admin)
  */
-router.get('/', auth, (req, res) => produkHukumController.index(req, res));
+router.get('/', auth, desaContextMiddleware, (req, res) => produkHukumController.index(req, res));
 
 /**
  * @route   POST /api/produk-hukum

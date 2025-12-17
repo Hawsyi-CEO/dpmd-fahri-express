@@ -132,9 +132,15 @@ async function logKelembagaanActivity(params) {
 
     // Validasi parameter wajib
     if (!kelembagaanType || !kelembagaanId || !desaId || !activityType || !entityType || !userId) {
-      console.error('❌ Missing required parameters for activity log');
+      console.error('❌ Missing required parameters for activity log:', {
+        kelembagaanType, kelembagaanId, desaId, activityType, entityType, userId
+      });
       return null;
     }
+
+    console.log('📝 Creating activity log:', {
+      kelembagaanType, kelembagaanId, activityType, entityType, desaId
+    });
 
     // Generate action description
     const actionDescription = generateActionDescription(
@@ -171,6 +177,7 @@ async function logKelembagaanActivity(params) {
 
   } catch (error) {
     console.error('❌ Error creating activity log:', error);
+    console.error('Error details:', error.message);
     // Don't throw error to avoid breaking main operation
     return null;
   }

@@ -293,6 +293,43 @@ const uploadAparaturDesa = multer({
   }
 });
 
+// Storage configuration for Pengurus
+const storagePengurus = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'storage/uploads/pengurus_files');
+  },
+  filename: function (req, file, cb) {
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    const nameWithoutExt = path.basename(file.originalname, ext);
+    const sanitizedName = nameWithoutExt.replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `${sanitizedName}_${timestamp}${ext}`;
+    
+    cb(null, filename);
+  }
+});
+
+// File filter for Pengurus (JPG, JPEG, PNG for avatar)
+const pengurusFileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const allowedExtensions = ['.jpg', '.jpeg', '.png'];
+  const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+  
+  if (allowedExtensions.includes(ext) && allowedMimeTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Hanya file JPG, JPEG, dan PNG yang diperbolehkan untuk avatar'), false);
+  }
+};
+
+const uploadPengurus = multer({
+  storage: storagePengurus,
+  fileFilter: pengurusFileFilter,
+  limits: {
+    fileSize: 1 * 1024 * 1024 // 1MB for avatar
+  }
+});
+
 module.exports = {
   uploadBumdes,
   uploadMusdesus,
@@ -301,5 +338,6 @@ module.exports = {
   uploadBerita,
   uploadProdukHukum,
   uploadSuratMasuk,
-  uploadAparaturDesa
+  uploadAparaturDesa,
+  uploadPengurus
 };
