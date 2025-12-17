@@ -1,4 +1,4 @@
-const prisma = require('../models/prisma');
+const prisma = require('../config/prisma');
 const path = require('path');
 const fs = require('fs').promises;
 const { sendDisposisiNotification } = require('./pushNotifications.controller');
@@ -355,18 +355,13 @@ exports.kirimKeKepalaDinas = async (req, res, next) => {
 
     // Send push notification to recipient
     try {
-      // Convert BigInt to string for notification function
-      const notifData = {
-        ...disposisi,
-        id: disposisi.id.toString(),
-        ke_user_id: disposisi.ke_user_id.toString(),
-        dari_user_id: disposisi.dari_user_id.toString(),
-        surat_id: disposisi.surat_id.toString()
-      };
-      await sendDisposisiNotification(notifData);
-      console.log('✅ Push notification sent to Kepala Dinas');
+      console.log('\n[SURAT] Attempting to send push notification to Kepala Dinas...');
+      console.log('[SURAT] Disposisi created with ID:', disposisi.id?.toString());
+      await sendDisposisiNotification(disposisi);
+      console.log('[SURAT] ✅ Push notification sent to Kepala Dinas\n');
     } catch (notifError) {
-      console.error('Error sending push notification:', notifError);
+      console.error('[SURAT] ❌ Error sending push notification:', notifError);
+      console.error('[SURAT] Error stack:', notifError.stack);
       // Don't fail the request if notification fails
     }
 

@@ -1,4 +1,4 @@
-const prisma = require('../models/prisma');
+const prisma = require('../config/prisma');
 const { sendDisposisiNotification } = require('./pushNotifications.controller');
 
 /**
@@ -128,9 +128,13 @@ exports.createDisposisi = async (req, res, next) => {
 
     // Send push notification to recipient
     try {
+      console.log('\n[DISPOSISI] Attempting to send push notification...');
+      console.log('[DISPOSISI] Disposisi created with ID:', disposisi.id?.toString());
       await sendDisposisiNotification(disposisi);
+      console.log('[DISPOSISI] Push notification send process completed\n');
     } catch (notifError) {
-      console.error('Error sending push notification:', notifError);
+      console.error('[DISPOSISI] ❌ Error in push notification process:', notifError);
+      console.error('[DISPOSISI] Error stack:', notifError.stack);
       // Don't fail the request if notification fails
     }
 
