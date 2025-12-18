@@ -45,13 +45,25 @@ echo ""
 # Step 2: Pull latest code from GitHub
 echo -e "${YELLOW}📥 Step 2: Pulling latest code from GitHub...${NC}"
 git status
+
+# Stash local changes if any
+echo -e "${YELLOW}💾 Stashing local changes...${NC}"
+git stash push -m "Auto-stash before migration $(date +%Y%m%d_%H%M%S)"
+
+# Pull latest code
 git pull origin main
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✅ Code updated successfully${NC}"
 else
     echo -e "${RED}❌ Git pull failed!${NC}"
+    echo -e "${YELLOW}ℹ️  Trying to apply stash back...${NC}"
+    git stash pop
     exit 1
 fi
+
+# Apply stash back if needed
+echo -e "${YELLOW}♻️  Applying stashed changes back...${NC}"
+git stash pop || echo -e "${YELLOW}⚠️  No stash to apply or conflicts, continuing...${NC}"
 echo ""
 
 # Step 3: Install dependencies

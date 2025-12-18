@@ -4,6 +4,8 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 // Fix BigInt serialization for JSON
@@ -13,6 +15,21 @@ BigInt.prototype.toJSON = function() {
 
 const logger = require('./utils/logger');
 const errorHandler = require('./middlewares/errorHandler');
+
+// Ensure required directories exist
+const requiredDirs = [
+  path.join(__dirname, '../storage/uploads/temp'),
+  path.join(__dirname, '../storage/uploads/peraturan'),
+  path.join(__dirname, '../storage/uploads/produk-hukum'),
+  path.join(__dirname, '../public/backups')
+];
+
+requiredDirs.forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    logger.info(`📁 Created directory: ${dir}`);
+  }
+});
 
 // Import routes
 const authRoutes = require('./routes/auth.routes');
@@ -121,7 +138,6 @@ if (process.env.NODE_ENV === 'development') {
 
 // Static files - MUST BE BEFORE API ROUTES
 // Serve uploaded files with CORS headers
-const path = require('path');
 app.use('/storage', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Cross-Origin-Resource-Policy', 'cross-origin');
