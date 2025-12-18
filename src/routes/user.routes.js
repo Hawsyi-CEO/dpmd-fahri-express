@@ -14,6 +14,9 @@ router.get('/stats', auth, userController.getUserStats);
 // Get all users (with filtering & pagination)
 router.get('/', auth, userController.getAllUsers);
 
+// Change own password (authenticated user) - MUST be before /:id routes
+router.put('/change-password', auth, userController.changePassword);
+
 // Get user by ID
 router.get('/:id', auth, userController.getUserById);
 
@@ -23,7 +26,7 @@ router.post('/', auth, userController.createUser);
 // Update user
 router.put('/:id', auth, userController.updateUser);
 
-// Reset user password
+// Reset user password (admin only)
 router.put('/:id/reset-password', auth, userController.resetPassword);
 
 // Delete user

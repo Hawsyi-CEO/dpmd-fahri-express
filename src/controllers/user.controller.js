@@ -515,6 +515,73 @@ class UserController {
       });
     }
   }
+
+  /**
+   * Change user password
+   */
+  async changePassword(req, res) {
+    try {
+      const userId = req.user.id; // From auth middleware
+      const { currentPassword, newPassword } = req.body;
+
+      // Validate input
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password saat ini dan password baru harus diisi'
+        });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password baru minimal 6 karakter'
+        });
+      }
+
+      // Get user from database
+      const user = await prisma.users.findUnique({
+        where: { id: BigInt(userId) }
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User tidak ditemukan'
+        });
+      }
+
+      // Verify current password
+      const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isPasswordValid) {
+        return res.status(401).json({
+          success: false,
+          message: 'Password saat ini salah'
+        });
+      }
+
+      // Hash new password
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+      // Update password
+      await prisma.users.update({
+        where: { id: BigInt(userId) },
+        data: { password: hashedPassword }
+      });
+
+      res.json({
+        success: true,
+        message: 'Password berhasil diubah'
+      });
+    } catch (error) {
+      console.error('Error changing password:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Gagal mengubah password',
+        error: error.message
+      });
+    }
+  }
 }
 
 module.exports = new UserController();
