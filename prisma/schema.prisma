@@ -8,6 +8,44 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model aparatur_desa {
+  id                         String                      @id @db.Char(36)
+  desa_id                    BigInt                      @db.UnsignedBigInt
+  nama_lengkap               String                      @db.VarChar(255)
+  jabatan                    String                      @db.VarChar(255)
+  nipd                       String?                     @db.VarChar(255)
+  niap                       String?                     @db.VarChar(255)
+  tempat_lahir               String                      @db.VarChar(255)
+  tanggal_lahir              DateTime                    @db.Date
+  jenis_kelamin              aparatur_desa_jenis_kelamin
+  pendidikan_terakhir        String                      @db.VarChar(255)
+  agama                      String                      @db.VarChar(255)
+  pangkat_golongan           String?                     @db.VarChar(255)
+  tanggal_pengangkatan       DateTime                    @db.Date
+  nomor_sk_pengangkatan      String                      @db.VarChar(255)
+  tanggal_pemberhentian      DateTime?                   @db.Date
+  nomor_sk_pemberhentian     String?                     @db.VarChar(255)
+  keterangan                 String?                     @db.VarChar(255)
+  status                     aparatur_desa_status        @default(Aktif)
+  produk_hukum_id            String?                     @db.Char(36)
+  bpjs_kesehatan_nomor       String?                     @db.VarChar(255)
+  bpjs_ketenagakerjaan_nomor String?                     @db.VarChar(255)
+  file_bpjs_kesehatan        String?                     @db.VarChar(255)
+  file_bpjs_ketenagakerjaan  String?                     @db.VarChar(255)
+  file_pas_foto              String?                     @db.VarChar(255)
+  file_ktp                   String?                     @db.VarChar(255)
+  file_kk                    String?                     @db.VarChar(255)
+  file_akta_kelahiran        String?                     @db.VarChar(255)
+  file_ijazah_terakhir       String?                     @db.VarChar(255)
+  created_at                 DateTime?                   @db.Timestamp(0)
+  updated_at                 DateTime?                   @db.Timestamp(0)
+  desas                      desas                       @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "aparatur_desa_desa_id_foreign")
+  produk_hukums              produk_hukums?              @relation(fields: [produk_hukum_id], references: [id], onUpdate: NoAction, map: "aparatur_desa_produk_hukum_id_foreign")
+
+  @@index([desa_id], map: "aparatur_desa_desa_id_foreign")
+  @@index([produk_hukum_id], map: "aparatur_desa_produk_hukum_id_foreign")
+}
+
 model berita {
   id_berita       Int              @id @default(autoincrement())
   judul           String           @db.VarChar(255)
@@ -127,68 +165,30 @@ model bumdes {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model desas {
-  id                  BigInt                    @id @default(autoincrement()) @db.UnsignedBigInt
-  kecamatan_id        BigInt                    @db.UnsignedBigInt
-  kode                String                    @unique(map: "desas_kode_unique") @db.VarChar(255)
-  nama                String                    @db.VarChar(255)
-  status_pemerintahan desas_status_pemerintahan @default(desa)
-  is_musdesus_target  Boolean                   @default(false)
-  created_at          DateTime?                 @db.Timestamp(0)
-  updated_at          DateTime?                 @db.Timestamp(0)
-  kecamatans          kecamatans                @relation(fields: [kecamatan_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "desas_kecamatan_id_foreign")
-  aparatur_desa       aparatur_desa[]
-  karang_tarunas      karang_tarunas[]
-  lpms                lpms[]
-  pengurus            pengurus[]
-  petugas_monitoring  petugas_monitoring[]
-  pkks                pkks[]
-  posyandus           posyandus[]
-  produk_hukums       produk_hukums[]
-  profil_desas        profil_desas?
-  rts                 rts[]
-  rws                 rws[]
-  satlinmas           satlinmas[]
+  id                        BigInt                      @id @default(autoincrement()) @db.UnsignedBigInt
+  kecamatan_id              BigInt                      @db.UnsignedBigInt
+  kode                      String                      @unique(map: "desas_kode_unique") @db.VarChar(255)
+  nama                      String                      @db.VarChar(255)
+  status_pemerintahan       desas_status_pemerintahan   @default(desa)
+  is_musdesus_target        Boolean                     @default(false)
+  created_at                DateTime?                   @db.Timestamp(0)
+  updated_at                DateTime?                   @db.Timestamp(0)
+  aparatur_desa             aparatur_desa[]
+  kecamatans                kecamatans                  @relation(fields: [kecamatan_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "desas_kecamatan_id_foreign")
+  karang_tarunas            karang_tarunas[]
   kelembagaan_activity_logs kelembagaan_activity_logs[]
+  lpms                      lpms[]
+  pengurus                  pengurus[]
+  petugas_monitoring        petugas_monitoring[]
+  pkks                      pkks[]
+  posyandus                 posyandus[]
+  produk_hukums             produk_hukums[]
+  profil_desas              profil_desas?
+  rts                       rts[]
+  rws                       rws[]
+  satlinmas                 satlinmas[]
 
   @@index([kecamatan_id], map: "desas_kecamatan_id_foreign")
-}
-
-model aparatur_desa {
-  id                           String                      @id @db.Char(36)
-  desa_id                      BigInt                      @db.UnsignedBigInt
-  nama_lengkap                 String                      @db.VarChar(255)
-  jabatan                      String                      @db.VarChar(255)
-  nipd                         String?                     @db.VarChar(255)
-  niap                         String?                     @db.VarChar(255)
-  tempat_lahir                 String                      @db.VarChar(255)
-  tanggal_lahir                DateTime                    @db.Date
-  jenis_kelamin                aparatur_desa_jenis_kelamin
-  pendidikan_terakhir          String                      @db.VarChar(255)
-  agama                        String                      @db.VarChar(255)
-  pangkat_golongan             String?                     @db.VarChar(255)
-  tanggal_pengangkatan         DateTime                    @db.Date
-  nomor_sk_pengangkatan        String                      @db.VarChar(255)
-  tanggal_pemberhentian        DateTime?                   @db.Date
-  nomor_sk_pemberhentian       String?                     @db.VarChar(255)
-  keterangan                   String?                     @db.VarChar(255)
-  status                       aparatur_desa_status        @default(Aktif)
-  produk_hukum_id              String?                     @db.Char(36)
-  bpjs_kesehatan_nomor         String?                     @db.VarChar(255)
-  bpjs_ketenagakerjaan_nomor   String?                     @db.VarChar(255)
-  file_bpjs_kesehatan          String?                     @db.VarChar(255)
-  file_bpjs_ketenagakerjaan    String?                     @db.VarChar(255)
-  file_pas_foto                String?                     @db.VarChar(255)
-  file_ktp                     String?                     @db.VarChar(255)
-  file_kk                      String?                     @db.VarChar(255)
-  file_akta_kelahiran          String?                     @db.VarChar(255)
-  file_ijazah_terakhir         String?                     @db.VarChar(255)
-  created_at                   DateTime?                   @db.Timestamp(0)
-  updated_at                   DateTime?                   @db.Timestamp(0)
-  desas                        desas                       @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "aparatur_desa_desa_id_foreign")
-  produk_hukums                produk_hukums?              @relation(fields: [produk_hukum_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "aparatur_desa_produk_hukum_id_foreign")
-
-  @@index([desa_id], map: "aparatur_desa_desa_id_foreign")
-  @@index([produk_hukum_id], map: "aparatur_desa_produk_hukum_id_foreign")
 }
 
 model dinas {
@@ -219,7 +219,7 @@ model karang_tarunas {
   updated_at         DateTime?                          @default(now()) @db.Timestamp(0)
   produk_hukum_id    String?                            @db.Char(36)
   desas              desas                              @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "karang_tarunas_desa_id_foreign")
-  produk_hukums      produk_hukums?                     @relation(fields: [produk_hukum_id], references: [id], onUpdate: NoAction, map: "karang_tarunas_produk_hukum_id_foreign")
+  produk_hukums      produk_hukums?                     @relation(fields: [produk_hukum_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "karang_tarunas_produk_hukum_id_foreign")
 
   @@index([desa_id], map: "karang_tarunas_desa_id_foreign")
   @@index([produk_hukum_id], map: "karang_tarunas_produk_hukum_id_foreign")
@@ -262,6 +262,34 @@ model kegiatan_bidang {
   @@index([id_kegiatan], map: "kegiatan_bidang_id_kegiatan_foreign")
 }
 
+model kelembagaan_activity_logs {
+  id                 String    @id @db.Char(36)
+  kelembagaan_type   String    @db.VarChar(50)
+  kelembagaan_id     String    @db.Char(36)
+  kelembagaan_nama   String?   @db.VarChar(255)
+  desa_id            BigInt    @db.UnsignedBigInt
+  activity_type      String    @db.VarChar(50)
+  entity_type        String    @db.VarChar(50)
+  entity_id          String?   @db.Char(36)
+  entity_name        String?   @db.VarChar(255)
+  action_description String    @db.Text
+  old_value          Json?
+  new_value          Json?
+  user_id            BigInt    @db.UnsignedBigInt
+  user_name          String?   @db.VarChar(255)
+  user_role          String?   @db.VarChar(50)
+  created_at         DateTime? @default(now()) @db.Timestamp(0)
+  desas              desas     @relation(fields: [desa_id], references: [id], onDelete: Cascade, map: "kelembagaan_logs_desa_id_foreign")
+  users              users     @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "kelembagaan_logs_user_id_foreign")
+
+  @@index([activity_type], map: "idx_activity_type")
+  @@index([created_at], map: "idx_created_at")
+  @@index([desa_id], map: "idx_desa_id")
+  @@index([entity_type], map: "idx_entity_type")
+  @@index([kelembagaan_type, kelembagaan_id], map: "idx_kelembagaan_type_id")
+  @@index([user_id], map: "idx_user_id")
+}
+
 model kelurahan {
   id_kelurahan Int       @id @default(autoincrement())
   kelurahan    String    @db.VarChar(255)
@@ -284,7 +312,7 @@ model lpms {
   updated_at         DateTime?                @default(now()) @db.Timestamp(0)
   produk_hukum_id    String?                  @db.Char(36)
   desas              desas                    @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "lpms_desa_id_foreign")
-  produk_hukums      produk_hukums?           @relation(fields: [produk_hukum_id], references: [id], onUpdate: NoAction, map: "lpms_produk_hukum_id_foreign")
+  produk_hukums      produk_hukums?           @relation(fields: [produk_hukum_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "lpms_produk_hukum_id_foreign")
 
   @@index([desa_id], map: "lpms_desa_id_foreign")
   @@index([produk_hukum_id], map: "lpms_produk_hukum_id_foreign")
@@ -321,18 +349,6 @@ model pengurus {
   @@index([desa_id], map: "pengurus_desa_id_foreign")
 }
 
-model pegawai {
-  id_pegawai   BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  id_bidang    BigInt    @db.UnsignedBigInt
-  nama_pegawai String    @db.VarChar(255)
-  created_at   DateTime? @db.Timestamp(0)
-  updated_at   DateTime? @db.Timestamp(0)
-  bidangs      bidangs   @relation(fields: [id_bidang], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pegawai_id_bidang_foreign")
-  users        users[]
-
-  @@index([id_bidang], map: "pegawai_id_bidang_foreign")
-}
-
 model petugas_monitoring {
   id             BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
   nama_desa      String      @db.VarChar(255)
@@ -361,7 +377,7 @@ model pkks {
   updated_at         DateTime?                @default(now()) @db.Timestamp(0)
   produk_hukum_id    String?                  @db.Char(36)
   desas              desas                    @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pkks_desa_id_foreign")
-  produk_hukums      produk_hukums?           @relation(fields: [produk_hukum_id], references: [id], onUpdate: NoAction, map: "pkks_produk_hukum_id_foreign")
+  produk_hukums      produk_hukums?           @relation(fields: [produk_hukum_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "pkks_produk_hukum_id_foreign")
 
   @@index([desa_id], map: "pkks_desa_id_foreign")
   @@index([produk_hukum_id], map: "pkks_produk_hukum_id_foreign")
@@ -378,7 +394,7 @@ model posyandus {
   updated_at         DateTime?                     @default(now()) @db.Timestamp(0)
   produk_hukum_id    String?                       @db.Char(36)
   desas              desas                         @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "posyandus_desa_id_foreign")
-  produk_hukums      produk_hukums?                @relation(fields: [produk_hukum_id], references: [id], onUpdate: NoAction, map: "posyandus_produk_hukum_id_foreign")
+  produk_hukums      produk_hukums?                @relation(fields: [produk_hukum_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "posyandus_produk_hukum_id_foreign")
 
   @@index([desa_id], map: "posyandus_desa_id_foreign")
   @@index([produk_hukum_id], map: "posyandus_produk_hukum_id_foreign")
@@ -416,13 +432,13 @@ model produk_hukums {
   aparatur_desa                                          aparatur_desa[]
   bumdes_bumdes_produk_hukum_perdes_idToproduk_hukums    bumdes[]                       @relation("bumdes_produk_hukum_perdes_idToproduk_hukums")
   bumdes_bumdes_produk_hukum_sk_bumdes_idToproduk_hukums bumdes[]                       @relation("bumdes_produk_hukum_sk_bumdes_idToproduk_hukums")
-  desas                                                  desas                          @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "produk_hukums_desa_id_foreign")
-  rws                                                    rws[]
-  rts                                                    rts[]
-  posyandus                                              posyandus[]
   karang_tarunas                                         karang_tarunas[]
   lpms                                                   lpms[]
   pkks                                                   pkks[]
+  posyandus                                              posyandus[]
+  desas                                                  desas                          @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "produk_hukums_desa_id_foreign")
+  rts                                                    rts[]
+  rws                                                    rws[]
   satlinmas                                              satlinmas[]
 
   @@index([desa_id], map: "produk_hukums_desa_id_foreign")
@@ -465,8 +481,8 @@ model rts {
   updated_at         DateTime?               @default(now()) @db.Timestamp(0)
   produk_hukum_id    String?                 @db.Char(36)
   desas              desas                   @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "rts_desa_id_foreign")
+  produk_hukums      produk_hukums?          @relation(fields: [produk_hukum_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "rts_produk_hukum_id_foreign")
   rws                rws                     @relation(fields: [rw_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "rts_rw_id_foreign")
-  produk_hukums      produk_hukums?          @relation(fields: [produk_hukum_id], references: [id], onUpdate: NoAction, map: "rts_produk_hukum_id_foreign")
 
   @@unique([rw_id, nomor], map: "unique_rw_nomor")
   @@index([desa_id], map: "rts_desa_id_foreign")
@@ -509,30 +525,121 @@ model satlinmas {
 }
 
 model users {
-  id                BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
-  name              String          @db.VarChar(255)
-  email             String          @unique(map: "users_email_unique") @db.VarChar(255)
-  email_verified_at DateTime?       @db.Timestamp(0)
-  password          String          @db.VarChar(255)
-  is_active         Boolean         @default(true)
-  role              users_role      @default(desa)
-  kecamatan_id      Int?            @db.UnsignedInt
-  desa_id           BigInt?         @db.UnsignedBigInt
-  bidang_id         Int?            @db.UnsignedInt
-  pegawai_id        BigInt?         @db.UnsignedBigInt
-  dinas_id          Int?            @db.UnsignedInt
-  remember_token    String?         @db.VarChar(100)
-  created_at        DateTime?       @db.Timestamp(0)
-  updated_at        DateTime?       @db.Timestamp(0)
-  pegawai              pegawai?             @relation(fields: [pegawai_id], references: [id_pegawai], onDelete: Cascade, onUpdate: NoAction, map: "users_pegawai_id_foreign")
-  surat_created        surat_masuk[]        @relation("SuratCreatedBy")
-  disposisi_dari       disposisi[]          @relation("DisposisiDari")
-  disposisi_ke         disposisi[]          @relation("DisposisiKe")
-  lampiran_uploaded    lampiran_surat[]
-  push_subscriptions   push_subscriptions[]
-  kelembagaan_activity_logs kelembagaan_activity_logs[]
+  id                                      BigInt                      @id @default(autoincrement()) @db.UnsignedBigInt
+  name                                    String                      @db.VarChar(255)
+  email                                   String                      @unique(map: "users_email_unique") @db.VarChar(255)
+  email_verified_at                       DateTime?                   @db.Timestamp(0)
+  password                                String                      @db.VarChar(255)
+  role                                    users_role                  @default(desa)
+  kecamatan_id                            Int?                        @db.UnsignedInt
+  desa_id                                 BigInt?                     @db.UnsignedBigInt
+  bidang_id                               Int?                        @db.UnsignedInt
+  dinas_id                                Int?                        @db.UnsignedInt
+  remember_token                          String?                     @db.VarChar(100)
+  created_at                              DateTime?                   @db.Timestamp(0)
+  updated_at                              DateTime?                   @db.Timestamp(0)
+  is_active                               Boolean                     @default(true)
+  pegawai_id                              BigInt?                     @db.UnsignedBigInt
+  disposisi_disposisi_dari_user_idTousers disposisi[]                 @relation("disposisi_dari_user_idTousers")
+  disposisi_disposisi_ke_user_idTousers   disposisi[]                 @relation("disposisi_ke_user_idTousers")
+  kelembagaan_activity_logs               kelembagaan_activity_logs[]
+  lampiran_surat                          lampiran_surat[]
+  push_subscriptions                      push_subscriptions[]
+  surat_masuk                             surat_masuk[]
+  pegawai                                 pegawai?                    @relation(fields: [pegawai_id], references: [id_pegawai], onDelete: Cascade, onUpdate: NoAction, map: "users_pegawai_id_foreign")
 
   @@index([pegawai_id], map: "users_pegawai_id_index")
+}
+
+model disposisi {
+  id                                  BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
+  surat_id                            BigInt               @db.UnsignedBigInt
+  dari_user_id                        BigInt               @db.UnsignedBigInt
+  ke_user_id                          BigInt               @db.UnsignedBigInt
+  catatan                             String?              @db.Text
+  instruksi                           disposisi_instruksi? @default(biasa)
+  status                              disposisi_status?    @default(pending)
+  level_disposisi                     Int                  @db.UnsignedTinyInt
+  tanggal_disposisi                   DateTime?            @default(now()) @db.DateTime(0)
+  tanggal_dibaca                      DateTime?            @db.DateTime(0)
+  tanggal_selesai                     DateTime?            @db.DateTime(0)
+  created_at                          DateTime?            @default(now()) @db.Timestamp(0)
+  updated_at                          DateTime?            @default(now()) @db.Timestamp(0)
+  users_disposisi_dari_user_idTousers users                @relation("disposisi_dari_user_idTousers", fields: [dari_user_id], references: [id])
+  users_disposisi_ke_user_idTousers   users                @relation("disposisi_ke_user_idTousers", fields: [ke_user_id], references: [id])
+  surat_masuk                         surat_masuk          @relation(fields: [surat_id], references: [id], onDelete: Cascade)
+
+  @@index([dari_user_id], map: "idx_dari_user")
+  @@index([ke_user_id, status], map: "idx_disposisi_ke_status")
+  @@index([surat_id, level_disposisi], map: "idx_disposisi_surat_level")
+  @@index([ke_user_id], map: "idx_ke_user")
+  @@index([level_disposisi], map: "idx_level")
+  @@index([status], map: "idx_status")
+  @@index([surat_id], map: "idx_surat_id")
+}
+
+model lampiran_surat {
+  id          BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
+  surat_id    BigInt      @db.UnsignedBigInt
+  nama_file   String      @db.VarChar(255)
+  file_path   String      @db.VarChar(500)
+  ukuran_file Int?        @db.UnsignedInt
+  tipe_file   String?     @db.VarChar(50)
+  uploaded_by BigInt      @db.UnsignedBigInt
+  created_at  DateTime?   @default(now()) @db.Timestamp(0)
+  surat_masuk surat_masuk @relation(fields: [surat_id], references: [id], onDelete: Cascade)
+  users       users       @relation(fields: [uploaded_by], references: [id])
+
+  @@index([surat_id], map: "idx_surat_id")
+  @@index([uploaded_by], map: "lampiran_surat_uploaded_by_fkey")
+}
+
+model pegawai {
+  id_pegawai   BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  id_bidang    BigInt    @db.UnsignedBigInt
+  nama_pegawai String    @db.VarChar(255)
+  created_at   DateTime? @db.Timestamp(0)
+  updated_at   DateTime? @db.Timestamp(0)
+  bidangs      bidangs   @relation(fields: [id_bidang], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pegawai_id_bidang_foreign")
+  users        users[]
+
+  @@index([id_bidang], map: "pegawai_id_bidang_foreign")
+}
+
+model push_subscriptions {
+  id           BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id      BigInt    @db.UnsignedBigInt
+  endpoint     String    @db.Text
+  subscription Json
+  created_at   DateTime? @default(now()) @db.Timestamp(0)
+  updated_at   DateTime? @default(now()) @db.Timestamp(0)
+  users        users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id], map: "push_subscriptions_user_id_index")
+}
+
+model surat_masuk {
+  id             BigInt                   @id @default(autoincrement()) @db.UnsignedBigInt
+  nomor_surat    String                   @unique @db.VarChar(100)
+  tanggal_surat  DateTime                 @db.Date
+  tanggal_terima DateTime?                @default(now()) @db.DateTime(0)
+  pengirim       String                   @db.VarChar(255)
+  perihal        String                   @db.Text
+  jenis_surat    surat_masuk_jenis_surat? @default(biasa)
+  file_path      String?                  @db.VarChar(500)
+  keterangan     String?                  @db.Text
+  status         surat_masuk_status?      @default(draft)
+  created_by     BigInt                   @db.UnsignedBigInt
+  created_at     DateTime?                @default(now()) @db.Timestamp(0)
+  updated_at     DateTime?                @default(now()) @db.Timestamp(0)
+  disposisi      disposisi[]
+  lampiran_surat lampiran_surat[]
+  users          users                    @relation(fields: [created_by], references: [id])
+
+  @@index([created_by], map: "idx_created_by")
+  @@index([status], map: "idx_status")
+  @@index([status, tanggal_surat(sort: Desc)], map: "idx_surat_status_tanggal")
+  @@index([tanggal_surat], map: "idx_tanggal_surat")
 }
 
 enum desas_status_pemerintahan {
@@ -605,28 +712,6 @@ enum satlinmas_status_verifikasi {
   unverified
 }
 
-enum users_role {
-  superadmin
-  admin
-  desa
-  kecamatan
-  dinas
-  kepala_dinas
-  sekretaris_dinas
-  kabid_sekretariat
-  kabid_pemerintahan_desa
-  kabid_spked
-  kabid_kekayaan_keuangan_desa
-  kabid_pemberdayaan_masyarakat_desa
-  sarpras
-  sekretariat
-  sarana_prasarana
-  kekayaan_keuangan
-  pemberdayaan_masyarakat
-  pemerintahan_desa
-  pegawai
-}
-
 enum berita_kategori {
   umum
   bumdes
@@ -662,6 +747,11 @@ enum produk_hukums_jenis {
   Keputusan_Kepala_Desa @map("Keputusan Kepala Desa")
 }
 
+enum aparatur_desa_jenis_kelamin {
+  Laki_laki @map("Laki-laki")
+  Perempuan
+}
+
 enum pengurus_status_verifikasi {
   verified
   unverified
@@ -683,83 +773,9 @@ enum pengurus_jenis_kelamin {
   Perempuan
 }
 
-model surat_masuk {
-  id            BigInt              @id @default(autoincrement()) @db.UnsignedBigInt
-  nomor_surat   String              @unique @db.VarChar(100)
-  tanggal_surat DateTime            @db.Date
-  tanggal_terima DateTime?         @default(now()) @db.DateTime(0)
-  pengirim      String              @db.VarChar(255)
-  perihal       String              @db.Text
-  jenis_surat   surat_jenis?        @default(biasa)
-  file_path     String?             @db.VarChar(500)
-  keterangan    String?             @db.Text
-  status        surat_status?       @default(draft)
-  created_by    BigInt              @db.UnsignedBigInt
-  created_at    DateTime?           @default(now()) @db.Timestamp(0)
-  updated_at    DateTime?           @default(now()) @db.Timestamp(0)
-  creator       users               @relation("SuratCreatedBy", fields: [created_by], references: [id], onDelete: Restrict)
-  disposisi     disposisi[]
-  lampiran      lampiran_surat[]
-
-  @@index([tanggal_surat], map: "idx_tanggal_surat")
-  @@index([status], map: "idx_status")
-  @@index([created_by], map: "idx_created_by")
-  @@index([status, tanggal_surat(sort: Desc)], map: "idx_surat_status_tanggal")
-}
-
-model disposisi {
-  id                BigInt             @id @default(autoincrement()) @db.UnsignedBigInt
-  surat_id          BigInt             @db.UnsignedBigInt
-  dari_user_id      BigInt             @db.UnsignedBigInt
-  ke_user_id        BigInt             @db.UnsignedBigInt
-  catatan           String?            @db.Text
-  instruksi         disposisi_instruksi? @default(biasa)
-  status            disposisi_status?  @default(pending)
-  level_disposisi   Int                @db.UnsignedTinyInt
-  tanggal_disposisi DateTime?          @default(now()) @db.DateTime(0)
-  tanggal_dibaca    DateTime?          @db.DateTime(0)
-  tanggal_selesai   DateTime?          @db.DateTime(0)
-  created_at        DateTime?          @default(now()) @db.Timestamp(0)
-  updated_at        DateTime?          @default(now()) @db.Timestamp(0)
-  surat             surat_masuk        @relation(fields: [surat_id], references: [id], onDelete: Cascade)
-  dari_user         users              @relation("DisposisiDari", fields: [dari_user_id], references: [id], onDelete: Restrict)
-  ke_user           users              @relation("DisposisiKe", fields: [ke_user_id], references: [id], onDelete: Restrict)
-
-  @@index([surat_id], map: "idx_surat_id")
-  @@index([dari_user_id], map: "idx_dari_user")
-  @@index([ke_user_id], map: "idx_ke_user")
-  @@index([status], map: "idx_status")
-  @@index([level_disposisi], map: "idx_level")
-  @@index([ke_user_id, status], map: "idx_disposisi_ke_status")
-  @@index([surat_id, level_disposisi], map: "idx_disposisi_surat_level")
-}
-
-model lampiran_surat {
-  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  surat_id    BigInt   @db.UnsignedBigInt
-  nama_file   String   @db.VarChar(255)
-  file_path   String   @db.VarChar(500)
-  ukuran_file Int?     @db.UnsignedInt
-  tipe_file   String?  @db.VarChar(50)
-  uploaded_by BigInt   @db.UnsignedBigInt
-  created_at  DateTime? @default(now()) @db.Timestamp(0)
-  surat       surat_masuk @relation(fields: [surat_id], references: [id], onDelete: Cascade)
-  uploader    users    @relation(fields: [uploaded_by], references: [id], onDelete: Restrict)
-
-  @@index([surat_id], map: "idx_surat_id")
-}
-
-enum surat_jenis {
-  biasa
-  penting
-  segera
-  rahasia
-}
-
-enum surat_status {
-  draft
-  dikirim
-  selesai
+enum aparatur_desa_status {
+  Aktif
+  Tidak_Aktif @map("Tidak Aktif")
 }
 
 enum disposisi_instruksi {
@@ -772,6 +788,28 @@ enum disposisi_instruksi {
   simpan
 }
 
+enum users_role {
+  superadmin
+  admin
+  desa
+  kecamatan
+  dinas
+  kepala_dinas
+  sekretaris_dinas
+  kabid_sekretariat
+  kabid_pemerintahan_desa
+  kabid_spked
+  kabid_kekayaan_keuangan_desa
+  kabid_pemberdayaan_masyarakat_desa
+  sarpras
+  sekretariat
+  sarana_prasarana
+  kekayaan_keuangan
+  pemberdayaan_masyarakat
+  pemerintahan_desa
+  pegawai
+}
+
 enum disposisi_status {
   pending
   dibaca
@@ -780,54 +818,15 @@ enum disposisi_status {
   teruskan
 }
 
-enum aparatur_desa_jenis_kelamin {
-  Laki_laki @map("Laki-laki")
-  Perempuan
+enum surat_masuk_jenis_surat {
+  biasa
+  penting
+  segera
+  rahasia
 }
 
-enum aparatur_desa_status {
-  Aktif        @map("Aktif")
-  Tidak_Aktif  @map("Tidak Aktif")
-}
-
-model push_subscriptions {
-  id           BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  user_id      BigInt    @db.UnsignedBigInt
-  endpoint     String    @db.Text
-  subscription Json
-  created_at   DateTime? @default(now()) @db.Timestamp(0)
-  updated_at   DateTime? @default(now()) @updatedAt @db.Timestamp(0)
-
-  users users @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-  @@index([user_id], map: "push_subscriptions_user_id_index")
-}
-
-model kelembagaan_activity_logs {
-  id                  String    @id @db.Char(36)
-  kelembagaan_type    String    @db.VarChar(50)
-  kelembagaan_id      String    @db.Char(36)
-  kelembagaan_nama    String?   @db.VarChar(255)
-  desa_id             BigInt    @db.UnsignedBigInt
-  activity_type       String    @db.VarChar(50)
-  entity_type         String    @db.VarChar(50)
-  entity_id           String?   @db.Char(36)
-  entity_name         String?   @db.VarChar(255)
-  action_description  String    @db.Text
-  old_value           Json?
-  new_value           Json?
-  user_id             BigInt    @db.UnsignedBigInt
-  user_name           String?   @db.VarChar(255)
-  user_role           String?   @db.VarChar(50)
-  created_at          DateTime? @default(now()) @db.Timestamp(0)
-  
-  desas               desas     @relation(fields: [desa_id], references: [id], onDelete: Cascade, map: "kelembagaan_logs_desa_id_foreign")
-  users               users     @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "kelembagaan_logs_user_id_foreign")
-
-  @@index([kelembagaan_type, kelembagaan_id], map: "idx_kelembagaan_type_id")
-  @@index([entity_type], map: "idx_entity_type")
-  @@index([desa_id], map: "idx_desa_id")
-  @@index([activity_type], map: "idx_activity_type")
-  @@index([created_at], map: "idx_created_at")
-  @@index([user_id], map: "idx_user_id")
+enum surat_masuk_status {
+  draft
+  dikirim
+  selesai
 }
