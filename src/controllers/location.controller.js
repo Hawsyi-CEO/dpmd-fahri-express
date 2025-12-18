@@ -9,7 +9,7 @@ class LocationController {
       logger.info('Fetching all kecamatans');
 
       const kecamatans = await prisma.kecamatans.findMany({
-        orderBy: { nama_kecamatan: 'asc' }
+        orderBy: { nama: 'asc' }
       });
 
       logger.info(`Found ${kecamatans.length} kecamatans`);
@@ -17,7 +17,7 @@ class LocationController {
       // Convert BigInt to String for JSON serialization
       const serializedData = kecamatans.map(kec => ({
         ...kec,
-        id_kecamatan: kec.id_kecamatan.toString()
+        id: kec.id.toString()
       }));
 
       return res.json({
@@ -37,7 +37,7 @@ class LocationController {
       logger.info('Fetching all desas');
 
       const desas = await prisma.desas.findMany({
-        orderBy: { nama_desa: 'asc' }
+        orderBy: { nama: 'asc' }
       });
 
       logger.info(`Found ${desas.length} desas`);
@@ -45,8 +45,8 @@ class LocationController {
       // Convert BigInt to String for JSON serialization
       const serializedData = desas.map(desa => ({
         ...desa,
-        id_desa: desa.id_desa.toString(),
-        id_kecamatan: desa.id_kecamatan.toString()
+        id: desa.id.toString(),
+        kecamatan_id: desa.kecamatan_id.toString()
       }));
 
       return res.json({
@@ -68,8 +68,8 @@ class LocationController {
       logger.info(`Fetching desas for kecamatan_id: ${kecamatanId}`);
 
       const desas = await prisma.desas.findMany({
-        where: { id_kecamatan: parseInt(kecamatanId) },
-        orderBy: { nama_desa: 'asc' }
+        where: { kecamatan_id: BigInt(kecamatanId) },
+        orderBy: { nama: 'asc' }
       });
 
       logger.info(`Found ${desas.length} desas for kecamatan_id: ${kecamatanId}`);
@@ -77,8 +77,8 @@ class LocationController {
       // Convert BigInt to String for JSON serialization
       const serializedData = desas.map(desa => ({
         ...desa,
-        id_desa: desa.id_desa.toString(),
-        id_kecamatan: desa.id_kecamatan.toString()
+        id: desa.id.toString(),
+        kecamatan_id: desa.kecamatan_id.toString()
       }));
 
       return res.json({
