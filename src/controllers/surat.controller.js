@@ -46,7 +46,7 @@ exports.createSuratMasuk = async (req, res, next) => {
         created_by,
       },
       include: {
-        creator: {
+        users: {
           select: { id: true, name: true, email: true, role: true },
         },
       },
@@ -149,7 +149,7 @@ exports.getAllSuratMasuk = async (req, res, next) => {
       prisma.surat_masuk.findMany({
         where,
         include: {
-          creator: {
+          users: {
             select: { id: true, name: true, email: true },
           },
           disposisi: {
@@ -190,23 +190,23 @@ exports.getSuratMasukById = async (req, res, next) => {
     const surat = await prisma.surat_masuk.findUnique({
       where: { id: BigInt(id) },
       include: {
-        creator: {
+        users: {
           select: { id: true, name: true, email: true, role: true },
         },
         disposisi: {
           include: {
-            dari_user: {
+            users_disposisi_dari_user_idTousers: {
               select: { id: true, name: true, email: true, role: true },
             },
-            ke_user: {
+            users_disposisi_ke_user_idTousers: {
               select: { id: true, name: true, email: true, role: true },
             },
           },
           orderBy: { level_disposisi: 'asc' },
         },
-        lampiran: {
+        lampiran_surat: {
           include: {
-            uploader: {
+            users: {
               select: { id: true, name: true },
             },
           },
@@ -335,13 +335,13 @@ exports.kirimKeKepalaDinas = async (req, res, next) => {
         level_disposisi: 1,
       },
       include: {
-        dari_user: {
+        users_disposisi_dari_user_idTousers: {
           select: { id: true, name: true, email: true },
         },
-        ke_user: {
+        users_disposisi_ke_user_idTousers: {
           select: { id: true, name: true, email: true },
         },
-        surat: {
+        surat_masuk: {
           select: { id: true, nomor_surat: true, perihal: true, pengirim: true },
         },
       },
