@@ -16,13 +16,19 @@ class ProdukHukumController {
    */
   async index(req, res) {
     try {
-      const user = req.user;
       const { search, all, page = 1, limit = 12 } = req.query;
 
+      // req.desaId is set by desaContextMiddleware
+      // For admin: comes from query parameter (optional - if not provided, show all)
+      // For desa: comes from user.desa_id (enforced by middleware - required)
+      
       // Build where clause
-      const where = {
-        desa_id: user.desa_id
-      };
+      const where = {};
+      
+      // If desaId is provided, filter by desa
+      if (req.desaId) {
+        where.desa_id = req.desaId;
+      }
 
       // Add search filter if provided
       if (search) {

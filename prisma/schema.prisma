@@ -148,6 +148,7 @@ model desas {
   rts                 rts[]
   rws                 rws[]
   satlinmas           satlinmas[]
+  kelembagaan_activity_logs kelembagaan_activity_logs[]
 
   @@index([kecamatan_id], map: "desas_kecamatan_id_foreign")
 }
@@ -216,9 +217,12 @@ model karang_tarunas {
   status_verifikasi  karang_tarunas_status_verifikasi?  @default(unverified)
   created_at         DateTime?                          @default(now()) @db.Timestamp(0)
   updated_at         DateTime?                          @default(now()) @db.Timestamp(0)
+  produk_hukum_id    String?                            @db.Char(36)
   desas              desas                              @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "karang_tarunas_desa_id_foreign")
+  produk_hukums      produk_hukums?                     @relation(fields: [produk_hukum_id], references: [id], onUpdate: NoAction, map: "karang_tarunas_produk_hukum_id_foreign")
 
   @@index([desa_id], map: "karang_tarunas_desa_id_foreign")
+  @@index([produk_hukum_id], map: "karang_tarunas_produk_hukum_id_foreign")
 }
 
 model kecamatans {
@@ -278,9 +282,12 @@ model lpms {
   status_verifikasi  lpms_status_verifikasi?  @default(unverified)
   created_at         DateTime?                @default(now()) @db.Timestamp(0)
   updated_at         DateTime?                @default(now()) @db.Timestamp(0)
+  produk_hukum_id    String?                  @db.Char(36)
   desas              desas                    @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "lpms_desa_id_foreign")
+  produk_hukums      produk_hukums?           @relation(fields: [produk_hukum_id], references: [id], onUpdate: NoAction, map: "lpms_produk_hukum_id_foreign")
 
   @@index([desa_id], map: "lpms_desa_id_foreign")
+  @@index([produk_hukum_id], map: "lpms_produk_hukum_id_foreign")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -352,9 +359,12 @@ model pkks {
   status_verifikasi  pkks_status_verifikasi?  @default(unverified)
   created_at         DateTime?                @default(now()) @db.Timestamp(0)
   updated_at         DateTime?                @default(now()) @db.Timestamp(0)
+  produk_hukum_id    String?                  @db.Char(36)
   desas              desas                    @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pkks_desa_id_foreign")
+  produk_hukums      produk_hukums?           @relation(fields: [produk_hukum_id], references: [id], onUpdate: NoAction, map: "pkks_produk_hukum_id_foreign")
 
   @@index([desa_id], map: "pkks_desa_id_foreign")
+  @@index([produk_hukum_id], map: "pkks_produk_hukum_id_foreign")
 }
 
 model posyandus {
@@ -366,9 +376,12 @@ model posyandus {
   status_verifikasi  posyandus_status_verifikasi?  @default(unverified)
   created_at         DateTime?                     @default(now()) @db.Timestamp(0)
   updated_at         DateTime?                     @default(now()) @db.Timestamp(0)
+  produk_hukum_id    String?                       @db.Char(36)
   desas              desas                         @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "posyandus_desa_id_foreign")
+  produk_hukums      produk_hukums?                @relation(fields: [produk_hukum_id], references: [id], onUpdate: NoAction, map: "posyandus_produk_hukum_id_foreign")
 
   @@index([desa_id], map: "posyandus_desa_id_foreign")
+  @@index([produk_hukum_id], map: "posyandus_produk_hukum_id_foreign")
 }
 
 model products {
@@ -405,6 +418,11 @@ model produk_hukums {
   bumdes_bumdes_produk_hukum_sk_bumdes_idToproduk_hukums bumdes[]                       @relation("bumdes_produk_hukum_sk_bumdes_idToproduk_hukums")
   desas                                                  desas                          @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "produk_hukums_desa_id_foreign")
   rws                                                    rws[]
+  rts                                                    rts[]
+  posyandus                                              posyandus[]
+  karang_tarunas                                         karang_tarunas[]
+  lpms                                                   lpms[]
+  pkks                                                   pkks[]
   satlinmas                                              satlinmas[]
 
   @@index([desa_id], map: "produk_hukums_desa_id_foreign")
@@ -445,11 +463,14 @@ model rts {
   status_verifikasi  rts_status_verifikasi?  @default(unverified)
   created_at         DateTime?               @default(now()) @db.Timestamp(0)
   updated_at         DateTime?               @default(now()) @db.Timestamp(0)
+  produk_hukum_id    String?                 @db.Char(36)
   desas              desas                   @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "rts_desa_id_foreign")
   rws                rws                     @relation(fields: [rw_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "rts_rw_id_foreign")
+  produk_hukums      produk_hukums?          @relation(fields: [produk_hukum_id], references: [id], onUpdate: NoAction, map: "rts_produk_hukum_id_foreign")
 
   @@unique([rw_id, nomor], map: "unique_rw_nomor")
   @@index([desa_id], map: "rts_desa_id_foreign")
+  @@index([produk_hukum_id], map: "rts_produk_hukum_id_foreign")
 }
 
 model rws {
@@ -509,6 +530,7 @@ model users {
   disposisi_ke         disposisi[]          @relation("DisposisiKe")
   lampiran_uploaded    lampiran_surat[]
   push_subscriptions   push_subscriptions[]
+  kelembagaan_activity_logs kelembagaan_activity_logs[]
 
   @@index([pegawai_id], map: "users_pegawai_id_index")
 }
@@ -779,4 +801,33 @@ model push_subscriptions {
   users users @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id], map: "push_subscriptions_user_id_index")
+}
+
+model kelembagaan_activity_logs {
+  id                  String    @id @db.Char(36)
+  kelembagaan_type    String    @db.VarChar(50)
+  kelembagaan_id      String    @db.Char(36)
+  kelembagaan_nama    String?   @db.VarChar(255)
+  desa_id             BigInt    @db.UnsignedBigInt
+  activity_type       String    @db.VarChar(50)
+  entity_type         String    @db.VarChar(50)
+  entity_id           String?   @db.Char(36)
+  entity_name         String?   @db.VarChar(255)
+  action_description  String    @db.Text
+  old_value           Json?
+  new_value           Json?
+  user_id             BigInt    @db.UnsignedBigInt
+  user_name           String?   @db.VarChar(255)
+  user_role           String?   @db.VarChar(50)
+  created_at          DateTime? @default(now()) @db.Timestamp(0)
+  
+  desas               desas     @relation(fields: [desa_id], references: [id], onDelete: Cascade, map: "kelembagaan_logs_desa_id_foreign")
+  users               users     @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "kelembagaan_logs_user_id_foreign")
+
+  @@index([kelembagaan_type, kelembagaan_id], map: "idx_kelembagaan_type_id")
+  @@index([entity_type], map: "idx_entity_type")
+  @@index([desa_id], map: "idx_desa_id")
+  @@index([activity_type], map: "idx_activity_type")
+  @@index([created_at], map: "idx_created_at")
+  @@index([user_id], map: "idx_user_id")
 }

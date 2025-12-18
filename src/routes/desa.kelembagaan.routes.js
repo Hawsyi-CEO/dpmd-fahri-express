@@ -6,77 +6,92 @@
 
 const express = require('express');
 const router = express.Router();
-const kelembagaanController = require('../controllers/kelembagaan.controller');
 const { auth } = require('../middlewares/auth');
+const desaContextMiddleware = require('../middlewares/desaContext.middleware');
+const { uploadPengurus } = require('../middlewares/upload');
+
+// Import new modular controllers
+const {
+  rwController,
+  rtController,
+  posyanduController,
+  karangTarunaController,
+  lpmController,
+  pkkController,
+  satlinmasController,
+  summaryController,
+  pengurusController
+} = require('../controllers/kelembagaan/index');
 
 // All routes require authentication
 router.use(auth);
 
+// Apply desaContextMiddleware to all routes (for admin access via desa_id query param)
+router.use(desaContextMiddleware);
+
 // Summary endpoint for logged-in desa
-router.get('/kelembagaan/summary', kelembagaanController.getDesaSummary);
+router.get('/kelembagaan/summary', summaryController.getDesaSummary.bind(summaryController));
 
 // RW routes
-router.get('/rw', kelembagaanController.listDesaRW);
-router.post('/rw', kelembagaanController.createRW);
-router.get('/rw/:id', kelembagaanController.showDesaRW);
-router.put('/rw/:id', kelembagaanController.updateRW);
-router.delete('/rw/:id', kelembagaanController.deleteRW);
-router.put('/rw/:id/toggle-status', kelembagaanController.toggleRWStatus);
+router.get('/rw', rwController.listDesaRW.bind(rwController));
+router.post('/rw', rwController.createRW.bind(rwController));
+router.get('/rw/:id', rwController.showDesaRW.bind(rwController));
+router.put('/rw/:id', rwController.updateRW.bind(rwController));
+router.put('/rw/:id/toggle-status', rwController.toggleStatus.bind(rwController));
+router.put('/rw/:id/toggle-verification', rwController.toggleVerification.bind(rwController));
 
 // RT routes
-router.get('/rt', kelembagaanController.listDesaRT);
-router.post('/rt', kelembagaanController.createRT);
-router.get('/rt/:id', kelembagaanController.showDesaRT);
-router.put('/rt/:id', kelembagaanController.updateRT);
-router.delete('/rt/:id', kelembagaanController.deleteRT);
-router.put('/rt/:id/toggle-status', kelembagaanController.toggleRTStatus);
+router.get('/rt', rtController.listDesaRT.bind(rtController));
+router.post('/rt', rtController.createRT.bind(rtController));
+router.get('/rt/:id', rtController.showDesaRT.bind(rtController));
+router.put('/rt/:id', rtController.updateRT.bind(rtController));
+router.put('/rt/:id/toggle-status', rtController.toggleStatus.bind(rtController));
+router.put('/rt/:id/toggle-verification', rtController.toggleVerification.bind(rtController));
 
 // Posyandu routes
-router.get('/posyandu', kelembagaanController.listDesaPosyandu);
-router.post('/posyandu', kelembagaanController.createPosyandu);
-router.get('/posyandu/:id', kelembagaanController.showDesaPosyandu);
-router.put('/posyandu/:id', kelembagaanController.updatePosyandu);
-router.delete('/posyandu/:id', kelembagaanController.deletePosyandu);
-router.put('/posyandu/:id/toggle-status', kelembagaanController.togglePosyanduStatus);
+router.get('/posyandu', posyanduController.listDesaPosyandu.bind(posyanduController));
+router.post('/posyandu', posyanduController.createPosyandu.bind(posyanduController));
+router.get('/posyandu/:id', posyanduController.showDesaPosyandu.bind(posyanduController));
+router.put('/posyandu/:id', posyanduController.updatePosyandu.bind(posyanduController));
+router.put('/posyandu/:id/toggle-status', posyanduController.toggleStatus.bind(posyanduController));
+router.put('/posyandu/:id/toggle-verification', posyanduController.toggleVerification.bind(posyanduController));
 
 // Karang Taruna routes (singleton - usually only 1 per desa)
-router.get('/karang-taruna', kelembagaanController.listDesaKarangTaruna);
-router.post('/karang-taruna', kelembagaanController.createKarangTaruna);
-router.get('/karang-taruna/:id', kelembagaanController.showDesaKarangTaruna);
-router.put('/karang-taruna/:id', kelembagaanController.updateKarangTaruna);
-router.delete('/karang-taruna/:id', kelembagaanController.deleteKarangTaruna);
-router.put('/karang-taruna/:id/toggle-status', kelembagaanController.toggleKarangTarunaStatus);
+router.get('/karang-taruna', karangTarunaController.listDesa.bind(karangTarunaController));
+router.post('/karang-taruna', karangTarunaController.create.bind(karangTarunaController));
+router.get('/karang-taruna/:id', karangTarunaController.showDesa.bind(karangTarunaController));
+router.put('/karang-taruna/:id', karangTarunaController.update.bind(karangTarunaController));
+router.put('/karang-taruna/:id/toggle-status', karangTarunaController.toggleStatus.bind(karangTarunaController));
 
 // LPM routes (singleton)
-router.get('/lpm', kelembagaanController.listDesaLPM);
-router.post('/lpm', kelembagaanController.createLPM);
-router.get('/lpm/:id', kelembagaanController.showDesaLPM);
-router.put('/lpm/:id', kelembagaanController.updateLPM);
-router.delete('/lpm/:id', kelembagaanController.deleteLPM);
-router.put('/lpm/:id/toggle-status', kelembagaanController.toggleLPMStatus);
+router.get('/lpm', lpmController.listDesa.bind(lpmController));
+router.post('/lpm', lpmController.create.bind(lpmController));
+router.get('/lpm/:id', lpmController.showDesa.bind(lpmController));
+router.put('/lpm/:id', lpmController.update.bind(lpmController));
+router.put('/lpm/:id/toggle-status', lpmController.toggleStatus.bind(lpmController));
 
 // Satlinmas routes (singleton)
-router.get('/satlinmas', kelembagaanController.listDesaSatlinmas);
-router.post('/satlinmas', kelembagaanController.createSatlinmas);
-router.get('/satlinmas/:id', kelembagaanController.showDesaSatlinmas);
-router.put('/satlinmas/:id', kelembagaanController.updateSatlinmas);
-router.delete('/satlinmas/:id', kelembagaanController.deleteSatlinmas);
-router.put('/satlinmas/:id/toggle-status', kelembagaanController.toggleSatlinmasStatus);
+router.get('/satlinmas', satlinmasController.listDesa.bind(satlinmasController));
+router.post('/satlinmas', satlinmasController.create.bind(satlinmasController));
+router.get('/satlinmas/:id', satlinmasController.showDesa.bind(satlinmasController));
+router.put('/satlinmas/:id', satlinmasController.update.bind(satlinmasController));
+router.put('/satlinmas/:id/toggle-status', satlinmasController.toggleStatus.bind(satlinmasController));
 
 // PKK routes (singleton)
-router.get('/pkk', kelembagaanController.listDesaPKK);
-router.post('/pkk', kelembagaanController.createPKK);
-router.get('/pkk/:id', kelembagaanController.showDesaPKK);
-router.put('/pkk/:id', kelembagaanController.updatePKK);
-router.delete('/pkk/:id', kelembagaanController.deletePKK);
-router.put('/pkk/:id/toggle-status', kelembagaanController.togglePKKStatus);
+router.get('/pkk', pkkController.listDesa.bind(pkkController));
+router.post('/pkk', pkkController.create.bind(pkkController));
+router.get('/pkk/:id', pkkController.showDesa.bind(pkkController));
+router.put('/pkk/:id', pkkController.update.bind(pkkController));
+router.put('/pkk/:id/toggle-status', pkkController.toggleStatus.bind(pkkController));
 
 // Pengurus routes (polymorphic - can be attached to any kelembagaan)
-router.get('/pengurus', kelembagaanController.listDesaPengurus);
-router.post('/pengurus', kelembagaanController.createPengurus);
-router.get('/pengurus/:id', kelembagaanController.showDesaPengurus);
-router.put('/pengurus/:id', kelembagaanController.updatePengurus);
-router.delete('/pengurus/:id', kelembagaanController.deletePengurus);
-router.put('/pengurus/:id/status', kelembagaanController.updatePengurusStatus);
+router.get('/pengurus/by-kelembagaan', pengurusController.getPengurusByKelembagaan.bind(pengurusController));
+router.get('/pengurus/history', pengurusController.getPengurusHistory.bind(pengurusController));
+router.get('/pengurus', pengurusController.listDesaPengurus.bind(pengurusController));
+router.post('/pengurus', uploadPengurus.single('avatar'), pengurusController.createPengurus.bind(pengurusController));
+router.get('/pengurus/:id', pengurusController.showDesaPengurus.bind(pengurusController));
+router.put('/pengurus/:id', uploadPengurus.single('avatar'), pengurusController.updatePengurus.bind(pengurusController));
+router.delete('/pengurus/:id', pengurusController.deletePengurus.bind(pengurusController));
+router.put('/pengurus/:id/status', pengurusController.updatePengurusStatus.bind(pengurusController));
 
 module.exports = router;
