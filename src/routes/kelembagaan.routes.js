@@ -35,6 +35,7 @@ router.get('/desa/:id/satlinmas', summaryController.getDesaSatlinmas.bind(summar
 router.get('/desa/:id/pkk', summaryController.getDesaPKK.bind(summaryController));
 
 // List endpoints (with optional desa_id query parameter)
+router.get('/rw', rwController.listRW.bind(rwController));
 router.get('/rt', rtController.listRT.bind(rtController));
 router.get('/posyandu', posyanduController.listPosyandu.bind(posyanduController));
 router.get('/karang-taruna', karangTarunaController.list.bind(karangTarunaController));
