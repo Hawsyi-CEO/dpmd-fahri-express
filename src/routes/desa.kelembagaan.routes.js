@@ -23,13 +23,19 @@ const {
   pengurusController
 } = require('../controllers/kelembagaan/index');
 
+// Import dashboard controller
+const { getDesaDashboardSummary } = require('../controllers/dashboard/desa.dashboard.controller');
+
 // All routes require authentication
 router.use(auth);
 
 // Apply desaContextMiddleware to all routes (for admin access via desa_id query param)
 router.use(desaContextMiddleware);
 
-// Summary endpoint for logged-in desa
+// Dashboard summary endpoint (for Desa Dashboard Page)
+router.get('/dashboard/summary', getDesaDashboardSummary);
+
+// Summary endpoint for logged-in desa (for Kelembagaan Page)
 router.get('/kelembagaan/summary', summaryController.getDesaSummary.bind(summaryController));
 
 // RW routes

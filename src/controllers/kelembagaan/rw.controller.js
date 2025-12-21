@@ -375,6 +375,90 @@ class RWController {
   }
 
   /**
+   * List RW (for admin/public)
+   * GET /api/kelembagaan/rw
+   * Optional query: desaId
+   */
+  async listRW(req, res) {
+    try {
+      const { desaId } = req.query;
+      
+      // Build where clause
+      const whereClause = {};
+      if (desaId) {
+        whereClause.desa_id = desaId;
+      }
+
+      const items = await prisma.rws.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          nomor: true,
+          alamat: true,
+          status_kelembagaan: true,
+          status_verifikasi: true,
+          desa_id: true,
+          desas: {
+            select: {
+              id: true,
+              nama: true,
+              kecamatans: {
+                select: {
+                  id: true,
+                  nama: true
+                }
+              }
+            }
+          },
+          rts: {
+            select: { id: true }
+          }
+        },
+        orderBy: [
+          { desa_id: 'asc' },
+          { nomor: 'asc' }
+        ]
+      });
+
+      // Get ketua for each RW
+      const enrichedData = await Promise.all(
+        items.map(async (rw) => {
+          const ketua = await prisma.pengurus.findFirst({
+            where: {
+              pengurusable_type: 'rws',
+              pengurusable_id: rw.id,
+              status_jabatan: 'aktif',
+              jabatan: {
+                in: ['Ketua RW', 'ketua rw', 'KETUA RW']
+              }
+            },
+            select: {
+              nama_lengkap: true
+            }
+          });
+
+          return {
+            id: rw.id,
+            nomor: rw.nomor,
+            alamat: rw.alamat,
+            status_kelembagaan: rw.status_kelembagaan,
+            status_verifikasi: rw.status_verifikasi,
+            desa_id: rw.desa_id,
+            desa: rw.desas,
+            ketua_nama: ketua?.nama_lengkap || null,
+            jumlah_rt: rw.rts?.length || 0
+          };
+        })
+      );
+
+      res.json({ success: true, data: enrichedData });
+    } catch (error) {
+      console.error('Error in listRW:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengambil data RW', error: error.message });
+    }
+  }
+
+  /**
    * Show RW (for admin/public)
    * GET /api/kelembagaan/rw/:id
    */

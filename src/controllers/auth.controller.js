@@ -79,36 +79,40 @@ const login = async (req, res) => {
     if (user.desa_id) {
       try {
         const desa = await prisma.desas.findUnique({
-          where: { id_desa: user.desa_id },
+          where: { id: user.desa_id },
           select: {
-            id_desa: true,
-            nama_desa: true,
-            kode_desa: true,
-            id_kecamatan: true
+            id: true,
+            nama: true,
+            kode: true,
+            kecamatan_id: true,
+            status_pemerintahan: true
           }
         });
 
         if (desa) {
           responseData.desa = {
-            id: convertBigInt(desa.id_desa),
-            nama: desa.nama_desa,
-            kode: desa.kode_desa,
-            kecamatan_id: convertBigInt(desa.id_kecamatan)
+            id: convertBigInt(desa.id),
+            nama: desa.nama,
+            kode: desa.kode,
+            kecamatan_id: convertBigInt(desa.kecamatan_id),
+            status_pemerintahan: desa.status_pemerintahan
           };
 
           // Fetch related kecamatan
           const kecamatan = await prisma.kecamatans.findUnique({
-            where: { id_kecamatan: desa.id_kecamatan },
+            where: { id: desa.kecamatan_id },
             select: {
-              id_kecamatan: true,
-              nama_kecamatan: true
+              id: true,
+              nama: true,
+              kode: true
             }
           });
 
           if (kecamatan) {
             responseData.desa.kecamatan = {
-              id: convertBigInt(kecamatan.id_kecamatan),
-              nama: kecamatan.nama_kecamatan
+              id: convertBigInt(kecamatan.id),
+              nama: kecamatan.nama,
+              kode: kecamatan.kode
             };
           }
         }
@@ -186,36 +190,40 @@ const verifyToken = async (req, res) => {
     // If user has desa_id, fetch desa data with kecamatan
     if (user.desa_id) {
       const desa = await prisma.desas.findUnique({
-        where: { id_desa: user.desa_id },
+        where: { id: user.desa_id },
         select: {
-          id_desa: true,
-          nama_desa: true,
-          kode_desa: true,
-          id_kecamatan: true
+          id: true,
+          nama: true,
+          kode: true,
+          kecamatan_id: true,
+          status_pemerintahan: true
         }
       });
 
       if (desa) {
         responseData.desa = {
-          id: convertBigInt(desa.id_desa),
-          nama: desa.nama_desa,
-          kode: desa.kode_desa,
-          kecamatan_id: convertBigInt(desa.id_kecamatan)
+          id: convertBigInt(desa.id),
+          nama: desa.nama,
+          kode: desa.kode,
+          kecamatan_id: convertBigInt(desa.kecamatan_id),
+          status_pemerintahan: desa.status_pemerintahan
         };
 
         // Fetch kecamatan data
         const kecamatan = await prisma.kecamatans.findUnique({
-          where: { id_kecamatan: desa.id_kecamatan },
+          where: { id: desa.kecamatan_id },
           select: {
-            id_kecamatan: true,
-            nama_kecamatan: true
+            id: true,
+            nama: true,
+            kode: true
           }
         });
 
         if (kecamatan) {
           responseData.desa.kecamatan = {
-            id: convertBigInt(kecamatan.id_kecamatan),
-            nama: kecamatan.nama_kecamatan
+            id: convertBigInt(kecamatan.id),
+            nama: kecamatan.nama,
+            kode: kecamatan.kode
           };
         }
       }
@@ -229,6 +237,112 @@ const verifyToken = async (req, res) => {
     });
   } catch (error) {
     logger.error('Verify token error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+/**
+ * Get Profile - Get current user profile with complete relations
+ */
+const getProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Fetch complete user data
+    const user = await prisma.users.findUnique({
+      where: { id: BigInt(userId) },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        desa_id: true,
+        kecamatan_id: true,
+        bidang_id: true,
+        dinas_id: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Helper to convert BigInt to string
+    const convertBigInt = (value) => {
+      if (value === null || value === undefined) return value;
+      return typeof value === 'bigint' ? value.toString() : value;
+    };
+
+    // Prepare response data
+    const responseData = {
+      id: convertBigInt(user.id),
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      desa_id: convertBigInt(user.desa_id),
+      kecamatan_id: convertBigInt(user.kecamatan_id),
+      bidang_id: convertBigInt(user.bidang_id),
+      dinas_id: convertBigInt(user.dinas_id)
+    };
+
+    // If user has desa_id, fetch desa data with kecamatan
+    if (user.desa_id) {
+      try {
+        const desa = await prisma.desas.findUnique({
+          where: { id: user.desa_id },
+          select: {
+            id: true,
+            nama: true,
+            kode: true,
+            kecamatan_id: true,
+            status_pemerintahan: true
+          }
+        });
+
+        if (desa) {
+          responseData.desa = {
+            id: convertBigInt(desa.id),
+            nama: desa.nama,
+            kode: desa.kode,
+            kecamatan_id: convertBigInt(desa.kecamatan_id),
+            status_pemerintahan: desa.status_pemerintahan
+          };
+
+          // Fetch kecamatan data
+          const kecamatan = await prisma.kecamatans.findUnique({
+            where: { id: desa.kecamatan_id },
+            select: {
+              id: true,
+              nama: true,
+              kode: true
+            }
+          });
+
+          if (kecamatan) {
+            responseData.desa.kecamatan = {
+              id: convertBigInt(kecamatan.id),
+              nama: kecamatan.nama,
+              kode: kecamatan.kode
+            };
+          }
+        }
+      } catch (error) {
+        logger.warn(`Failed to fetch desa/kecamatan for user ID ${userId}:`, error);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: responseData
+    });
+  } catch (error) {
+    logger.error('Get profile error:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error'
@@ -456,6 +570,7 @@ const checkTailscaleVpn = async (req, res) => {
 module.exports = {
   login,
   verifyToken,
+  getProfile,
   checkVpnAccess,
   checkTailscaleVpn
 };

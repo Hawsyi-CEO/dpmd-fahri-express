@@ -108,7 +108,7 @@ exports.createDisposisi = async (req, res, next) => {
         level_disposisi: parseInt(level_disposisi),
       },
       include: {
-        surat: {
+        surat_masuk: {
           select: {
             id: true,
             nomor_surat: true,
@@ -117,10 +117,10 @@ exports.createDisposisi = async (req, res, next) => {
             tanggal_surat: true,
           },
         },
-        dari_user: {
+        users_disposisi_dari_user_idTousers: {
           select: { id: true, name: true, email: true, role: true },
         },
-        ke_user: {
+        users_disposisi_ke_user_idTousers: {
           select: { id: true, name: true, email: true, role: true },
         },
       },
@@ -171,7 +171,7 @@ exports.getDisposisiMasuk = async (req, res, next) => {
       prisma.disposisi.findMany({
         where,
         include: {
-          surat: {
+          surat_masuk: {
             select: {
               id: true,
               nomor_surat: true,
@@ -182,7 +182,7 @@ exports.getDisposisiMasuk = async (req, res, next) => {
               file_path: true,
             },
           },
-          dari_user: {
+          users_disposisi_dari_user_idTousers: {
             select: { id: true, name: true, email: true, role: true },
           },
         },
@@ -230,7 +230,7 @@ exports.getDisposisiKeluar = async (req, res, next) => {
       prisma.disposisi.findMany({
         where,
         include: {
-          surat: {
+          surat_masuk: {
             select: {
               id: true,
               nomor_surat: true,
@@ -240,7 +240,7 @@ exports.getDisposisiKeluar = async (req, res, next) => {
               jenis_surat: true,
             },
           },
-          ke_user: {
+          users_disposisi_ke_user_idTousers: {
             select: { id: true, name: true, email: true, role: true },
           },
         },
@@ -276,17 +276,17 @@ exports.getDisposisiById = async (req, res, next) => {
     const disposisi = await prisma.disposisi.findUnique({
       where: { id: BigInt(id) },
       include: {
-        surat: {
+        surat_masuk: {
           include: {
-            creator: {
+            users: {
               select: { id: true, name: true, email: true },
             },
             disposisi: {
               include: {
-                dari_user: {
+                users_disposisi_dari_user_idTousers: {
                   select: { id: true, name: true, email: true, role: true },
                 },
-                ke_user: {
+                users_disposisi_ke_user_idTousers: {
                   select: { id: true, name: true, email: true, role: true },
                 },
               },
@@ -294,10 +294,10 @@ exports.getDisposisiById = async (req, res, next) => {
             },
           },
         },
-        dari_user: {
+        users_disposisi_dari_user_idTousers: {
           select: { id: true, name: true, email: true, role: true },
         },
-        ke_user: {
+        users_disposisi_ke_user_idTousers: {
           select: { id: true, name: true, email: true, role: true },
         },
       },
@@ -424,10 +424,10 @@ exports.getDisposisiHistory = async (req, res, next) => {
     const disposisi = await prisma.disposisi.findMany({
       where: { surat_id: BigInt(surat_id) },
       include: {
-        dari_user: {
+        users_disposisi_dari_user_idTousers: {
           select: { id: true, name: true, email: true, role: true },
         },
-        ke_user: {
+        users_disposisi_ke_user_idTousers: {
           select: { id: true, name: true, email: true, role: true },
         },
       },
