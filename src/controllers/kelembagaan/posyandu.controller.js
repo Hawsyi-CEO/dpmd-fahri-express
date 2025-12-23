@@ -230,15 +230,20 @@ class PosyanduController {
   async toggleStatus(req, res) {
     try {
       const user = req.user;
-      const desaId = validateDesaAccess(req, res);
-      if (!desaId) return;
-
-      const item = await prisma.posyandus.findFirst({
-        where: { id: String(req.params.id), desa_id: desaId }
+      
+      // First, find the item to get its desa_id
+      // For superadmin/admin, allow access to any desa's kelembagaan
+      const item = await prisma.posyandus.findUnique({
+        where: { id: String(req.params.id) }
       });
 
       if (!item) {
         return res.status(404).json({ success: false, message: 'Posyandu tidak ditemukan' });
+      }
+
+      // For desa users, validate they have access to this desa
+      if (user.role === 'desa' && user.desa_id !== item.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
       }
 
       const { status_kelembagaan } = req.body;
@@ -279,15 +284,20 @@ class PosyanduController {
   async toggleVerification(req, res) {
     try {
       const user = req.user;
-      const desaId = validateDesaAccess(req, res);
-      if (!desaId) return;
-
-      const item = await prisma.posyandus.findFirst({
-        where: { id: String(req.params.id), desa_id: desaId }
+      
+      // First, find the item to get its desa_id
+      // For superadmin/admin, allow access to any desa's kelembagaan
+      const item = await prisma.posyandus.findUnique({
+        where: { id: String(req.params.id) }
       });
 
       if (!item) {
         return res.status(404).json({ success: false, message: 'Posyandu tidak ditemukan' });
+      }
+
+      // For desa users, validate they have access to this desa
+      if (user.role === 'desa' && user.desa_id !== item.desa_id) {
+        return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
       }
 
       const { status_verifikasi } = req.body;
