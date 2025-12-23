@@ -180,8 +180,8 @@ app.use('/api', locationRoutes); // Kecamatan & Desa routes
 app.use('/api/surat-masuk', require('./routes/surat.routes'));
 app.use('/api/disposisi', require('./routes/disposisi.routes'));
 
-// Push Notifications routes
-app.use('/api/push-notifications', require('./routes/pushNotifications.routes'));
+// Push Notifications routes - Modern Web Push API
+app.use('/api/push-notification', require('./routes/pushNotification'));
 
 app.use('/api/desa/bumdes', bumdesRoutes);
 app.use('/api/bumdes', bumdesRoutes); // Admin routes

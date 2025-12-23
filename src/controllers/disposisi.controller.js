@@ -1,5 +1,5 @@
 const prisma = require('../config/prisma');
-const { sendDisposisiNotification } = require('./pushNotifications.controller');
+const PushNotificationService = require('../services/pushNotificationService');
 
 /**
  * Helper function: Get role hierarchy level
@@ -55,6 +55,10 @@ const validateWorkflowTransition = (fromRole, toRole) => {
  */
 exports.createDisposisi = async (req, res, next) => {
   try {
+    console.log('\n═══════════════════════════════════════');
+    console.log('📝 [DISPOSISI] CREATE REQUEST RECEIVED');
+    console.log('═══════════════════════════════════════');
+    
     const {
       surat_id,
       ke_user_id,
@@ -65,6 +69,15 @@ exports.createDisposisi = async (req, res, next) => {
 
     const dari_user_id = req.user.id;
     const dari_user_role = req.user.role;
+    
+    console.log('📋 Request Data:', {
+      surat_id,
+      dari_user_id: dari_user_id.toString(),
+      dari_user_role,
+      ke_user_id: ke_user_id.toString(),
+      instruksi,
+      level_disposisi
+    });
 
     // Block pegawai/staff from creating disposisi
     const userLevel = getRoleLevel(dari_user_role);
@@ -127,14 +140,39 @@ exports.createDisposisi = async (req, res, next) => {
     });
 
     // Send push notification to recipient
+    console.log('\n📨 [DISPOSISI] Starting push notification process...');
     try {
-      console.log('\n[DISPOSISI] Attempting to send push notification...');
-      console.log('[DISPOSISI] Disposisi created with ID:', disposisi.id?.toString());
-      await sendDisposisiNotification(disposisi);
-      console.log('[DISPOSISI] Push notification send process completed\n');
+      console.log('📋 [PUSH] Notification data preparation:', {
+        disposisi_id: disposisi.id.toString(),
+        ke_user_id: ke_user_id.toString(),
+        dari_user: disposisi.users_disposisi_dari_user_idTousers?.name,
+        perihal: disposisi.surat_masuk?.perihal
+      });
+
+      const notificationData = {
+        id: disposisi.id,
+        perihal: disposisi.surat_masuk?.perihal || 'Disposisi baru',
+        nomor_surat: disposisi.surat_masuk?.nomor_surat,
+        dari_user: disposisi.users_disposisi_dari_user_idTousers?.name,
+        instruksi: disposisi.instruksi,
+        catatan: disposisi.catatan
+      };
+      
+      console.log('📤 [PUSH] Calling PushNotificationService.notifyNewDisposisi...');
+      console.log('📤 [PUSH] Target user IDs:', [Number(ke_user_id)]);
+
+      const result = await PushNotificationService.notifyNewDisposisi(
+        notificationData,
+        [Number(ke_user_id)]
+      );
+      
+      console.log('✅ [PUSH] Notification sent! Result:', JSON.stringify(result, null, 2));
+      console.log('═══════════════════════════════════════\n');
     } catch (notifError) {
-      console.error('[DISPOSISI] ❌ Error in push notification process:', notifError);
-      console.error('[DISPOSISI] Error stack:', notifError.stack);
+      console.error('\n❌ [PUSH] ERROR sending push notification!');
+      console.error('Error message:', notifError.message);
+      console.error('Error stack:', notifError.stack);
+      console.error('═══════════════════════════════════════\n');
       // Don't fail the request if notification fails
     }
 
@@ -157,6 +195,14 @@ exports.getDisposisiMasuk = async (req, res, next) => {
     const userId = req.user.id;
     const { status, page = 1, limit = 20 } = req.query;
 
+    console.log('[getDisposisiMasuk] Query params:', {
+      userId: userId?.toString(),
+      userRole: req.user.role,
+      status,
+      page,
+      limit,
+    });
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const take = parseInt(limit);
 
@@ -165,6 +211,11 @@ exports.getDisposisiMasuk = async (req, res, next) => {
     };
 
     if (status) where.status = status;
+
+    console.log('[getDisposisiMasuk] Where clause:', {
+      ke_user_id: where.ke_user_id?.toString(),
+      status: where.status,
+    });
 
     const [total, disposisi] = await Promise.all([
       prisma.disposisi.count({ where }),
@@ -192,9 +243,18 @@ exports.getDisposisiMasuk = async (req, res, next) => {
       }),
     ]);
 
+    console.log(`[getDisposisiMasuk] Found ${total} total disposisi, returning ${disposisi.length} items`);
+
+    // Transform response untuk frontend compatibility
+    const transformedDisposisi = disposisi.map(d => ({
+      ...d,
+      surat: d.surat_masuk, // Alias untuk frontend
+      dari_user: d.users_disposisi_dari_user_idTousers, // Alias untuk frontend
+    }));
+
     res.json({
       success: true,
-      data: disposisi,
+      data: transformedDisposisi,
       pagination: {
         total,
         page: parseInt(page),
@@ -203,6 +263,8 @@ exports.getDisposisiMasuk = async (req, res, next) => {
       },
     });
   } catch (error) {
+    console.error('[getDisposisiMasuk] Error:', error.message);
+    console.error('[getDisposisiMasuk] Stack:', error.stack);
     next(error);
   }
 };
@@ -250,9 +312,16 @@ exports.getDisposisiKeluar = async (req, res, next) => {
       }),
     ]);
 
+    // Transform response untuk frontend compatibility
+    const transformedDisposisi = disposisi.map(d => ({
+      ...d,
+      surat: d.surat_masuk, // Alias untuk frontend
+      ke_user: d.users_disposisi_ke_user_idTousers, // Alias untuk frontend
+    }));
+
     res.json({
       success: true,
-      data: disposisi,
+      data: transformedDisposisi,
       pagination: {
         total,
         page: parseInt(page),
