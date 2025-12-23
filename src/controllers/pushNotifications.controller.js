@@ -189,16 +189,20 @@ const sendToUser = async (req, res) => {
     const results = await Promise.allSettled(
       subscriptions.map(async (sub) => {
         try {
-          const subscription = JSON.parse(sub.subscription);
+          // Parse subscription - handle both string and object
+          const subscription = typeof sub.subscription === 'string' 
+            ? JSON.parse(sub.subscription) 
+            : sub.subscription;
           
           // Options untuk heads-up notification (priority tinggi)
           const options = {
-            TTL: 3600,
+            TTL: 86400, // 24 jam (lebih lama untuk retry)
             urgency: 'high', // CRITICAL: Wajib 'high' untuk heads-up di Android
             headers: {
               'Topic': 'disposisi',
               'Priority': 'high',
-              'Urgency': 'high'
+              'Urgency': 'high',
+              'Content-Encoding': 'aes128gcm'
             }
           };
           
@@ -264,15 +268,17 @@ const sendToMultipleUsers = async (req, res) => {
     const payload = JSON.stringify({
       title: title || 'DPMD - Notifikasi Baru',
       body: body || 'Anda memiliki notifikasi baru',
-      icon: '/icon-192x192.png',
-      badge: '/icon-192x192.png',
-      vibrate: [200, 100, 200],
+      icon: '/logo-bogor.png',
+      badge: '/logo-bogor.png',
+      vibrate: [500, 200, 500, 200, 500],
       tag: 'disposisi-notification',
       requireInteraction: true,
+      renotify: true,
+      silent: false,
       data: data || { url: '/dashboard/disposisi' },
       actions: [
-        { action: 'open', title: 'Buka' },
-        { action: 'close', title: 'Tutup' }
+        { action: 'open', title: 'BUKA' },
+        { action: 'close', title: 'TUTUP' }
       ]
     });
 
@@ -286,12 +292,13 @@ const sendToMultipleUsers = async (req, res) => {
           
           // Options untuk heads-up notification (priority tinggi)
           const options = {
-            TTL: 3600,
+            TTL: 86400, // 24 jam
             urgency: 'high', // CRITICAL: Wajib 'high' untuk heads-up di Android
             headers: { 
               'Topic': 'disposisi',
               'Priority': 'high',
-              'Urgency': 'high'
+              'Urgency': 'high',
+              'Content-Encoding': 'aes128gcm'
             }
           };
           
@@ -498,12 +505,13 @@ const sendDisposisiNotification = async (disposisi) => {
           
           // Options untuk heads-up notification (priority tinggi)
           const options = {
-            TTL: 3600,
+            TTL: 86400, // 24 jam untuk retry
             urgency: 'high', // CRITICAL: Wajib 'high' untuk heads-up di Android
             headers: { 
               'Topic': 'disposisi',
               'Priority': 'high',
-              'Urgency': 'high'
+              'Urgency': 'high',
+              'Content-Encoding': 'aes128gcm'
             }
           };
             
