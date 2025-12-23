@@ -179,6 +179,9 @@ app.use('/api', locationRoutes); // Kecamatan & Desa routes
 // App Settings routes (for edit mode, etc.)
 app.use('/api/app-settings', require('./routes/appSettings.routes'));
 
+// Printer routes (for thermal printer)
+app.use('/api/printer', require('./routes/printer.routes'));
+
 // Disposisi Surat routes
 app.use('/api/surat-masuk', require('./routes/surat.routes'));
 app.use('/api/disposisi', require('./routes/disposisi.routes'));
