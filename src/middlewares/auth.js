@@ -84,7 +84,9 @@ const checkRole = (...roles) => {
 
     // Normalize user role (trim whitespace, lowercase)
     const userRole = String(req.user.role).trim().toLowerCase();
-    const allowedRoles = roles.map(r => String(r).trim().toLowerCase());
+    // Flatten in case array of arrays passed
+    const flatRoles = roles.flat();
+    const allowedRoles = flatRoles.map(r => String(r).trim().toLowerCase());
 
     logger.info(`🔐 Role check - User: ${req.user.email} | User role: "${userRole}" | Allowed roles: [${allowedRoles.join(', ')}]`);
 
