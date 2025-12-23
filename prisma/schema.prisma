@@ -540,6 +540,7 @@ model users {
   updated_at                              DateTime?                   @db.Timestamp(0)
   is_active                               Boolean                     @default(true)
   pegawai_id                              BigInt?                     @db.UnsignedBigInt
+  app_settings                            app_settings[]
   disposisi_disposisi_dari_user_idTousers disposisi[]                 @relation("disposisi_dari_user_idTousers")
   disposisi_disposisi_ke_user_idTousers   disposisi[]                 @relation("disposisi_ke_user_idTousers")
   kelembagaan_activity_logs               kelembagaan_activity_logs[]
@@ -829,4 +830,18 @@ enum surat_masuk_status {
   draft
   dikirim
   selesai
+}
+
+model app_settings {
+  id                 Int       @id @default(autoincrement())
+  setting_key        String    @unique @db.VarChar(100)
+  setting_value      String    @db.Text
+  description        String?   @db.VarChar(255)
+  updated_by_user_id BigInt?   @db.UnsignedBigInt
+  created_at         DateTime? @default(now()) @db.Timestamp(0)
+  updated_at         DateTime? @updatedAt @db.Timestamp(0)
+  users              users?    @relation(fields: [updated_by_user_id], references: [id], onDelete: SetNull, map: "fk_app_settings_user")
+
+  @@index([setting_key], map: "idx_setting_key")
+  @@index([updated_by_user_id], map: "fk_app_settings_user_idx")
 }

@@ -176,6 +176,9 @@ app.use('/api/pegawai', pegawaiRoutes); // Pegawai routes
 app.use('/api/bidang', bidangRoutes); // Bidang routes
 app.use('/api', locationRoutes); // Kecamatan & Desa routes
 
+// App Settings routes (for edit mode, etc.)
+app.use('/api/app-settings', require('./routes/appSettings.routes'));
+
 // Disposisi Surat routes
 app.use('/api/surat-masuk', require('./routes/surat.routes'));
 app.use('/api/disposisi', require('./routes/disposisi.routes'));
