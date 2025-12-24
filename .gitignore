@@ -48,6 +48,7 @@ build/
 # Test
 coverage/
 .nyc_output/
+tes
 
 # PM2
 .pm2/
