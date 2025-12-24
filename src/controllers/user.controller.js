@@ -5,6 +5,7 @@
 
 const prisma = require('../config/prisma');
 const bcrypt = require('bcryptjs');
+const path = require('path');
 
 class UserController {
   /**
@@ -578,6 +579,69 @@ class UserController {
       res.status(500).json({
         success: false,
         message: 'Gagal mengubah password',
+        error: error.message
+      });
+    }
+  }
+
+  async uploadAvatar(req, res) {
+    try {
+      const { id } = req.params;
+
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'No file uploaded'
+        });
+      }
+
+      // Check if user exists
+      const user = await prisma.users.findUnique({
+        where: { id: parseInt(id) }
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      // Delete old avatar if exists
+      if (user.avatar) {
+        const fs = require('fs');
+        const oldAvatarPath = path.join(__dirname, '../../', user.avatar);
+        if (fs.existsSync(oldAvatarPath)) {
+          fs.unlinkSync(oldAvatarPath);
+        }
+      }
+
+      // Update user with new avatar path
+      const avatarPath = `/storage/avatars/${req.file.filename}`;
+      const updatedUser = await prisma.users.update({
+        where: { id: parseInt(id) },
+        data: { avatar: avatarPath },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          avatar: true,
+          is_active: true,
+          created_at: true
+        }
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Avatar uploaded successfully',
+        data: updatedUser
+      });
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to upload avatar',
         error: error.message
       });
     }

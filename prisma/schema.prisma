@@ -535,6 +535,7 @@ model users {
   desa_id                                 BigInt?                     @db.UnsignedBigInt
   bidang_id                               Int?                        @db.UnsignedInt
   dinas_id                                Int?                        @db.UnsignedInt
+  avatar                                  String?                     @db.VarChar(255)
   remember_token                          String?                     @db.VarChar(100)
   created_at                              DateTime?                   @db.Timestamp(0)
   updated_at                              DateTime?                   @db.Timestamp(0)
