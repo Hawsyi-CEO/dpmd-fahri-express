@@ -671,7 +671,7 @@ class UserController {
         data: { avatar: avatarPath },
         select: {
           id: true,
-          nama: true,
+          name: true,
           email: true,
           role: true,
           avatar: true,
@@ -685,7 +685,10 @@ class UserController {
       return res.status(200).json({
         success: true,
         message: 'Avatar uploaded successfully',
-        data: updatedUser
+        data: {
+          ...updatedUser,
+          nama: updatedUser.name // Add nama alias for frontend compatibility
+        }
       });
     } catch (error) {
       console.error('[Avatar Upload] ❌ Error uploading avatar:', error);
