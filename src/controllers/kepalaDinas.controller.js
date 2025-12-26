@@ -17,29 +17,21 @@ class KepalaDinasController {
     try {
       logger.info('Getting Kepala Dinas dashboard statistics');
 
-      // Get BUMDes statistics
-      const bumdesStats = await this.getBumdesStats();
-      logger.info('BUMDes stats retrieved:', bumdesStats);
-      
-      // Get Perjalanan Dinas statistics
-      const perjadinStats = await this.getPerjadinStats();
-      logger.info('Perjadin stats retrieved:', perjadinStats);
+      // Get Total Desa from desas table
+      const totalDesa = await prisma.desas.count();
+      logger.info('Total desa:', totalDesa);
 
-      // Get trend data (monthly)
-      const trendData = await this.getTrendData();
-      logger.info('Trend data retrieved:', trendData);
+      // Get Total Pegawai from pegawai table
+      const totalPegawai = await prisma.pegawai.count();
+      logger.info('Total pegawai:', totalPegawai);
 
       const response = {
         success: true,
         data: {
           summary: {
-            total_bumdes: bumdesStats.total,
-            total_perjalanan_dinas: perjadinStats.total,
-            total_kegiatan: perjadinStats.total
-          },
-          bumdes: bumdesStats,
-          perjalanan_dinas: perjadinStats,
-          trends: trendData
+            total_desa: totalDesa,
+            total_pegawai: totalPegawai
+          }
         }
       };
 
