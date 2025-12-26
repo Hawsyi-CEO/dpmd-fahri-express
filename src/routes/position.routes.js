@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const positionController = require('../controllers/position.controller');
-const { authenticate } = require('../middlewares/auth.middleware');
+const { auth } = require('../middlewares/auth');
 
 // Middleware to check if user is admin/sekretariat
 const isAdminOrSekretariat = (req, res, next) => {
@@ -19,7 +19,7 @@ const isAdminOrSekretariat = (req, res, next) => {
 };
 
 // All routes require authentication
-router.use(authenticate);
+router.use(auth);
 
 /**
  * @route   GET /api/positions
