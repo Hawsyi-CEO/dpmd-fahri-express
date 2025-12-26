@@ -647,7 +647,7 @@ class UserController {
         });
       }
 
-      console.log('[Avatar Upload] ✅ User found:', user.nama);
+      console.log('[Avatar Upload] ✅ User found:', user.name);
 
       // Delete old avatar if exists
       if (user.avatar) {
