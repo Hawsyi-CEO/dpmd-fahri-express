@@ -1,6 +1,7 @@
 // src/controllers/bankeu-t1.controller.js
 const fs = require('fs').promises;
 const path = require('path');
+const ActivityLogger = require('../utils/activityLogger');
 
 /**
  * Upload and replace bankeu-tahap1.json file
@@ -113,6 +114,23 @@ const uploadBankeuT1Data = async (req, res) => {
       }
     });
     const uniqueDesa = Object.keys(desaMap).length;
+
+    // Log activity
+    try {
+      await ActivityLogger.log({
+        userId: req.user.id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        bidangId: 3, // SPKED
+        module: 'bankeu',
+        action: 'update',
+        entityType: 'bankeu_tahap_1',
+        entityName: 'Bantuan Keuangan Tahap 1',
+        description: `${req.user.name} memperbarui data Bantuan Keuangan Tahap 1 (${validRows} desa)`
+      });
+    } catch (logError) {
+      console.error('Error logging bankeu activity:', logError);
+    }
 
     res.json({
       success: true,

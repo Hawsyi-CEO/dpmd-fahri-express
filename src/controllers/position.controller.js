@@ -8,16 +8,15 @@ const prisma = new PrismaClient();
  */
 exports.getAllPositions = async (req, res) => {
   try {
-    const positions = await prisma.positions.findMany({
-      orderBy: {
-        level: 'asc'
-      },
-      include: {
-        _count: {
-          select: { users: true }
-        }
-      }
-    });
+    // Return static positions list since there's no positions table
+    const positions = [
+      { id: 1, name: 'Kepala Dinas', level: 1 },
+      { id: 2, name: 'Sekretaris', level: 2 },
+      { id: 3, name: 'Kepala Bidang', level: 3 },
+      { id: 4, name: 'Kepala Sub Bagian', level: 4 },
+      { id: 5, name: 'Ketua Tim', level: 5 },
+      { id: 6, name: 'Staff', level: 6 }
+    ];
 
     res.json({
       success: true,
@@ -166,12 +165,11 @@ exports.updateUserPosition = async (req, res) => {
 
     const oldPositionId = user.position_id;
 
-    // Update user position
+    // Update user position (don't change role, keep it as pegawai)
     const updatedUser = await prisma.users.update({
       where: { id: BigInt(userId) },
       data: {
         position_id: position_id ? parseInt(position_id) : null,
-        role: newPosition ? newPosition.code : user.role, // Sync role with position code
         updated_at: new Date()
       },
       include: {

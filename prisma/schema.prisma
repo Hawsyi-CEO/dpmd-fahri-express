@@ -531,7 +531,6 @@ model users {
   email_verified_at                       DateTime?                   @db.Timestamp(0)
   password                                String                      @db.VarChar(255)
   role                                    users_role                  @default(desa)
-  position_id                             Int?                        @db.Int
   kecamatan_id                            Int?                        @db.UnsignedInt
   desa_id                                 BigInt?                     @db.UnsignedBigInt
   bidang_id                               Int?                        @db.UnsignedInt
@@ -542,19 +541,16 @@ model users {
   updated_at                              DateTime?                   @db.Timestamp(0)
   is_active                               Boolean                     @default(true)
   pegawai_id                              BigInt?                     @db.UnsignedBigInt
-  position                                positions?                  @relation(fields: [position_id], references: [id], onDelete: SetNull, map: "fk_users_position")
   disposisi_disposisi_dari_user_idTousers disposisi[]                 @relation("disposisi_dari_user_idTousers")
   disposisi_disposisi_ke_user_idTousers   disposisi[]                 @relation("disposisi_ke_user_idTousers")
   kelembagaan_activity_logs               kelembagaan_activity_logs[]
+  activity_logs                           activity_logs[]
   lampiran_surat                          lampiran_surat[]
   push_subscriptions                      push_subscriptions[]
   surat_masuk                             surat_masuk[]
   pegawai                                 pegawai?                    @relation(fields: [pegawai_id], references: [id_pegawai], onDelete: Cascade, onUpdate: NoAction, map: "users_pegawai_id_foreign")
-  position_history_user                   position_history[]          @relation("position_history_user")
-  position_history_changed_by             position_history[]          @relation("position_history_changed_by")
 
   @@index([pegawai_id], map: "users_pegawai_id_index")
-  @@index([position_id], map: "idx_users_position_id")
 }
 
 model disposisi {
@@ -837,35 +833,29 @@ enum surat_masuk_status {
   selesai
 }
 
-model positions {
-  id               Int                @id @default(autoincrement())
-  code             String             @unique @db.VarChar(50)
-  name             String             @db.VarChar(100)
-  level            Int
-  description      String?            @db.Text
-  created_at       DateTime           @default(now()) @db.Timestamp(0)
-  updated_at       DateTime           @default(now()) @updatedAt @db.Timestamp(0)
-  users            users[]
-  history_old      position_history[] @relation("position_history_old")
-  history_new      position_history[] @relation("position_history_new")
-
-  @@index([code], map: "idx_code")
-  @@index([level], map: "idx_level")
-}
-
-model position_history {
-  id              Int        @id @default(autoincrement())
-  user_id         BigInt     @db.UnsignedBigInt
-  old_position_id Int?
-  new_position_id Int?
-  changed_by      BigInt     @db.UnsignedBigInt
-  reason          String?    @db.Text
-  created_at      DateTime   @default(now()) @db.Timestamp(0)
-  user            users      @relation("position_history_user", fields: [user_id], references: [id], onDelete: Cascade)
-  old_position    positions? @relation("position_history_old", fields: [old_position_id], references: [id], onDelete: SetNull)
-  new_position    positions? @relation("position_history_new", fields: [new_position_id], references: [id], onDelete: SetNull)
-  changer         users      @relation("position_history_changed_by", fields: [changed_by], references: [id], onDelete: Cascade)
+model activity_logs {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id     BigInt    @db.UnsignedBigInt
+  user_name   String?   @db.VarChar(255)
+  user_role   String?   @db.VarChar(50)
+  bidang_id   BigInt?   @db.UnsignedBigInt
+  module      String    @db.VarChar(50)
+  action      String    @db.VarChar(50)
+  entity_type String    @db.VarChar(100)
+  entity_id   BigInt?   @db.UnsignedBigInt
+  entity_name String?   @db.VarChar(255)
+  description String    @db.Text
+  old_value   Json?
+  new_value   Json?
+  ip_address  String?   @db.VarChar(45)
+  user_agent  String?   @db.VarChar(500)
+  created_at  DateTime? @default(now()) @db.Timestamp(0)
+  users       users     @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "activity_logs_user_id_foreign")
 
   @@index([user_id], map: "idx_user_id")
+  @@index([bidang_id], map: "idx_bidang_id")
+  @@index([module], map: "idx_module")
+  @@index([action], map: "idx_action")
   @@index([created_at], map: "idx_created_at")
+  @@index([module, action], map: "idx_module_action")
 }

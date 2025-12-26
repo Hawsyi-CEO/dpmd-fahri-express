@@ -2,48 +2,27 @@ const prisma = require('../config/prisma');
 const PushNotificationService = require('../services/pushNotificationService');
 
 /**
- * Helper function: Get role hierarchy level
- * Level 1 = Kepala Dinas
- * Level 2 = Sekretaris Dinas  
- * Level 3 = Kepala Bidang (kabid_*)
- * Level 4+ = Staff/Pegawai
+ * Helper function: Get role hierarchy level (Simple role-based)
  */
 const getRoleLevel = (role) => {
   if (role === 'kepala_dinas') return 1;
   if (role === 'sekretaris_dinas') return 2;
   if (role.startsWith('kabid_')) return 3;
-  if (role === 'pegawai' || role === 'sekretariat') return 4;
-  return 5; // Other roles
+  if (role === 'ketua_tim') return 4;
+  if (role === 'pegawai') return 5;
+  return 6; // Other roles
 };
 
 /**
- * Helper function: Validate workflow transition
+ * Helper function: Validate workflow transition based on roles
  */
 const validateWorkflowTransition = (fromRole, toRole) => {
   const fromLevel = getRoleLevel(fromRole);
   const toLevel = getRoleLevel(toRole);
 
-  // Workflow rules:
-  // Level 1 (Kepala Dinas) → can only send to Level 2 (Sekretaris Dinas)
-  // Level 2 (Sekretaris Dinas) → can only send to Level 3 (Kepala Bidang)
-  // Level 3 (Kepala Bidang) → can send to Level 4+ (Staff/Pegawai)
-  // Level 4+ (Pegawai/Staff) → CANNOT create disposisi
-
-  // Block pegawai/staff from creating disposisi
-  if (fromLevel >= 4) {
-    return { valid: false, message: 'Pegawai/Staff tidak memiliki akses untuk membuat disposisi' };
-  }
-
-  if (fromLevel === 1 && toLevel !== 2) {
-    return { valid: false, message: 'Kepala Dinas hanya bisa mendisposisi ke Sekretaris Dinas' };
-  }
-
-  if (fromLevel === 2 && toLevel !== 3) {
-    return { valid: false, message: 'Sekretaris Dinas hanya bisa mendisposisi ke Kepala Bidang' };
-  }
-
-  if (fromLevel === 3 && toLevel < 4) {
-    return { valid: false, message: 'Kepala Bidang hanya bisa mendisposisi ke Staff/Pegawai' };
+  // Simple rule: can only send to same level or lower
+  if (toLevel < fromLevel) {
+    return { valid: false, message: 'Tidak dapat mendisposisi ke level yang lebih tinggi' };
   }
 
   return { valid: true };
@@ -79,18 +58,9 @@ exports.createDisposisi = async (req, res, next) => {
       level_disposisi
     });
 
-    // Block pegawai/staff from creating disposisi
-    const userLevel = getRoleLevel(dari_user_role);
-    if (userLevel >= 4) {
-      return res.status(403).json({
-        success: false,
-        message: 'Anda tidak memiliki akses untuk membuat disposisi. Hanya Kepala Dinas, Sekretaris Dinas, dan Kepala Bidang yang dapat membuat disposisi.',
-      });
-    }
-
     // Validate ke_user exists
     const keUser = await prisma.users.findUnique({
-      where: { id: BigInt(ke_user_id) },
+      where: { id: BigInt(ke_user_id) }
     });
 
     if (!keUser) {
@@ -100,7 +70,12 @@ exports.createDisposisi = async (req, res, next) => {
       });
     }
 
-    // Validate workflow hierarchy
+    console.log('📊 [WORKFLOW VALIDATION]', {
+      from: { id: dari_user_id.toString(), role: dari_user_role },
+      to: { id: ke_user_id.toString(), role: keUser.role }
+    });
+
+    // Validate workflow hierarchy (simple role-based)
     const workflowValidation = validateWorkflowTransition(dari_user_role, keUser.role);
     if (!workflowValidation.valid) {
       return res.status(400).json({
@@ -131,10 +106,20 @@ exports.createDisposisi = async (req, res, next) => {
           },
         },
         users_disposisi_dari_user_idTousers: {
-          select: { id: true, name: true, email: true, role: true },
+          select: { 
+            id: true, 
+            name: true, 
+            email: true, 
+            role: true
+          },
         },
         users_disposisi_ke_user_idTousers: {
-          select: { id: true, name: true, email: true, role: true },
+          select: { 
+            id: true, 
+            name: true, 
+            email: true, 
+            role: true
+          },
         },
       },
     });
@@ -234,7 +219,12 @@ exports.getDisposisiMasuk = async (req, res, next) => {
             },
           },
           users_disposisi_dari_user_idTousers: {
-            select: { id: true, name: true, email: true, role: true },
+            select: { 
+            id: true, 
+            name: true, 
+            email: true, 
+            role: true
+          },
           },
         },
         orderBy: { tanggal_disposisi: 'desc' },
@@ -303,7 +293,12 @@ exports.getDisposisiKeluar = async (req, res, next) => {
             },
           },
           users_disposisi_ke_user_idTousers: {
-            select: { id: true, name: true, email: true, role: true },
+            select: { 
+            id: true, 
+            name: true, 
+            email: true, 
+            role: true
+          },
           },
         },
         orderBy: { tanggal_disposisi: 'desc' },
@@ -353,10 +348,20 @@ exports.getDisposisiById = async (req, res, next) => {
             disposisi: {
               include: {
                 users_disposisi_dari_user_idTousers: {
-                  select: { id: true, name: true, email: true, role: true },
+                  select: { 
+            id: true, 
+            name: true, 
+            email: true, 
+            role: true
+          },
                 },
                 users_disposisi_ke_user_idTousers: {
-                  select: { id: true, name: true, email: true, role: true },
+                  select: { 
+            id: true, 
+            name: true, 
+            email: true, 
+            role: true
+          },
                 },
               },
               orderBy: { level_disposisi: 'asc' },
@@ -364,10 +369,20 @@ exports.getDisposisiById = async (req, res, next) => {
           },
         },
         users_disposisi_dari_user_idTousers: {
-          select: { id: true, name: true, email: true, role: true },
+          select: { 
+            id: true, 
+            name: true, 
+            email: true, 
+            role: true
+          },
         },
         users_disposisi_ke_user_idTousers: {
-          select: { id: true, name: true, email: true, role: true },
+          select: { 
+            id: true, 
+            name: true, 
+            email: true, 
+            role: true
+          },
         },
       },
     });
@@ -494,10 +509,20 @@ exports.getDisposisiHistory = async (req, res, next) => {
       where: { surat_id: BigInt(surat_id) },
       include: {
         users_disposisi_dari_user_idTousers: {
-          select: { id: true, name: true, email: true, role: true },
+          select: { 
+            id: true, 
+            name: true, 
+            email: true, 
+            role: true
+          },
         },
         users_disposisi_ke_user_idTousers: {
-          select: { id: true, name: true, email: true, role: true },
+          select: { 
+            id: true, 
+            name: true, 
+            email: true, 
+            role: true
+          },
         },
       },
       orderBy: { level_disposisi: 'asc' },
@@ -567,73 +592,72 @@ exports.getStatistik = async (req, res, next) => {
  */
 exports.getAvailableUsers = async (req, res, next) => {
   try {
-    const userRole = req.user.role;
-    const userId = req.user.id;
-    const fromLevel = getRoleLevel(userRole);
+    const currentUser = req.user;
+    const currentRole = currentUser.role;
+
+    console.log('[getAvailableUsers] Current user:', {
+      id: currentUser.id.toString(),
+      role: currentRole,
+      bidang_id: currentUser.bidang_id ? currentUser.bidang_id.toString() : null
+    });
 
     let whereClause = {};
 
-    // Kepala Dinas (level 1) → only Sekretaris Dinas
-    if (fromLevel === 1) {
+    // Role-based filtering (simplified)
+    if (currentRole === 'kepala_dinas') {
+      // Kepala Dinas → can send to Sekretaris Dinas
       whereClause = {
         role: 'sekretaris_dinas'
       };
     }
-    // Sekretaris Dinas (level 2) → only Kepala Bidang
-    else if (fromLevel === 2) {
+    else if (currentRole === 'sekretaris_dinas') {
+      // Sekretaris Dinas → can send to Kepala Bidang
       whereClause = {
         role: {
-          in: [
-            'kabid_sekretariat',
-            'kabid_pemerintahan_desa',
-            'kabid_spked',
-            'kabid_kekayaan_keuangan_desa',
-            'kabid_pemberdayaan_masyarakat_desa'
-          ]
+          startsWith: 'kabid_'
         }
       };
     }
-    // Kepala Bidang (level 3) → Staff/Pegawai DALAM BIDANG YANG SAMA
-    else if (fromLevel === 3) {
-      // Get current user's bidang_id
-      const currentUser = await prisma.users.findUnique({
-        where: { id: BigInt(userId) },
-        select: { bidang_id: true }
-      });
-
-      if (!currentUser || !currentUser.bidang_id) {
+    else if (currentRole.startsWith('kabid_')) {
+      // Kepala Bidang → can ONLY send to Ketua Tim in same bidang
+      if (!currentUser.bidang_id) {
         return res.status(400).json({
           success: false,
           message: 'Kepala Bidang harus terdaftar dalam bidang tertentu'
         });
       }
 
-      // Filter pegawai/sekretariat dalam bidang yang sama
       whereClause = {
-        role: { in: ['pegawai', 'sekretariat'] },
-        bidang_id: currentUser.bidang_id
+        bidang_id: currentUser.bidang_id,
+        role: 'ketua_tim'  // Only Ketua Tim, NOT pegawai directly
       };
     }
-    // Others → all users except self
-    else {
-      const allUsers = await prisma.users.findMany({
-        where: {
-          id: { not: BigInt(userId) },
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          bidang_id: true,
-        },
-      });
+    else if (currentRole === 'ketua_tim') {
+      // Ketua Tim → can send to Pegawai in same bidang
+      if (!currentUser.bidang_id) {
+        return res.status(400).json({
+          success: false,
+          message: 'Ketua Tim harus terdaftar dalam bidang tertentu'
+        });
+      }
 
-      return res.json({
-        success: true,
-        data: allUsers,
+      whereClause = {
+        bidang_id: currentUser.bidang_id,
+        role: 'pegawai'
+      };
+    }
+    else {
+      // Pegawai or others cannot create disposisi
+      return res.status(403).json({
+        success: false,
+        message: 'Anda tidak memiliki akses untuk membuat disposisi'
       });
     }
+
+    // Exclude self
+    whereClause.id = {
+      not: currentUser.id
+    };
 
     const users = await prisma.users.findMany({
       where: whereClause,
@@ -643,14 +667,148 @@ exports.getAvailableUsers = async (req, res, next) => {
         email: true,
         role: true,
         bidang_id: true,
+        bidang: {
+          select: {
+            id: true,
+            nama_bidang: true
+          }
+        }
       },
     });
+
+    console.log(`[getAvailableUsers] Found ${users.length} available users`);
 
     res.json({
       success: true,
       data: users,
     });
   } catch (error) {
+    console.error('[getAvailableUsers] Error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @route POST /api/disposisi/surat-masuk
+ * @desc Input surat masuk oleh pegawai sekretariat
+ * @access Pegawai Sekretariat (bidang_id = 2)
+ */
+exports.createSuratMasuk = async (req, res, next) => {
+  try {
+    console.log('\n═══════════════════════════════════════');
+    console.log('📨 [SURAT MASUK] CREATE REQUEST');
+    console.log('═══════════════════════════════════════');
+
+    const { asal_surat, nomor_surat, perihal_surat, tanggal_diterima, ringkasan_isi } = req.body;
+    const user_id = req.user.id;
+    const user_role = req.user.role;
+    const bidang_id = req.user.bidang_id;
+
+    console.log('📋 User Info:', {
+      user_id: user_id.toString(),
+      user_role,
+      bidang_id: bidang_id ? bidang_id.toString() : null,
+    });
+
+    // Validate: Only pegawai from sekretariat (bidang_id = 2) can input
+    if (user_role !== 'pegawai' || !bidang_id || BigInt(bidang_id) !== BigInt(2)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Hanya pegawai sekretariat yang dapat menginput surat masuk',
+      });
+    }
+
+    // Handle file upload
+    let file_path = null;
+    if (req.file) {
+      file_path = req.file.path.replace(/\\/g, '/');
+      console.log('📎 File uploaded:', file_path);
+    }
+
+    // Create surat masuk record
+    const suratMasuk = await prisma.surat_masuk.create({
+      data: {
+        nomor_surat,
+        pengirim: asal_surat,
+        perihal: perihal_surat,
+        tanggal_surat: new Date(tanggal_diterima),
+        tanggal_terima: new Date(),
+        keterangan: ringkasan_isi,
+        file_path,
+        status: 'dikirim',
+        created_by: BigInt(user_id),
+      },
+    });
+
+    console.log('✅ [SURAT MASUK] Created:', suratMasuk.id.toString());
+
+    // Auto-create disposisi to Kepala Dinas
+    // Priority 1: Find user with position 'kepala_dinas' (position_id = 2)
+    // Priority 2: Find user with role 'kepala_dinas' (fallback for old system)
+    let kepalaDinas = await prisma.users.findFirst({
+      where: { position_id: 2 },  // Find by position first (any role)
+      include: {
+        position: true
+      }
+    });
+
+    // Fallback: find by role if no user with position found
+    if (!kepalaDinas) {
+      console.log('⚠️  [KEPALA DINAS] No user with position_id=2 found, trying role-based search...');
+      kepalaDinas = await prisma.users.findFirst({
+        where: { role: 'kepala_dinas' },
+        include: {
+          position: true
+        }
+      });
+    }
+
+    console.log('🔍 [KEPALA DINAS] Found:', kepalaDinas ? {
+      id: kepalaDinas.id.toString(),
+      name: kepalaDinas.name,
+      role: kepalaDinas.role,
+      position: kepalaDinas.position?.name || 'No position'
+    } : 'NOT FOUND - Please assign a pegawai with Kepala Dinas position');
+
+    if (kepalaDinas) {
+      const disposisi = await prisma.disposisi.create({
+        data: {
+          surat_id: suratMasuk.id,
+          dari_user_id: BigInt(user_id),
+          ke_user_id: kepalaDinas.id,
+          catatan: `Surat masuk dari ${asal_surat}`,
+          instruksi: 'segera',
+          status: 'pending',
+          level_disposisi: 1,
+        },
+      });
+
+      console.log('✅ [DISPOSISI] Auto-created to Kepala Dinas:', disposisi.id.toString());
+
+      // Send push notification
+      try {
+        await PushNotificationService.sendNotificationToUser(kepalaDinas.id, {
+          title: '📨 Surat Masuk Baru',
+          body: `${perihal_surat} dari ${asal_surat}`,
+          data: {
+            type: 'disposisi',
+            disposisi_id: disposisi.id.toString(),
+            surat_id: suratMasuk.id.toString(),
+          },
+        });
+        console.log('✅ [PUSH] Notification sent to Kepala Dinas');
+      } catch (pushError) {
+        console.error('❌ [PUSH] Error:', pushError);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Surat masuk berhasil diinput dan dikirim ke Kepala Dinas',
+      data: suratMasuk,
+    });
+  } catch (error) {
+    console.error('❌ [SURAT MASUK] Error:', error);
     next(error);
   }
 };

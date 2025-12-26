@@ -21,6 +21,9 @@ const requiredDirs = [
   path.join(__dirname, '../storage/uploads/temp'),
   path.join(__dirname, '../storage/uploads/peraturan'),
   path.join(__dirname, '../storage/uploads/produk-hukum'),
+  path.join(__dirname, '../storage/uploads/bumdes_dokumen_badanhukum'),
+  path.join(__dirname, '../storage/uploads/bumdes_laporan_keuangan'),
+  path.join(__dirname, '../storage/uploads/bumdes'),
   path.join(__dirname, '../public/backups')
 ];
 

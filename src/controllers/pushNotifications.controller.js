@@ -1,19 +1,8 @@
 const prisma = require('../config/prisma');
-const webpush = require('web-push');
+const { webpush, vapidKeys } = require('../config/push-notification');
 
-// VAPID keys (generate with: npx web-push generate-vapid-keys)
-// Store these in .env file
-const vapidKeys = {
-  publicKey: process.env.VAPID_PUBLIC_KEY || 'BNxVXS4vaBi0sfwgQhqLN87pRF_9vn6mHOvrzs3LnktYkh84LOqrZbbgeXZ2PoKJ6MFnVDcpXD5fA3XAcPAU52o',
-  privateKey: process.env.VAPID_PRIVATE_KEY || 'eCleqcj2GhhQK1PtiSUElAQqh9EpmIGhoAZeunFVMFE'
-};
-
-// Configure web-push
-webpush.setVapidDetails(
-  'mailto:admin@dpmdbogorkab.id',
-  vapidKeys.publicKey,
-  vapidKeys.privateKey
-);
+// VAPID keys now imported from config
+console.log('[Push Controller] Using VAPID public key:', vapidKeys.publicKey.substring(0, 30) + '...');
 
 // Subscribe user to push notifications
 const subscribe = async (req, res) => {
@@ -426,9 +415,9 @@ const sendDisposisiNotification = async (disposisi) => {
     
     if (recipientRole === 'kepala_dinas') {
       notificationUrl = `/kepala-dinas/disposisi/${id}`;
-    } else if (recipientRole === 'sekretariat') {
+    } else if (recipientRole === 'sekretaris_dinas') {
       notificationUrl = `/sekretaris-dinas/disposisi/${id}`;
-    } else if (recipientRole === 'kepala_bidang') {
+    } else if (recipientRole.startsWith('kabid_')) {
       notificationUrl = `/kepala-bidang/disposisi/${id}`;
     } else if (recipientRole === 'pegawai') {
       notificationUrl = `/pegawai/disposisi/${id}`;

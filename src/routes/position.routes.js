@@ -4,14 +4,19 @@ const router = express.Router();
 const positionController = require('../controllers/position.controller');
 const { auth } = require('../middlewares/auth');
 
-// Middleware to check if user is admin/sekretariat
+// Middleware to check if user is admin or pegawai sekretariat
 const isAdminOrSekretariat = (req, res, next) => {
   const userRole = req.user.role;
+  const userBidangId = req.user.bidang_id;
   
-  if (!['superadmin', 'admin', 'sekretariat'].includes(userRole)) {
+  // Allow: superadmin, admin, or pegawai from sekretariat (bidang_id = 2)
+  const isAdmin = ['superadmin', 'admin'].includes(userRole);
+  const isPegawaiSekretariat = userRole === 'pegawai' && userBidangId && BigInt(userBidangId) === BigInt(2);
+  
+  if (!isAdmin && !isPegawaiSekretariat) {
     return res.status(403).json({
       success: false,
-      message: 'Akses ditolak. Hanya admin atau sekretariat yang dapat mengakses fitur ini.'
+      message: 'Akses ditolak. Hanya admin atau pegawai sekretariat yang dapat mengakses fitur ini.'
     });
   }
   

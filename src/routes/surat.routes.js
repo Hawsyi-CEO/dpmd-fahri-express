@@ -6,23 +6,23 @@ const { uploadSuratMasuk } = require('../middlewares/upload');
 
 /**
  * @route POST /api/surat-masuk
- * @access Sekretariat only
+ * @access Superadmin only (deprecated - use /api/disposisi/surat-masuk instead)
  */
 router.post(
   '/',
   auth,
-  checkRole('sekretariat', 'superadmin'),
+  checkRole('superadmin'),
   suratController.createSuratMasuk
 );
 
 /**
  * @route POST /api/surat-masuk/:id/upload
- * @access Sekretariat only
+ * @access Superadmin only
  */
 router.post(
   '/:id/upload',
   auth,
-  checkRole('sekretariat', 'superadmin'),
+  checkRole('superadmin'),
   uploadSuratMasuk.single('file'),
   suratController.uploadFileSurat
 );
@@ -49,12 +49,12 @@ router.get(
 
 /**
  * @route PUT /api/surat-masuk/:id
- * @access Sekretariat only
+ * @access Superadmin only
  */
 router.put(
   '/:id',
   auth,
-  checkRole('sekretariat', 'superadmin'),
+  checkRole('superadmin'),
   suratController.updateSuratMasuk
 );
 
@@ -71,12 +71,12 @@ router.delete(
 
 /**
  * @route POST /api/surat-masuk/:id/kirim-kepala-dinas
- * @access Sekretariat only
+ * @access Superadmin only
  */
 router.post(
   '/:id/kirim-kepala-dinas',
   auth,
-  checkRole('sekretariat', 'superadmin'),
+  checkRole('superadmin'),
   suratController.kirimKeKepalaDinas
 );
 

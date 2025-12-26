@@ -26,15 +26,7 @@ router.get('/', auth, async (req, res) => {
             nama: true
           }
         },
-        users: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            is_active: true,
-            role: true
-          }
-        }
+        users: true
       },
       orderBy: {
         nama_pegawai: 'asc'
@@ -71,12 +63,8 @@ router.get('/:id', auth, async (req, res) => {
           }
         },
         users: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            is_active: true,
-            role: true
+          include: {
+            position: true
           }
         }
       }

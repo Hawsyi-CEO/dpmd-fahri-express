@@ -44,12 +44,12 @@ router.get(
 /**
  * @route   POST /api/bankeu-t1/upload
  * @desc    Upload and replace bankeu-tahap1.json file
- * @access  Private - kepala_dinas, sarana_prasarana
+ * @access  Private - kepala_dinas, sarana_prasarana, pegawai, kepala_bidang, ketua_tim
  */
 router.post(
   '/upload',
   auth,
-  checkRole('kepala_dinas', 'sarana_prasarana'),
+  checkRole('kepala_dinas', 'sarana_prasarana', 'pegawai', 'kepala_bidang', 'ketua_tim'),
   upload.single('file'),
   bankeuT1Controller.uploadBankeuT1Data
 );
@@ -68,12 +68,12 @@ router.get(
 /**
  * @route   GET /api/bankeu-t1/backups
  * @desc    Get list of backup files
- * @access  Private - kepala_dinas, sarana_prasarana
+ * @access  Private - kepala_dinas, sarana_prasarana, pegawai, kepala_bidang, ketua_tim
  */
 router.get(
   '/backups',
   auth,
-  checkRole('kepala_dinas', 'sarana_prasarana'),
+  checkRole('kepala_dinas', 'sarana_prasarana', 'pegawai', 'kepala_bidang', 'ketua_tim'),
   bankeuT1Controller.getBankeuT1BackupList
 );
 

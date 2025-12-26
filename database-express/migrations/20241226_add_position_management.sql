@@ -27,19 +27,33 @@ INSERT INTO positions (code, name, level, description) VALUES
 ('kabid_pemberdayaan_masyarakat_desa', 'Kepala Bidang Pemberdayaan Masyarakat Desa', 4, 'Kepala Bidang Pemberdayaan Masyarakat Desa'),
 ('ketua_tim', 'Ketua Tim', 5, 'Ketua Tim - Koordinator tim pelaksana'),
 ('pegawai', 'Pegawai', 6, 'Pegawai/Staff - Pelaksana tugas');
-
--- Step 3: Add position_id column to users table
-ALTER TABLE users 
-ADD COLUMN position_id INT NULL COMMENT 'Foreign key to positions table' AFTER role,
-ADD CONSTRAINT fk_users_position FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE SET NULL;
+-- Step 3: Add position_id column to users table (if not exists)
+-- Check if column already exists, if not add it
+SET @dbname = DATABASE();
+SET @tablename = 'users';
+SET @columnname = 'position_id';
+SET @preparedStatement = (SELECT IF(
+  (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE
+      (table_name = @tablename)
+      AND (table_schema = @dbname)
+      AND (column_name = @columnname)
+  ) > 0,
+  'SELECT 1',
+  CONCAT('ALTER TABLE ', @tablename, ' ADD COLUMN position_id INT NULL COMMENT "Foreign key to positions table" AFTER role, ADD CONSTRAINT fk_users_position FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE SET NULL')
+));
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
 
 -- Step 4: Create position_history table for audit trail
 CREATE TABLE IF NOT EXISTS position_history (
   id INT PRIMARY KEY AUTO_INCREMENT,
-  user_id INT NOT NULL COMMENT 'User whose position changed',
+  user_id BIGINT UNSIGNED NOT NULL COMMENT 'User whose position changed',
   old_position_id INT NULL COMMENT 'Previous position (NULL if first assignment)',
   new_position_id INT NULL COMMENT 'New position (NULL if removed)',
-  changed_by INT NOT NULL COMMENT 'User who made the change (typically admin)',
+  changed_by BIGINT UNSIGNED NOT NULL COMMENT 'User who made the change (typically admin)',
   reason TEXT COMMENT 'Reason for change',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -48,6 +62,7 @@ CREATE TABLE IF NOT EXISTS position_history (
   FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_user_id (user_id),
   INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Step 5: Migrate existing users to use positions (Optional - for existing data)

@@ -4,25 +4,28 @@ const bumdesController = require('../controllers/bumdes.controller');
 const { auth, checkRole } = require('../middlewares/auth');
 const { uploadBumdes } = require('../middlewares/upload');
 
+// Define allowed roles for BUMDes management (SPKED = Bidang 3)
+const bumdesRoles = ['desa', 'dinas', 'superadmin', 'sarana_prasarana', 'pegawai', 'kepala_bidang', 'kepala_dinas', 'ketua_tim'];
+
 // PUBLIC/SHARED ROUTES (specific routes first before dynamic params)
-router.get('/statistics', auth, checkRole('desa', 'dinas', 'superadmin', 'sarana_prasarana'), bumdesController.getStatistics);
-router.get('/dokumen-badan-hukum', auth, checkRole('desa', 'dinas', 'superadmin', 'sarana_prasarana'), bumdesController.getDokumenBadanHukum);
-router.get('/laporan-keuangan', auth, checkRole('desa', 'dinas', 'superadmin', 'sarana_prasarana'), bumdesController.getLaporanKeuangan);
-router.get('/produk-hukum', auth, checkRole('desa', 'dinas', 'superadmin', 'sarana_prasarana'), bumdesController.getProdukHukum);
-router.get('/check-desa/:kode_desa', auth, checkRole('desa', 'dinas', 'superadmin', 'sarana_prasarana'), bumdesController.checkDesaBumdes);
+router.get('/statistics', auth, checkRole(...bumdesRoles), bumdesController.getStatistics);
+router.get('/dokumen-badan-hukum', auth, checkRole(...bumdesRoles), bumdesController.getDokumenBadanHukum);
+router.get('/laporan-keuangan', auth, checkRole(...bumdesRoles), bumdesController.getLaporanKeuangan);
+router.get('/produk-hukum', auth, checkRole(...bumdesRoles), bumdesController.getProdukHukum);
+router.get('/check-desa/:kode_desa', auth, checkRole(...bumdesRoles), bumdesController.checkDesaBumdes);
 
 // DELETE ROUTES
-router.delete('/delete-file', auth, checkRole('desa', 'dinas', 'superadmin', 'sarana_prasarana'), bumdesController.deleteFile);
+router.delete('/delete-file', auth, checkRole(...bumdesRoles), bumdesController.deleteFile);
 
 // DESA-SPECIFIC ROUTES
 router.get('/produk-hukum-options', auth, checkRole('desa'), bumdesController.getProdukHukumForBumdes);
 
 // ADMIN ROUTES
-router.get('/all', auth, checkRole('dinas', 'superadmin', 'sarana_prasarana'), bumdesController.getAllBumdes);
+router.get('/all', auth, checkRole('dinas', 'superadmin', 'sarana_prasarana', 'pegawai', 'kepala_bidang', 'kepala_dinas', 'ketua_tim'), bumdesController.getAllBumdes);
 
 // DESA/ADMIN HYBRID ROUTES
 // Check if user is desa (use getDesaBumdes) or admin (use getAllBumdes)
-router.get('/', auth, checkRole('desa', 'dinas', 'superadmin', 'sarana_prasarana'), (req, res, next) => {
+router.get('/', auth, checkRole(...bumdesRoles), (req, res, next) => {
   // If user is desa, get their bumdes only
   if (req.user.role === 'desa') {
     return bumdesController.getDesaBumdes(req, res, next);
@@ -31,16 +34,16 @@ router.get('/', auth, checkRole('desa', 'dinas', 'superadmin', 'sarana_prasarana
   return bumdesController.getAllBumdes(req, res, next);
 });
 
-router.post('/', auth, checkRole('desa', 'dinas', 'superadmin', 'sarana_prasarana'), bumdesController.storeDesaBumdes);
+router.post('/', auth, checkRole(...bumdesRoles), bumdesController.storeDesaBumdes);
 router.post(
   '/upload-file',
   auth,
-  checkRole('desa', 'dinas', 'superadmin', 'sarana_prasarana'),
+  checkRole(...bumdesRoles),
   uploadBumdes.single('file'),
   bumdesController.uploadDesaBumdesFile
 );
-router.get('/:id', auth, checkRole('desa', 'dinas', 'superadmin', 'sarana_prasarana'), bumdesController.getBumdesById);
-router.put('/:id', auth, checkRole('desa', 'dinas', 'superadmin', 'sarana_prasarana'), bumdesController.updateDesaBumdes);
-router.delete('/:id', auth, checkRole('desa', 'dinas', 'superadmin', 'sarana_prasarana'), bumdesController.deleteDesaBumdes);
+router.get('/:id', auth, checkRole(...bumdesRoles), bumdesController.getBumdesById);
+router.put('/:id', auth, checkRole(...bumdesRoles), bumdesController.updateDesaBumdes);
+router.delete('/:id', auth, checkRole(...bumdesRoles), bumdesController.deleteDesaBumdes);
 
 module.exports = router;

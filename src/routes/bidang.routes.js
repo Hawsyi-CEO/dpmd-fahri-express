@@ -6,6 +6,8 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
 const { auth } = require('../middlewares/auth');
+const bidangController = require('../controllers/bidang.controller');
+const { checkBidangAccess } = require('../middlewares/bidangAccess');
 
 // Get all bidang
 router.get('/', auth, async (req, res) => {
@@ -61,5 +63,30 @@ router.get('/:id', auth, async (req, res) => {
     });
   }
 });
+
+/**
+ * @route   GET /api/bidang/:bidangId/dashboard
+ * @desc    Get dashboard data for specific bidang (stats + activity logs)
+ * @access  Private (pegawai/kepala_bidang for their bidang, kepala_dinas/superadmin for all)
+ */
+router.get(
+  '/:bidangId/dashboard',
+  auth,
+  checkBidangAccess,
+  (req, res) => bidangController.getDashboard(req, res)
+);
+
+/**
+ * @route   GET /api/bidang/:bidangId/activity-logs
+ * @desc    Get activity logs for specific bidang with filters
+ * @access  Private (pegawai/kepala_bidang for their bidang, kepala_dinas/superadmin for all)
+ */
+router.get(
+  '/:bidangId/activity-logs',
+  auth,
+  checkBidangAccess,
+  (req, res) => bidangController.getActivityLogs(req, res)
+);
+
 
 module.exports = router;
