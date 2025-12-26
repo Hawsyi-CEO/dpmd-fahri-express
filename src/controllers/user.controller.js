@@ -590,19 +590,51 @@ class UserController {
       const fs = require('fs');
       const path = require('path');
 
+      console.log('[Avatar Upload] Starting upload for user ID:', id);
+      console.log('[Avatar Upload] File:', req.file);
+
       if (!req.file) {
+        console.log('[Avatar Upload] ❌ No file in request');
         return res.status(400).json({
           success: false,
           message: 'No file uploaded'
         });
       }
 
+      // Check if storage directory exists
+      const storageDir = path.join(__dirname, '../../storage/avatars/');
+      if (!fs.existsSync(storageDir)) {
+        console.error('[Avatar Upload] ❌ Storage directory does not exist:', storageDir);
+        return res.status(500).json({
+          success: false,
+          message: 'Storage directory not configured properly',
+          error: 'STORAGE_DIR_NOT_FOUND'
+        });
+      }
+
+      // Check write permission
+      try {
+        const testFile = path.join(storageDir, '.write_test');
+        fs.writeFileSync(testFile, 'test');
+        fs.unlinkSync(testFile);
+        console.log('[Avatar Upload] ✅ Storage directory writable');
+      } catch (permError) {
+        console.error('[Avatar Upload] ❌ Storage directory not writable:', permError);
+        return res.status(500).json({
+          success: false,
+          message: 'Storage directory is not writable',
+          error: 'STORAGE_NOT_WRITABLE'
+        });
+      }
+
       // Check if user exists
+      console.log('[Avatar Upload] Checking if user exists...');
       const user = await prisma.users.findUnique({
         where: { id: parseInt(id) }
       });
 
       if (!user) {
+        console.log('[Avatar Upload] ❌ User not found:', id);
         // Delete uploaded file if user not found
         const uploadedFilePath = path.join(__dirname, '../../storage/avatars/', req.file.filename);
         if (fs.existsSync(uploadedFilePath)) {
@@ -615,20 +647,25 @@ class UserController {
         });
       }
 
+      console.log('[Avatar Upload] ✅ User found:', user.nama);
+
       // Delete old avatar if exists
       if (user.avatar) {
         const oldAvatarPath = path.join(__dirname, '../../', user.avatar);
         if (fs.existsSync(oldAvatarPath)) {
           try {
             fs.unlinkSync(oldAvatarPath);
+            console.log('[Avatar Upload] 🗑️  Old avatar deleted');
           } catch (err) {
-            console.warn('Could not delete old avatar:', err);
+            console.warn('[Avatar Upload] ⚠️  Could not delete old avatar:', err);
           }
         }
       }
 
       // Update user with new avatar path
       const avatarPath = `/storage/avatars/${req.file.filename}`;
+      console.log('[Avatar Upload] Updating database with path:', avatarPath);
+      
       const updatedUser = await prisma.users.update({
         where: { id: parseInt(id) },
         data: { avatar: avatarPath },
@@ -643,13 +680,16 @@ class UserController {
         }
       });
 
+      console.log('[Avatar Upload] ✅ Avatar uploaded successfully:', req.file.filename);
+
       return res.status(200).json({
         success: true,
         message: 'Avatar uploaded successfully',
         data: updatedUser
       });
     } catch (error) {
-      console.error('Error uploading avatar:', error);
+      console.error('[Avatar Upload] ❌ Error uploading avatar:', error);
+      console.error('[Avatar Upload] Error stack:', error.stack);
       
       // Delete uploaded file on error
       if (req.file) {
@@ -659,8 +699,9 @@ class UserController {
         if (fs.existsSync(uploadedFilePath)) {
           try {
             fs.unlinkSync(uploadedFilePath);
+            console.log('[Avatar Upload] 🗑️  Cleaned up uploaded file after error');
           } catch (err) {
-            console.warn('Could not delete uploaded file after error:', err);
+            console.warn('[Avatar Upload] ⚠️  Could not delete uploaded file after error:', err);
           }
         }
       }
@@ -668,7 +709,8 @@ class UserController {
       return res.status(500).json({
         success: false,
         message: 'Failed to upload avatar',
-        error: error.message
+        error: error.message,
+        errorCode: error.code || 'UNKNOWN_ERROR'
       });
     }
   }
