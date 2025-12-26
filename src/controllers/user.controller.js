@@ -587,6 +587,8 @@ class UserController {
   async uploadAvatar(req, res) {
     try {
       const { id } = req.params;
+      const fs = require('fs');
+      const path = require('path');
 
       if (!req.file) {
         return res.status(400).json({
@@ -601,6 +603,12 @@ class UserController {
       });
 
       if (!user) {
+        // Delete uploaded file if user not found
+        const uploadedFilePath = path.join(__dirname, '../../storage/avatars/', req.file.filename);
+        if (fs.existsSync(uploadedFilePath)) {
+          fs.unlinkSync(uploadedFilePath);
+        }
+        
         return res.status(404).json({
           success: false,
           message: 'User not found'
@@ -609,10 +617,13 @@ class UserController {
 
       // Delete old avatar if exists
       if (user.avatar) {
-        const fs = require('fs');
         const oldAvatarPath = path.join(__dirname, '../../', user.avatar);
         if (fs.existsSync(oldAvatarPath)) {
-          fs.unlinkSync(oldAvatarPath);
+          try {
+            fs.unlinkSync(oldAvatarPath);
+          } catch (err) {
+            console.warn('Could not delete old avatar:', err);
+          }
         }
       }
 
@@ -623,7 +634,7 @@ class UserController {
         data: { avatar: avatarPath },
         select: {
           id: true,
-          name: true,
+          nama: true,
           email: true,
           role: true,
           avatar: true,
@@ -639,6 +650,21 @@ class UserController {
       });
     } catch (error) {
       console.error('Error uploading avatar:', error);
+      
+      // Delete uploaded file on error
+      if (req.file) {
+        const fs = require('fs');
+        const path = require('path');
+        const uploadedFilePath = path.join(__dirname, '../../storage/avatars/', req.file.filename);
+        if (fs.existsSync(uploadedFilePath)) {
+          try {
+            fs.unlinkSync(uploadedFilePath);
+          } catch (err) {
+            console.warn('Could not delete uploaded file after error:', err);
+          }
+        }
+      }
+      
       return res.status(500).json({
         success: false,
         message: 'Failed to upload avatar',
