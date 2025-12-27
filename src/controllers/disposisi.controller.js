@@ -743,32 +743,16 @@ exports.createSuratMasuk = async (req, res, next) => {
     console.log('✅ [SURAT MASUK] Created:', suratMasuk.id.toString());
 
     // Auto-create disposisi to Kepala Dinas
-    // Priority 1: Find user with position 'kepala_dinas' (position_id = 2)
-    // Priority 2: Find user with role 'kepala_dinas' (fallback for old system)
-    let kepalaDinas = await prisma.users.findFirst({
-      where: { position_id: 2 },  // Find by position first (any role)
-      include: {
-        position: true
-      }
+    // Find user with role 'kepala_dinas'
+    const kepalaDinas = await prisma.users.findFirst({
+      where: { role: 'kepala_dinas' }
     });
-
-    // Fallback: find by role if no user with position found
-    if (!kepalaDinas) {
-      console.log('⚠️  [KEPALA DINAS] No user with position_id=2 found, trying role-based search...');
-      kepalaDinas = await prisma.users.findFirst({
-        where: { role: 'kepala_dinas' },
-        include: {
-          position: true
-        }
-      });
-    }
 
     console.log('🔍 [KEPALA DINAS] Found:', kepalaDinas ? {
       id: kepalaDinas.id.toString(),
       name: kepalaDinas.name,
-      role: kepalaDinas.role,
-      position: kepalaDinas.position?.name || 'No position'
-    } : 'NOT FOUND - Please assign a pegawai with Kepala Dinas position');
+      role: kepalaDinas.role
+    } : 'NOT FOUND - Please create a user with role kepala_dinas');
 
     if (kepalaDinas) {
       const disposisi = await prisma.disposisi.create({

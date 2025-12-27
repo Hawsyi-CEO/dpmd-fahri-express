@@ -88,8 +88,8 @@ class BidangController {
             disposisi_pending: await prisma.disposisi.count({ 
               where: { status: 'pending' } 
             }),
-            total_perjalanan_dinas: await prisma.perjalanan_dinas.count(),
-            perjadin_bulan_ini: await prisma.perjalanan_dinas.count({
+            total_perjalanan_dinas: await prisma.kegiatan.count(),
+            perjadin_bulan_ini: await prisma.kegiatan.count({
               where: {
                 tanggal_mulai: {
                   gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
