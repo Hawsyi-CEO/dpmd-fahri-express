@@ -40,35 +40,35 @@ router.delete(
 router.get(
   '/all',
   auth,
-  checkRole('dinas', 'superadmin'),
+  checkRole('dinas', 'superadmin', 'pemerintahan_desa', 'kepala_bidang', 'kepala_dinas'),
   musdesusController.getAllMusdesus
 );
 
 router.get(
   '/statistics',
   auth,
-  checkRole('dinas', 'superadmin'),
+  checkRole('dinas', 'superadmin', 'pemerintahan_desa', 'kepala_bidang', 'kepala_dinas'),
   musdesusController.getStatistics
 );
 
 router.put(
   '/:id/status',
   auth,
-  checkRole('dinas', 'superadmin'),
+  checkRole('dinas', 'superadmin', 'pemerintahan_desa', 'kepala_bidang', 'kepala_dinas'),
   musdesusController.updateStatus
 );
 
 router.delete(
   '/:id',
   auth,
-  checkRole('dinas', 'superadmin'),
+  checkRole('dinas', 'superadmin', 'pemerintahan_desa', 'kepala_bidang', 'kepala_dinas'),
   musdesusController.deleteMusdesus
 );
 
 router.get(
   '/check-upload/:desa_id',
   auth,
-  checkRole('dinas', 'superadmin'),
+  checkRole('dinas', 'superadmin', 'pemerintahan_desa', 'kepala_bidang', 'kepala_dinas'),
   musdesusController.checkDesaUploadStatus
 );
 

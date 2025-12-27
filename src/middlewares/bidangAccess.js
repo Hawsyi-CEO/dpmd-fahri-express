@@ -2,9 +2,11 @@
  * Middleware to check if user has access to specific bidang
  * 
  * Access Rules:
- * - pegawai: Can only access their own bidang
- * - kepala_bidang: Can only access their own bidang
+ * - pegawai: Can only access their own bidang (based on bidang_id)
+ * - kepala_bidang: Can only access their own bidang (based on bidang_id)
+ * - ketua_tim: Can only access their own bidang (based on bidang_id)
  * - kepala_dinas: Can access all bidangs
+ * - sekretaris_dinas: Can access all bidangs
  * - superadmin: Can access all bidangs
  */
 

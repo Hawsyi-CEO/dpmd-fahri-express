@@ -417,7 +417,7 @@ const sendDisposisiNotification = async (disposisi) => {
       notificationUrl = `/kepala-dinas/disposisi/${id}`;
     } else if (recipientRole === 'sekretaris_dinas') {
       notificationUrl = `/sekretaris-dinas/disposisi/${id}`;
-    } else if (recipientRole.startsWith('kabid_')) {
+    } else if (recipientRole === 'kepala_bidang') {
       notificationUrl = `/kepala-bidang/disposisi/${id}`;
     } else if (recipientRole === 'pegawai') {
       notificationUrl = `/pegawai/disposisi/${id}`;

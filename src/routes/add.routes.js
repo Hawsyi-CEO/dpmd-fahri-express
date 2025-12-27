@@ -34,12 +34,12 @@ const upload = multer({
 /**
  * @route   POST /api/add/upload
  * @desc    Upload and replace add2025.json file
- * @access  Private - superadmin, sarana_prasarana, kekayaan_keuangan
+ * @access  Private - superadmin, sarana_prasarana, kekayaan_keuangan, kepala_bidang (KKD)
  */
 router.post(
   '/upload',
   auth,
-  checkRole('superadmin', 'sarana_prasarana', 'kekayaan_keuangan'),
+  checkRole('superadmin', 'sarana_prasarana', 'kekayaan_keuangan', 'kepala_bidang'),
   upload.single('file'),
   addController.uploadAddData
 );
@@ -69,12 +69,12 @@ router.get(
 /**
  * @route   GET /api/add/backups
  * @desc    Get list of backup files
- * @access  Private - superadmin, sarana_prasarana only
+ * @access  Private - superadmin, sarana_prasarana, kepala_bidang (KKD)
  */
 router.get(
   '/backups',
   auth,
-  checkRole('superadmin', 'sarana_prasarana'),
+  checkRole('superadmin', 'sarana_prasarana', 'kepala_bidang'),
   addController.getBackupList
 );
 

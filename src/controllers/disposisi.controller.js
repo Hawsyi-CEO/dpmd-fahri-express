@@ -7,7 +7,7 @@ const PushNotificationService = require('../services/pushNotificationService');
 const getRoleLevel = (role) => {
   if (role === 'kepala_dinas') return 1;
   if (role === 'sekretaris_dinas') return 2;
-  if (role.startsWith('kabid_')) return 3;
+  if (role === 'kepala_bidang') return 3;
   if (role === 'ketua_tim') return 4;
   if (role === 'pegawai') return 5;
   return 6; // Other roles
@@ -613,12 +613,10 @@ exports.getAvailableUsers = async (req, res, next) => {
     else if (currentRole === 'sekretaris_dinas') {
       // Sekretaris Dinas → can send to Kepala Bidang
       whereClause = {
-        role: {
-          startsWith: 'kabid_'
-        }
+        role: 'kepala_bidang'
       };
     }
-    else if (currentRole.startsWith('kabid_')) {
+    else if (currentRole === 'kepala_bidang') {
       // Kepala Bidang → can ONLY send to Ketua Tim in same bidang
       if (!currentUser.bidang_id) {
         return res.status(400).json({
@@ -667,10 +665,16 @@ exports.getAvailableUsers = async (req, res, next) => {
         email: true,
         role: true,
         bidang_id: true,
-        bidang: {
+        pegawai: {
           select: {
-            id: true,
-            nama_bidang: true
+            id_pegawai: true,
+            nama_pegawai: true,
+            bidangs: {
+              select: {
+                id: true,
+                nama: true
+              }
+            }
           }
         }
       },

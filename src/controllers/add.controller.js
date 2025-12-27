@@ -1,6 +1,7 @@
 // src/controllers/add.controller.js
 const fs = require('fs').promises;
 const path = require('path');
+const ActivityLogger = require('../utils/activityLogger');
 
 /**
  * Upload and replace add2025.json file
@@ -113,6 +114,22 @@ const uploadAddData = async (req, res) => {
       }
     });
     const uniqueDesa = Object.keys(desaMap).length;
+
+    // Log activity
+    await ActivityLogger.log({
+      userId: req.user.id,
+      userName: req.user.nama || req.user.email,
+      userRole: req.user.role,
+      bidangId: 4, // KKD
+      module: 'add',
+      action: 'upload',
+      entityType: 'add_data',
+      entityName: 'ADD 2025',
+      description: `Upload data ADD: ${totalRows} baris, ${validRows} valid, ${uniqueDesa} desa`,
+      newValue: { totalRows, validRows, uniqueDesa },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent')
+    });
 
     res.json({
       success: true,

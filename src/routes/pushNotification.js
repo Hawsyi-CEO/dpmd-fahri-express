@@ -192,4 +192,143 @@ router.post('/test', auth, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/push-notification/notifications
+ * Get notifications for current user (based on activity logs)
+ */
+router.get('/notifications', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    const { limit = 10 } = req.query;
+
+    const db = require('../config/database');
+    
+    let notifications = [];
+    
+    try {
+      // For superadmin: get recent activity logs from all bidang
+      if (userRole === 'superadmin') {
+        const [activityLogs] = await db.query(`
+          SELECT 
+            al.id,
+            al.action_type as type,
+            al.description as message,
+            al.created_at as time,
+            u.name as user_name,
+            b.nama_bidang as bidang_name
+          FROM activity_logs al
+          LEFT JOIN users u ON al.user_id = u.id
+          LEFT JOIN bidang b ON al.bidang_id = b.id
+          WHERE al.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+          ORDER BY al.created_at DESC
+          LIMIT ?
+        `, [parseInt(limit)]);
+        
+        notifications = activityLogs.map(log => ({
+          id: log.id,
+          title: `${log.type || 'Activity'} - ${log.bidang_name || 'System'}`,
+          message: log.message || `${log.user_name} melakukan aktivitas`,
+          time: formatTimeAgo(log.time),
+          read: false,
+          type: log.type || 'activity',
+          timestamp: log.time
+        }));
+      } 
+      // For bidang users: get activity logs from their bidang
+      else if (['kepala_bidang', 'ketua_tim', 'pegawai'].includes(userRole)) {
+        const [userBidang] = await db.query(
+          'SELECT bidang_id FROM users WHERE id = ?',
+          [userId]
+        );
+        
+        if (userBidang.length > 0 && userBidang[0].bidang_id) {
+          const [activityLogs] = await db.query(`
+            SELECT 
+              al.id,
+              al.action_type as type,
+              al.description as message,
+              al.created_at as time,
+              u.name as user_name
+            FROM activity_logs al
+            LEFT JOIN users u ON al.user_id = u.id
+            WHERE al.bidang_id = ?
+              AND al.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            ORDER BY al.created_at DESC
+            LIMIT ?
+          `, [userBidang[0].bidang_id, parseInt(limit)]);
+          
+          notifications = activityLogs.map(log => ({
+            id: log.id,
+            title: log.type || 'Activity',
+            message: log.message || `${log.user_name} melakukan aktivitas`,
+            time: formatTimeAgo(log.time),
+            read: false,
+            type: log.type || 'activity',
+            timestamp: log.time
+          }));
+        }
+      }
+      // For kepala_dinas and sekretaris_dinas: get from disposisi & kegiatan
+      else if (['kepala_dinas', 'sekretaris_dinas'].includes(userRole)) {
+        // Get recent disposisi
+        const [disposisi] = await db.query(`
+          SELECT 
+            id,
+            nomor_surat,
+            perihal,
+            created_at as time,
+            'disposisi' as type
+          FROM surat_masuk
+          WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+          ORDER BY created_at DESC
+          LIMIT ?
+        `, [parseInt(limit) / 2]);
+        
+        notifications = disposisi.map(d => ({
+          id: `disposisi-${d.id}`,
+          title: 'Disposisi Baru',
+          message: `${d.nomor_surat} - ${d.perihal}`,
+          time: formatTimeAgo(d.time),
+          read: false,
+          type: 'disposisi',
+          timestamp: d.time
+        }));
+      }
+    } catch (dbError) {
+      console.error('Database query error:', dbError);
+      // Return empty notifications if table doesn't exist or query fails
+      notifications = [];
+    }
+
+    res.json({
+      success: true,
+      data: notifications,
+      unreadCount: notifications.length
+    });
+  } catch (error) {
+    console.error('Error getting notifications:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get notifications',
+      error: error.message
+    });
+  }
+});
+
+// Helper function to format time ago
+function formatTimeAgo(date) {
+  const now = new Date();
+  const diff = now - new Date(date);
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days} hari lalu`;
+  if (hours > 0) return `${hours} jam lalu`;
+  if (minutes > 0) return `${minutes} menit lalu`;
+  return 'Baru saja';
+}
+
 module.exports = router;

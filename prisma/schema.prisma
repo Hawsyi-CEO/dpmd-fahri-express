@@ -792,24 +792,18 @@ enum disposisi_instruksi {
 
 enum users_role {
   superadmin
-  admin
-  desa
-  kecamatan
-  dinas
   kepala_dinas
   sekretaris_dinas
-  kabid_sekretariat
-  kabid_pemerintahan_desa
-  kabid_spked
-  kabid_kekayaan_keuangan_desa
-  kabid_pemberdayaan_masyarakat_desa
-  sarpras
+  kepala_bidang
+  ketua_tim
+  pegawai
   sekretariat
   sarana_prasarana
   kekayaan_keuangan
   pemberdayaan_masyarakat
   pemerintahan_desa
-  pegawai
+  desa
+  kecamatan
 }
 
 enum disposisi_status {

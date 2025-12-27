@@ -34,7 +34,7 @@ const upload = multer({
 router.post(
   '/upload',
   auth,
-  checkRole('superadmin', 'sarana_prasarana', 'kekayaan_keuangan'),
+  checkRole('superadmin', 'sarana_prasarana', 'kekayaan_keuangan', 'kepala_bidang'),
   upload.single('file'),
   ddEarmarkedT1Controller.uploadDdEarmarkedT1Data
 );
@@ -54,7 +54,7 @@ router.get(
 router.get(
   '/backups',
   auth,
-  checkRole('superadmin', 'sarana_prasarana'),
+  checkRole('superadmin', 'sarana_prasarana', 'kepala_bidang'),
   ddEarmarkedT1Controller.getDdEarmarkedT1BackupList
 );
 

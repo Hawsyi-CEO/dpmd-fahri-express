@@ -264,6 +264,36 @@ class PushNotificationService {
 
     return await this.sendToMultipleUsers(targetUserIds, payload);
   }
+
+  /**
+   * Alias method untuk backward compatibility
+   * @deprecated Use sendToUser instead
+   */
+  static async sendNotificationToUser(userId, payload) {
+    return await this.sendToUser(userId, payload);
+  }
+
+  /**
+   * Send test notification ke user
+   */
+  static async sendTestNotification(userId) {
+    const payload = {
+      title: '🎉 Test Notification',
+      body: 'Push notification berhasil! Sistem bekerja dengan baik.',
+      icon: '/logo-192.png',
+      badge: '/logo-96.png',
+      tag: 'test-notification',
+      data: {
+        type: 'test',
+        timestamp: Date.now(),
+        url: '/'
+      },
+      vibrate: [200, 100, 200],
+      requireInteraction: false
+    };
+
+    return await this.sendToUser(userId, payload);
+  }
 }
 
 module.exports = PushNotificationService;

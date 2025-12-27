@@ -44,12 +44,12 @@ router.get(
 /**
  * @route   POST /api/bhprd-t2/upload
  * @desc    Upload and replace bhprd-tahap2.json file
- * @access  Private - kepala_dinas, sarana_prasarana, kekayaan_keuangan
+ * @access  Private - kepala_dinas, sarana_prasarana, kekayaan_keuangan, kepala_bidang (KKD)
  */
 router.post(
   '/upload',
   auth,
-  checkRole('kepala_dinas', 'sarana_prasarana', 'kekayaan_keuangan'),
+  checkRole('kepala_dinas', 'sarana_prasarana', 'kekayaan_keuangan', 'kepala_bidang'),
   upload.single('file'),
   bhprdT2Controller.uploadBhprdT2Data
 );

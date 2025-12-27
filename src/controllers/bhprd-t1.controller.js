@@ -1,6 +1,7 @@
 // src/controllers/bhprd-t1.controller.js
 const fs = require('fs').promises;
 const path = require('path');
+const ActivityLogger = require('../utils/activityLogger');
 
 /**
  * Upload and replace bhprd-tahap1.json file
@@ -97,6 +98,22 @@ const uploadBhprdT1Data = async (req, res) => {
       }
     });
     const uniqueDesa = Object.keys(desaMap).length;
+
+    // Log activity
+    await ActivityLogger.log({
+      userId: req.user.id,
+      userName: req.user.nama || req.user.email,
+      userRole: req.user.role,
+      bidangId: 4, // KKD
+      module: 'bhprd',
+      action: 'upload',
+      entityType: 'bhprd_tahap1',
+      entityName: 'BHPRD Tahap 1',
+      description: `Upload data BHPRD Tahap 1: ${totalRows} baris, ${validRows} valid, ${uniqueDesa} desa`,
+      newValue: { totalRows, validRows, uniqueDesa },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent')
+    });
 
     res.json({
       success: true,

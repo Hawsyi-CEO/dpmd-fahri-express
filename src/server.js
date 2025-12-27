@@ -177,7 +177,6 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes); // User management routes
 app.use('/api/pegawai', pegawaiRoutes); // Pegawai routes
 app.use('/api/bidang', bidangRoutes); // Bidang routes
-app.use('/api/positions', require('./routes/position.routes')); // Position management routes
 app.use('/api', locationRoutes); // Kecamatan & Desa routes
 
 // Disposisi Surat routes

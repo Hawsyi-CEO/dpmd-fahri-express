@@ -1,6 +1,7 @@
 ﻿// src/controllers/dd-nonearmarked-t2.controller.js
 const fs = require('fs').promises;
 const path = require('path');
+const ActivityLogger = require('../utils/activityLogger');
 
 /**
  * Upload and replace dd-nonearmarked-tahap2.json file
@@ -113,6 +114,21 @@ const uploadDdNonEarmarkedT2Data = async (req, res) => {
       }
     });
     const uniqueDesa = Object.keys(desaMap).length;
+
+    // Log activity
+    await ActivityLogger.log({
+      userId: req.user?.id,
+      userName: req.user?.nama || req.user?.email,
+      userRole: req.user?.role,
+      bidangId: 5, // PMD bidang
+      module: 'dd',
+      action: 'upload',
+      entityType: 'dd_nonearmarked_tahap2',
+      description: `Upload data DD Non-Earmarked Tahap 2: ${totalRows} baris, ${validRows} valid, ${uniqueDesa} desa`,
+      newValue: JSON.stringify({ totalRows, validRows, uniqueDesa }),
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent')
+    });
 
     res.json({
       success: true,

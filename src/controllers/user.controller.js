@@ -52,7 +52,7 @@ class UserController {
         ];
       }
 
-      // Get users without relations (users table has no defined relations in schema)
+      // Get users with Prisma relations
       const [users, total] = await Promise.all([
         prisma.users.findMany({
           where,
@@ -67,16 +67,72 @@ class UserController {
             kecamatan_id: true,
             desa_id: true,
             dinas_id: true,
+            is_active: true,
             created_at: true,
-            updated_at: true
+            updated_at: true,
+            pegawai_id: true,
+            // Include pegawai relation (which includes bidangs)
+            pegawai: {
+              select: {
+                id_pegawai: true,
+                nama_pegawai: true,
+                id_bidang: true,
+                bidangs: {
+                  select: {
+                    id: true,
+                    nama: true
+                  }
+                }
+              }
+            }
           },
           orderBy: { created_at: 'desc' }
         }),
         prisma.users.count({ where })
       ]);
 
+      // Fetch kecamatan, desa, and bidang (fallback) manually
+      const usersWithRelations = await Promise.all(users.map(async (user) => {
+        const userData = { ...user };
+        
+        // Get bidang from pegawai relation OR fallback to deprecated bidang_id
+        if (user.pegawai?.bidangs) {
+          // New system: bidang from pegawai table
+          userData.bidang = user.pegawai.bidangs;
+        } else if (user.bidang_id) {
+          // Fallback: bidang from deprecated users.bidang_id column
+          const bidang = await prisma.bidangs.findUnique({
+            where: { id: BigInt(user.bidang_id) },
+            select: { id: true, nama: true }
+          });
+          userData.bidang = bidang;
+        } else {
+          userData.bidang = null;
+        }
+        
+        // Get kecamatan if kecamatan_id exists
+        if (user.kecamatan_id) {
+          const kecamatan = await prisma.kecamatans.findUnique({
+            where: { id: user.kecamatan_id },
+            select: { id: true, nama: true }
+          });
+          userData.kecamatan = kecamatan;
+        }
+        
+        // Get desa if desa_id exists
+        if (user.desa_id) {
+          const desa = await prisma.desas.findUnique({
+            where: { id: user.desa_id },
+            select: { id: true, nama: true }
+          });
+          userData.desa = desa;
+        }
+        
+        return userData;
+      }));
+
       // Transform data untuk response
-      const transformedUsers = users.map(user => ({
+      const transformedUsers = usersWithRelations.map(user => ({
         id: user.id,
         name: user.name,
         email: user.email,
@@ -85,6 +141,12 @@ class UserController {
         kecamatan_id: user.kecamatan_id,
         desa_id: user.desa_id,
         dinas_id: user.dinas_id,
+        pegawai_id: user.pegawai_id,
+        // Bidang from pegawai relation OR fallback to deprecated bidang_id
+        bidang: user.bidang || null,
+        kecamatan: user.kecamatan || null,
+        desa: user.desa || null,
+        is_active: user.is_active,
         created_at: user.created_at,
         updated_at: user.updated_at
       }));
@@ -128,8 +190,23 @@ class UserController {
           kecamatan_id: true,
           desa_id: true,
           dinas_id: true,
+          pegawai_id: true,
           created_at: true,
-          updated_at: true
+          updated_at: true,
+          // Include pegawai relation
+          pegawai: {
+            select: {
+              id_pegawai: true,
+              nama_pegawai: true,
+              id_bidang: true,
+              bidangs: {
+                select: {
+                  id: true,
+                  nama: true
+                }
+              }
+            }
+          }
         }
       });
 
@@ -140,8 +217,42 @@ class UserController {
         });
       }
 
+      // Fetch kecamatan, desa, and bidang (fallback) manually
+      const userData = { ...user };
+      
+      // Get bidang from pegawai relation OR fallback to deprecated bidang_id
+      if (user.pegawai?.bidangs) {
+        // New system: bidang from pegawai table
+        userData.bidang = user.pegawai.bidangs;
+      } else if (user.bidang_id) {
+        // Fallback: bidang from deprecated users.bidang_id column
+        const bidang = await prisma.bidangs.findUnique({
+          where: { id: BigInt(user.bidang_id) },
+          select: { id: true, nama: true }
+        });
+        userData.bidang = bidang;
+      } else {
+        userData.bidang = null;
+      }
+      
+      if (user.kecamatan_id) {
+        const kecamatan = await prisma.kecamatans.findUnique({
+          where: { id: user.kecamatan_id },
+          select: { id: true, nama: true }
+        });
+        userData.kecamatan = kecamatan;
+      }
+      
+      if (user.desa_id) {
+        const desa = await prisma.desas.findUnique({
+          where: { id: user.desa_id },
+          select: { id: true, nama: true }
+        });
+        userData.desa = desa;
+      }
+
       // Remove password from response
-      const { password, ...userWithoutPassword } = user;
+      const { password, ...userWithoutPassword } = userData;
 
       res.json({
         success: true,
@@ -258,7 +369,7 @@ class UserController {
         email, 
         password, 
         role, 
-        bidang_id, 
+        bidang_id,  // This will update pegawai.id_bidang, not users.bidang_id
         kecamatan_id, 
         desa_id,
         dinas_id,
@@ -266,9 +377,13 @@ class UserController {
         is_active
       } = req.body;
 
+      // Convert id to BigInt for proper comparison
+      const userId = BigInt(id);
+
       // Check if user exists
       const existingUser = await prisma.users.findUnique({
-        where: { id: parseInt(id) }
+        where: { id: userId },
+        include: { pegawai: true }
       });
 
       if (!existingUser) {
@@ -283,7 +398,7 @@ class UserController {
         const duplicateUser = await prisma.users.findFirst({
           where: {
             AND: [
-              { id: { not: parseInt(id) } },
+              { id: { not: userId } },
               { email }
             ]
           }
@@ -297,26 +412,45 @@ class UserController {
         }
       }
 
-      // Build update data
+      // Build update data for users table
       const updateData = {};
       if (name !== undefined) updateData.name = name;
       if (email !== undefined) updateData.email = email;
       if (role !== undefined) updateData.role = role;
       if (is_active !== undefined) updateData.is_active = is_active;
-      if (bidang_id !== undefined) updateData.bidang_id = bidang_id ? parseInt(bidang_id) : null;
       if (kecamatan_id !== undefined) updateData.kecamatan_id = kecamatan_id ? parseInt(kecamatan_id) : null;
-      if (desa_id !== undefined) updateData.desa_id = desa_id ? BigInt(desa_id) : null;
+      
+      // Safe BigInt conversion
+      if (desa_id !== undefined) {
+        updateData.desa_id = desa_id ? BigInt(String(desa_id)) : null;
+      }
       if (dinas_id !== undefined) updateData.dinas_id = dinas_id ? parseInt(dinas_id) : null;
-      if (pegawai_id !== undefined) updateData.pegawai_id = pegawai_id ? BigInt(pegawai_id) : null;
+      if (pegawai_id !== undefined) {
+        updateData.pegawai_id = pegawai_id ? BigInt(String(pegawai_id)) : null;
+      }
 
       // Hash password if provided
       if (password) {
         updateData.password = await bcrypt.hash(password, 10);
       }
 
+      // Update bidang: support both systems (pegawai table & deprecated users.bidang_id)
+      if (bidang_id !== undefined) {
+        if (existingUser.pegawai_id) {
+          // New system: update pegawai.id_bidang
+          await prisma.pegawai.update({
+            where: { id_pegawai: existingUser.pegawai_id },
+            data: { id_bidang: bidang_id ? BigInt(String(bidang_id)) : null }
+          });
+        } else {
+          // Fallback: update deprecated users.bidang_id
+          updateData.bidang_id = bidang_id ? parseInt(bidang_id) : null;
+        }
+      }
+
       // Update user
       const updatedUser = await prisma.users.update({
-        where: { id: parseInt(id) },
+        where: { id: userId },
         data: updateData,
         select: {
           id: true,
@@ -324,30 +458,64 @@ class UserController {
           email: true,
           role: true,
           is_active: true,
-          bidang_id: true,
+          bidang_id: true,  // This column exists but might be deprecated
           kecamatan_id: true,
           desa_id: true,
           dinas_id: true,
           pegawai_id: true,
           created_at: true,
-          updated_at: true
+          updated_at: true,
+          pegawai: {
+            select: {
+              id_pegawai: true,
+              id_bidang: true,
+              bidangs: {
+                select: {
+                  id: true,
+                  nama: true
+                }
+              }
+            }
+          }
         }
       });
 
-      // Return user without password
-      const userWithoutPassword = updatedUser;
+      // Add bidang from pegawai relation OR fallback to deprecated bidang_id
+      let bidang = null;
+      if (updatedUser.pegawai?.bidangs) {
+        // New system: bidang from pegawai table
+        bidang = updatedUser.pegawai.bidangs;
+      } else if (updatedUser.bidang_id) {
+        // Fallback: bidang from deprecated users.bidang_id column
+        const bidangData = await prisma.bidangs.findUnique({
+          where: { id: BigInt(updatedUser.bidang_id) },
+          select: { id: true, nama: true }
+        });
+        bidang = bidangData;
+      }
+
+      const userResponse = {
+        ...updatedUser,
+        bidang: bidang
+      };
 
       res.json({
         success: true,
         message: 'User updated successfully',
-        data: userWithoutPassword
+        data: userResponse
       });
     } catch (error) {
       console.error('Error updating user:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        code: error.code
+      });
       res.status(500).json({
         success: false,
         message: 'Failed to update user',
-        error: error.message
+        error: error.message,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       });
     }
   }
@@ -385,14 +553,46 @@ class UserController {
         }
       }
 
-      // Delete user
+      // Delete related records first to avoid foreign key constraint errors
+      
+      // 1. Delete disposisi where user is sender (dari_user_id)
+      await prisma.disposisi.deleteMany({
+        where: { dari_user_id: parseInt(id) }
+      });
+
+      // 2. Delete disposisi where user is receiver (ke_user_id)
+      await prisma.disposisi.deleteMany({
+        where: { ke_user_id: parseInt(id) }
+      });
+
+      // 3. Delete surat_masuk created by user
+      await prisma.surat_masuk.deleteMany({
+        where: { created_by: parseInt(id) }
+      });
+
+      // 4. Delete activity logs
+      await prisma.activity_logs.deleteMany({
+        where: { user_id: parseInt(id) }
+      });
+
+      // 5. Delete lampiran_surat
+      await prisma.lampiran_surat.deleteMany({
+        where: { uploaded_by: parseInt(id) }
+      });
+
+      // 6. Delete push subscriptions
+      await prisma.push_subscriptions.deleteMany({
+        where: { user_id: parseInt(id) }
+      });
+
+      // Finally, delete the user
       await prisma.users.delete({
         where: { id: parseInt(id) }
       });
 
       res.json({
         success: true,
-        message: 'User deleted successfully'
+        message: 'User and all related records deleted successfully'
       });
     } catch (error) {
       console.error('Error deleting user:', error);
@@ -460,40 +660,62 @@ class UserController {
    */
   async getUserStats(req, res) {
     try {
+      // First, get all user counts
       const [
         total,
         superadminCount,
-        dinasCount,
-        bidangCount,
+        kepalaDinasCount,
+        sekretarisDinasCount,
+        kepalaBidangCount,
+        ketuaTimCount,
+        pegawaiCount,
         kecamatanCount,
-        desaCount
+        allDesaRoleCount
       ] = await Promise.all([
         prisma.users.count(),
         prisma.users.count({ where: { role: 'superadmin' } }),
-        prisma.users.count({ 
-          where: { 
-            role: { 
-              in: ['dinas', 'kepala_dinas', 'admin'] 
-            } 
-          } 
-        }),
-        prisma.users.count({ 
-          where: { 
-            role: { 
-              in: [
-                'sarpras',
-                'sarana_prasarana',
-                'kekayaan_keuangan',
-                'pemberdayaan_masyarakat',
-                'pemerintahan_desa',
-                'sekretariat'
-              ] 
-            } 
-          } 
-        }),
+        prisma.users.count({ where: { role: 'kepala_dinas' } }),
+        prisma.users.count({ where: { role: 'sekretaris_dinas' } }),
+        prisma.users.count({ where: { role: 'kepala_bidang' } }),
+        prisma.users.count({ where: { role: 'ketua_tim' } }),
+        prisma.users.count({ where: { role: 'pegawai' } }),
         prisma.users.count({ where: { role: 'kecamatan' } }),
         prisma.users.count({ where: { role: 'desa' } })
       ]);
+
+      // Get users with role 'desa' and join with desas table
+      const usersWithDesa = await prisma.users.findMany({
+        where: { role: 'desa' },
+        select: {
+          id: true,
+          desa_id: true
+        }
+      });
+
+      // Count desa and kelurahan by checking desas table
+      let desaCount = 0;
+      let kelurahanCount = 0;
+
+      for (const user of usersWithDesa) {
+        if (user.desa_id) {
+          const desa = await prisma.desas.findUnique({
+            where: { id: user.desa_id },
+            select: { status_pemerintahan: true }
+          });
+          
+          if (desa) {
+            if (desa.status_pemerintahan === 'desa') {
+              desaCount++;
+            } else if (desa.status_pemerintahan === 'kelurahan') {
+              kelurahanCount++;
+            }
+          }
+        }
+      }
+
+      // Calculate total pegawai DPMD (only 5 valid roles)
+      const totalPegawaiDPMD = kepalaDinasCount + sekretarisDinasCount + kepalaBidangCount + 
+                                ketuaTimCount + pegawaiCount;
 
       res.json({
         success: true,
@@ -501,10 +723,15 @@ class UserController {
         data: {
           total,
           superadmin: superadminCount,
-          dinas: dinasCount,
-          bidang: bidangCount,
+          kepala_dinas: kepalaDinasCount,
+          sekretaris_dinas: sekretarisDinasCount,
+          kepala_bidang: kepalaBidangCount,
+          ketua_tim: ketuaTimCount,
+          pegawai: pegawaiCount,
+          total_pegawai_dpmd: totalPegawaiDPMD, // Total pegawai internal (5 role)
           kecamatan: kecamatanCount,
-          desa: desaCount
+          desa: desaCount, // Admin Desa (416)
+          kelurahan: kelurahanCount // Admin Kelurahan (sisanya)
         }
       });
     } catch (error) {
