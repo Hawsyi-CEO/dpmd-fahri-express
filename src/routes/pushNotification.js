@@ -104,6 +104,111 @@ router.get('/subscriptions', auth, async (req, res) => {
 });
 
 /**
+ * GET /api/push-notification/check
+ * Check if user has active subscription
+ */
+router.get('/check', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const subscriptions = await PushSubscription.getSubscriptionsByUser(userId);
+
+    res.json({
+      success: true,
+      subscribed: subscriptions.length > 0,
+      count: subscriptions.length
+    });
+  } catch (error) {
+    console.error('Error checking subscription:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check subscription',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/push-notification/statistics
+ * Get notification statistics
+ */
+router.get('/statistics', auth, async (req, res) => {
+  try {
+    const { PrismaClient } = require('@prisma/client');
+    const prisma = new PrismaClient();
+
+    // Count total subscriptions
+    const totalSubscribers = await prisma.push_subscriptions.count();
+
+    // Count today's schedules
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todaySchedules = await prisma.jadwal_kegiatan.count({
+      where: {
+        tanggal_mulai: {
+          gte: today,
+          lt: tomorrow
+        }
+      }
+    });
+
+    // Count tomorrow's schedules
+    const dayAfterTomorrow = new Date(tomorrow);
+    dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
+
+    const tomorrowSchedules = await prisma.jadwal_kegiatan.count({
+      where: {
+        tanggal_mulai: {
+          gte: tomorrow,
+          lt: dayAfterTomorrow
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        totalSent: 0, // TODO: Implement notification log
+        totalSubscribers,
+        todaySchedules,
+        tomorrowSchedules
+      }
+    });
+  } catch (error) {
+    console.error('Error getting statistics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get statistics',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/push-notification/history
+ * Get notification history
+ */
+router.get('/history', auth, async (req, res) => {
+  try {
+    // TODO: Implement notification history from database
+    // For now, return empty array
+    res.json({
+      success: true,
+      data: []
+    });
+  } catch (error) {
+    console.error('Error getting history:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get history',
+      error: error.message
+    });
+  }
+});
+
+/**
  * POST /api/push-notification/send
  * Send test push notification (admin only)
  */

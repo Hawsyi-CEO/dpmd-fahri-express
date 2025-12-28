@@ -21,7 +21,8 @@ Tanggal Check: 28 Desember 2025
 4. `020-027_*.sql` - Kelembagaan tables (RWs, RTs, Posyandu, dll) ✅
 5. `20241212_create_kelembagaan_activity_logs.sql` - Activity logs ✅
 6. `20251227_create_activity_logs.sql` - General activity logs ✅
-7. `add_produk_hukum_to_kelembagaan.sql` - Add FK to kelembagaan ✅
+7. `030_create_jadwal_kegiatan_table.sql` - Jadwal Kegiatan feature ✅
+8. `add_produk_hukum_to_kelembagaan.sql` - Add FK to kelembagaan ✅
 
 #### ⚠️ Duplicate/Legacy (Perlu Review)
 - `create_activity_logs_table.sql` - DUPLICATE dengan 20251227 file

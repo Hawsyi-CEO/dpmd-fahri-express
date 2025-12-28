@@ -68,12 +68,13 @@ model berita {
 }
 
 model bidangs {
-  id              BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
-  nama            String            @db.VarChar(255)
-  created_at      DateTime?         @db.Timestamp(0)
-  updated_at      DateTime?         @db.Timestamp(0)
-  kegiatan_bidang kegiatan_bidang[]
-  pegawai         pegawai[]
+  id               BigInt             @id @default(autoincrement()) @db.UnsignedBigInt
+  nama             String             @db.VarChar(255)
+  created_at       DateTime?          @db.Timestamp(0)
+  updated_at       DateTime?          @db.Timestamp(0)
+  kegiatan_bidang  kegiatan_bidang[]
+  pegawai          pegawai[]
+  jadwal_kegiatan  jadwal_kegiatan[]
 }
 
 model bumdes {
@@ -549,6 +550,8 @@ model users {
   push_subscriptions                      push_subscriptions[]
   surat_masuk                             surat_masuk[]
   pegawai                                 pegawai?                    @relation(fields: [pegawai_id], references: [id_pegawai], onDelete: Cascade, onUpdate: NoAction, map: "users_pegawai_id_foreign")
+  jadwal_kegiatan_created                 jadwal_kegiatan[]           @relation("jadwal_kegiatan_created_byTousers")
+  jadwal_kegiatan_approved                jadwal_kegiatan[]           @relation("jadwal_kegiatan_approved_byTousers")
 
   @@index([pegawai_id], map: "users_pegawai_id_index")
 }
@@ -797,11 +800,6 @@ enum users_role {
   kepala_bidang
   ketua_tim
   pegawai
-  sekretariat
-  sarana_prasarana
-  kekayaan_keuangan
-  pemberdayaan_masyarakat
-  pemerintahan_desa
   desa
   kecamatan
 }
@@ -852,4 +850,64 @@ model activity_logs {
   @@index([action], map: "idx_action")
   @@index([created_at], map: "idx_created_at")
   @@index([module, action], map: "idx_module_action")
+}
+
+model jadwal_kegiatan {
+  id                                                  BigInt                                 @id @default(autoincrement()) @db.UnsignedBigInt
+  judul                                               String                                 @db.VarChar(255)
+  deskripsi                                           String                                 @db.Text
+  bidang_id                                           BigInt?                                @db.UnsignedBigInt
+  tanggal_mulai                                       DateTime                               @db.DateTime(0)
+  tanggal_selesai                                     DateTime                               @db.DateTime(0)
+  lokasi                                              String?                                @db.VarChar(255)
+  asal_kegiatan                                       String?                                @db.VarChar(255)
+  pic_name                                            String?                                @db.VarChar(255)
+  pic_contact                                         String?                                @db.VarChar(50)
+  status                                              jadwal_kegiatan_status                 @default(draft)
+  prioritas                                           jadwal_kegiatan_prioritas              @default(sedang)
+  kategori                                            jadwal_kegiatan_kategori               @default(lainnya)
+  anggaran                                            Decimal?                               @db.Decimal(15, 2)
+  created_by                                          BigInt                                 @db.UnsignedBigInt
+  approved_by                                         BigInt?                                @db.UnsignedBigInt
+  approved_at                                         DateTime?                              @db.DateTime(0)
+  catatan_approval                                    String?                                @db.Text
+  created_at                                          DateTime?                              @default(now()) @db.Timestamp(0)
+  updated_at                                          DateTime?                              @default(now()) @db.Timestamp(0)
+  bidangs                                             bidangs?                               @relation(fields: [bidang_id], references: [id], onUpdate: NoAction, map: "fk_jadwal_kegiatan_bidang")
+  users_jadwal_kegiatan_created_byTousers             users                                  @relation("jadwal_kegiatan_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction, map: "fk_jadwal_kegiatan_created_by")
+  users_jadwal_kegiatan_approved_byTousers            users?                                 @relation("jadwal_kegiatan_approved_byTousers", fields: [approved_by], references: [id], onUpdate: NoAction, map: "fk_jadwal_kegiatan_approved_by")
+
+  @@index([bidang_id], map: "idx_jadwal_kegiatan_bidang_id")
+  @@index([status], map: "idx_jadwal_kegiatan_status")
+  @@index([prioritas], map: "idx_jadwal_kegiatan_prioritas")
+  @@index([kategori], map: "idx_jadwal_kegiatan_kategori")
+  @@index([tanggal_mulai], map: "idx_jadwal_kegiatan_tanggal_mulai")
+  @@index([tanggal_selesai], map: "idx_jadwal_kegiatan_tanggal_selesai")
+  @@index([created_by], map: "idx_jadwal_kegiatan_created_by")
+  @@index([approved_by], map: "idx_jadwal_kegiatan_approved_by")
+}
+
+enum jadwal_kegiatan_status {
+  draft
+  pending
+  approved
+  rejected
+  completed
+  cancelled
+}
+
+enum jadwal_kegiatan_prioritas {
+  rendah
+  sedang
+  tinggi
+  urgent
+}
+
+enum jadwal_kegiatan_kategori {
+  rapat
+  pelatihan
+  monitoring
+  kunjungan
+  acara
+  lainnya
 }

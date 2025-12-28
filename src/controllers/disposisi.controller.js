@@ -394,9 +394,24 @@ exports.getDisposisiById = async (req, res, next) => {
       });
     }
 
+    // Transform response untuk frontend compatibility
+    const transformedDisposisi = {
+      ...disposisi,
+      dari_user: disposisi.users_disposisi_dari_user_idTousers,
+      ke_user: disposisi.users_disposisi_ke_user_idTousers,
+      surat_masuk: disposisi.surat_masuk ? {
+        ...disposisi.surat_masuk,
+        disposisi: disposisi.surat_masuk.disposisi?.map(d => ({
+          ...d,
+          dari_user: d.users_disposisi_dari_user_idTousers,
+          ke_user: d.users_disposisi_ke_user_idTousers
+        }))
+      } : null
+    };
+
     res.json({
       success: true,
-      data: disposisi,
+      data: transformedDisposisi,
     });
   } catch (error) {
     next(error);

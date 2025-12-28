@@ -15,6 +15,7 @@ BigInt.prototype.toJSON = function() {
 
 const logger = require('./utils/logger');
 const errorHandler = require('./middlewares/errorHandler');
+const schedulerService = require('./services/scheduler.service');
 
 // Ensure required directories exist
 const requiredDirs = [
@@ -186,6 +187,9 @@ app.use('/api/disposisi', require('./routes/disposisi.routes'));
 // Push Notifications routes - Modern Web Push API
 app.use('/api/push-notification', require('./routes/pushNotification'));
 
+// Cron test routes - For testing push notifications manually
+app.use('/api/cron', require('./routes/cron.routes'));
+
 app.use('/api/desa/bumdes', bumdesRoutes);
 app.use('/api/bumdes', bumdesRoutes); // Admin routes
 app.use('/api/desa/musdesus', musdesusRoutes);
@@ -198,6 +202,7 @@ app.use('/api/perjadin', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/kegiatan', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/hero-gallery', heroGalleryRoutes);
 app.use('/api/kepala-dinas', kepalaDinasRoutes); // Kepala Dinas dashboard
+app.use('/api/jadwal-kegiatan', require('./routes/jadwalKegiatan.routes')); // Jadwal Kegiatan routes
 app.use('/api/berita', require('./routes/berita.routes')); // Berita routes
 app.use('/api/kelembagaan', kelembagaanRoutes); // Kelembagaan routes (admin/global)
 app.use('/api/kelembagaan/activity-logs', require('./routes/kelembagaanActivityLogs.routes')); // Activity logs
@@ -236,6 +241,8 @@ app.listen(PORT, () => {
   logger.info(`🚀 Server running on port ${PORT}`);
   logger.info(`📝 Environment: ${process.env.NODE_ENV}`);
   logger.info(`🔗 CORS enabled for: ${process.env.CORS_ORIGIN}`);
+  
+  // Initialize scheduler for push notifications
+  schedulerService.init();
 });
-
 module.exports = app;
