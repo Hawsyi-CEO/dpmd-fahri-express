@@ -144,6 +144,9 @@ exports.getAllSuratMasuk = async (req, res, next) => {
       ];
     }
 
+    console.log('[getAllSuratMasuk] Query params:', req.query);
+    console.log('[getAllSuratMasuk] Where clause:', JSON.stringify(where));
+
     const [total, surat] = await Promise.all([
       prisma.surat_masuk.count({ where }),
       prisma.surat_masuk.findMany({
@@ -164,6 +167,8 @@ exports.getAllSuratMasuk = async (req, res, next) => {
       }),
     ]);
 
+    console.log(`[getAllSuratMasuk] Found ${total} total, ${surat.length} returned`);
+
     res.json({
       success: true,
       data: surat,
@@ -175,6 +180,8 @@ exports.getAllSuratMasuk = async (req, res, next) => {
       },
     });
   } catch (error) {
+    console.error('[getAllSuratMasuk] Error:', error.message);
+    console.error('[getAllSuratMasuk] Stack:', error.stack);
     next(error);
   }
 };
@@ -323,6 +330,15 @@ exports.kirimKeKepalaDinas = async (req, res, next) => {
       });
     }
 
+    console.log('[kirimKeKepalaDinas] Creating disposisi with data:', {
+      surat_id: id,
+      dari_user_id: dari_user_id,
+      ke_user_id: kepala_dinas_user_id,
+      catatan,
+      instruksi: instruksi || 'biasa',
+      level_disposisi: 1,
+    });
+
     // Create disposisi
     const disposisi = await prisma.disposisi.create({
       data: {
@@ -345,6 +361,15 @@ exports.kirimKeKepalaDinas = async (req, res, next) => {
           select: { id: true, nomor_surat: true, perihal: true, pengirim: true },
         },
       },
+    });
+
+    console.log('[kirimKeKepalaDinas] Disposisi created successfully:', {
+      id: disposisi.id?.toString(),
+      surat_id: disposisi.surat_id?.toString(),
+      dari_user_id: disposisi.dari_user_id?.toString(),
+      ke_user_id: disposisi.ke_user_id?.toString(),
+      status: disposisi.status,
+      level_disposisi: disposisi.level_disposisi,
     });
 
     // Update surat status

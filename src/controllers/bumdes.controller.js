@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
+const ActivityLogger = require('../utils/activityLogger');
 const fs = require('fs').promises;
 const path = require('path');
 
@@ -42,11 +43,13 @@ class BumdesController {
       const userId = req.user.id;
       const userRole = req.user.role;
       const desaId = req.user.desa_id;
+      const bidangId = req.user.bidang_id;
 
       logger.info('BUMDES Store Request Received', {
         user_id: userId,
         user_role: userRole,
         desa_id: desaId,
+        bidang_id: bidangId,
         has_data: !!req.body
       });
 
@@ -125,6 +128,7 @@ class BumdesController {
       
       // For role 'desa', use their desa_id
       // For role 'sarana_prasarana', 'dinas', or 'superadmin', use desa_id from form data
+      // For role 'pegawai', 'kepala_bidang', 'kepala_dinas', 'ketua_tim' from SPKED (bidang 3), use desa_id from form data
       let targetDesaId;
       
       if (userRole === 'desa') {
@@ -138,6 +142,24 @@ class BumdesController {
         data.desa_id = parseInt(desaId);
       } else if (['sarana_prasarana', 'dinas', 'superadmin'].includes(userRole)) {
         // Sarpras/Admin must provide desa_id in the form data
+        if (!data.desa_id) {
+          return res.status(400).json({
+            success: false,
+            message: 'desa_id harus disertakan dalam data'
+          });
+        }
+        targetDesaId = parseInt(data.desa_id);
+        data.desa_id = parseInt(data.desa_id);
+      } else if (['pegawai', 'kepala_bidang', 'kepala_dinas', 'ketua_tim'].includes(userRole)) {
+        // Pegawai from SPKED (bidang 3) can manage BUMDes
+        if (bidangId !== 3) {
+          return res.status(403).json({
+            success: false,
+            message: 'Role Anda tidak memiliki akses untuk menyimpan BUMDes (hanya SPKED/Bidang 3)'
+          });
+        }
+        
+        // Must provide desa_id in form data
         if (!data.desa_id) {
           return res.status(400).json({
             success: false,
@@ -180,6 +202,7 @@ class BumdesController {
       });
 
       let bumdes;
+      const isUpdate = !!existing;
       
       if (existing) {
         // Update existing
@@ -194,6 +217,31 @@ class BumdesController {
           data
         });
         logger.info(`BUMDES created for desa_id: ${targetDesaId}, id: ${bumdes.id} by user ${userId} (${userRole})`);
+      }
+
+      // Log activity
+      try {
+        const desaInfo = await prisma.desas.findUnique({
+          where: { id: targetDesaId },
+          select: { nama: true }
+        });
+
+        await ActivityLogger.log({
+          userId: userId,
+          userName: req.user.name,
+          userRole: userRole,
+          bidangId: 3, // SPKED
+          module: 'bumdes',
+          action: isUpdate ? 'update' : 'create',
+          entityType: 'bumdes',
+          entityId: bumdes.id,
+          entityName: `BUMDes ${desaInfo?.nama || ''}`,
+          description: isUpdate 
+            ? `${req.user.name} memperbarui data BUMDes ${desaInfo?.nama || ''}`
+            : `${req.user.name} menambahkan data BUMDes ${desaInfo?.nama || ''}`
+        });
+      } catch (logError) {
+        logger.error('Error logging BUMDes activity:', logError);
       }
 
       return res.json({
@@ -214,13 +262,15 @@ class BumdesController {
       const userId = req.user.id;
       const userRole = req.user.role;
       const desaId = req.user.desa_id;
+      const bidangId = req.user.bidang_id;
 
       logger.info('=== BUMDES UPLOAD FILE REQUEST ===', {
         has_file: !!req.file,
         bumdes_id: req.body.bumdes_id,
         field_name: req.body.field_name,
         user_role: userRole,
-        desa_id: desaId
+        desa_id: desaId,
+        bidang_id: bidangId
       });
 
       if (!req.file) {
@@ -251,6 +301,19 @@ class BumdesController {
         });
       } else if (userRole === 'dinas' || userRole === 'superadmin' || userRole === 'sarana_prasarana') {
         // Dinas, superadmin, and sarana_prasarana can upload to any BUMDes
+        bumdes = await prisma.bumdes.findFirst({
+          where: { 
+            id: parseInt(bumdes_id)
+          }
+        });
+      } else if (['pegawai', 'kepala_bidang', 'kepala_dinas', 'ketua_tim'].includes(userRole)) {
+        // Pegawai from SPKED (bidang 3) can upload to any BUMDes
+        if (bidangId !== 3) {
+          return res.status(403).json({
+            success: false,
+            message: 'Role Anda tidak memiliki akses untuk upload file BUMDes (hanya SPKED/Bidang 3)'
+          });
+        }
         bumdes = await prisma.bumdes.findFirst({
           where: { 
             id: parseInt(bumdes_id)
@@ -359,6 +422,7 @@ class BumdesController {
       const { id } = req.params;
       const userRole = req.user.role;
       const desaId = req.user.desa_id;
+      const bidangId = req.user.bidang_id;
 
       // Check authorization based on role
       let existing;
@@ -372,6 +436,19 @@ class BumdesController {
         });
       } else if (userRole === 'dinas' || userRole === 'superadmin' || userRole === 'sarana_prasarana') {
         // Dinas, superadmin, and sarana_prasarana can update any BUMDes
+        existing = await prisma.bumdes.findFirst({
+          where: { 
+            id: parseInt(id)
+          }
+        });
+      } else if (['pegawai', 'kepala_bidang', 'kepala_dinas', 'ketua_tim'].includes(userRole)) {
+        // Pegawai from SPKED (bidang 3) can update any BUMDes
+        if (bidangId !== 3) {
+          return res.status(403).json({
+            success: false,
+            message: 'Role Anda tidak memiliki akses untuk mengupdate BUMDes (hanya SPKED/Bidang 3)'
+          });
+        }
         existing = await prisma.bumdes.findFirst({
           where: { 
             id: parseInt(id)
@@ -448,6 +525,7 @@ class BumdesController {
       const { id } = req.params;
       const userRole = req.user.role;
       const desaId = req.user.desa_id;
+      const bidangId = req.user.bidang_id;
 
       // Check authorization based on role
       let bumdes;
@@ -461,6 +539,19 @@ class BumdesController {
         });
       } else if (userRole === 'dinas' || userRole === 'superadmin' || userRole === 'sarana_prasarana') {
         // Dinas, superadmin, and sarana_prasarana can delete any BUMDes
+        bumdes = await prisma.bumdes.findFirst({
+          where: { 
+            id: parseInt(id)
+          }
+        });
+      } else if (['pegawai', 'kepala_bidang', 'kepala_dinas', 'ketua_tim'].includes(userRole)) {
+        // Pegawai from SPKED (bidang 3) can delete any BUMDes
+        if (bidangId !== 3) {
+          return res.status(403).json({
+            success: false,
+            message: 'Role Anda tidak memiliki akses untuk menghapus BUMDes (hanya SPKED/Bidang 3)'
+          });
+        }
         bumdes = await prisma.bumdes.findFirst({
           where: { 
             id: parseInt(id)

@@ -48,6 +48,7 @@ build/
 # Test
 coverage/
 .nyc_output/
+tes
 
 # PM2
 .pm2/
@@ -75,3 +76,24 @@ database-express/seeders/*-data.json
 *.tmp
 
 /src/generated/prisma
+
+# Development documentation (temporary files)
+*_FIX.md
+*_ACCESS.md
+*_UPDATE.md
+*_TROUBLESHOOTING.md
+*_ANALYSIS.md
+*_IMPLEMENTATION.md
+*_DESIGN.md
+*_FINAL.md
+WORKFLOW_STRUCTURE.md
+ROLE_SYSTEM.md
+PEGAWAI_MANAGEMENT_FIX.md
+KEPALA_BIDANG_ACCESS.md
+
+# Development scripts
+assign-*.js
+check-*.js
+revert-*.js
+revert-*.sql
+update-*.sql

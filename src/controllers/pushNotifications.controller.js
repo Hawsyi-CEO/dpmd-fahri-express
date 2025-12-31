@@ -1,19 +1,8 @@
 const prisma = require('../config/prisma');
-const webpush = require('web-push');
+const { webpush, vapidKeys } = require('../config/push-notification');
 
-// VAPID keys (generate with: npx web-push generate-vapid-keys)
-// Store these in .env file
-const vapidKeys = {
-  publicKey: process.env.VAPID_PUBLIC_KEY || 'BNxVXS4vaBi0sfwgQhqLN87pRF_9vn6mHOvrzs3LnktYkh84LOqrZbbgeXZ2PoKJ6MFnVDcpXD5fA3XAcPAU52o',
-  privateKey: process.env.VAPID_PRIVATE_KEY || 'eCleqcj2GhhQK1PtiSUElAQqh9EpmIGhoAZeunFVMFE'
-};
-
-// Configure web-push
-webpush.setVapidDetails(
-  'mailto:admin@dpmdbogorkab.id',
-  vapidKeys.publicKey,
-  vapidKeys.privateKey
-);
+// VAPID keys now imported from config
+console.log('[Push Controller] Using VAPID public key:', vapidKeys.publicKey.substring(0, 30) + '...');
 
 // Subscribe user to push notifications
 const subscribe = async (req, res) => {
@@ -169,25 +158,44 @@ const sendToUser = async (req, res) => {
     }
 
     const payload = JSON.stringify({
-      title: title || 'DPMD - Notifikasi Baru',
+      title: title || 'DPMD Bogor',
       body: body || 'Anda memiliki notifikasi baru',
-      icon: '/icon-192x192.png',
-      badge: '/icon-192x192.png',
-      vibrate: [200, 100, 200],
-      tag: 'disposisi-notification',
+      icon: '/logo-bogor.png',
+      badge: '/logo-bogor.png',
+      image: '/logo-bogor.png',
+      vibrate: [500, 200, 500, 200, 500, 200, 500],
+      tag: 'dpmd-notification',
       requireInteraction: true,
-      data: data || { url: '/dashboard/disposisi' },
+      renotify: true,
+      silent: false,
+      data: data || { url: '/dashboard' },
       actions: [
-        { action: 'open', title: 'Buka', icon: '/icon-192x192.png' },
-        { action: 'close', title: 'Tutup', icon: '/icon-192x192.png' }
+        { action: 'open', title: 'BUKA DISPOSISI' },
+        { action: 'mark_read', title: 'TANDAI DIBACA' }
       ]
     });
 
     const results = await Promise.allSettled(
       subscriptions.map(async (sub) => {
         try {
-          const subscription = JSON.parse(sub.subscription);
-          await webpush.sendNotification(subscription, payload);
+          // Parse subscription - handle both string and object
+          const subscription = typeof sub.subscription === 'string' 
+            ? JSON.parse(sub.subscription) 
+            : sub.subscription;
+          
+          // Options untuk heads-up notification (priority tinggi)
+          const options = {
+            TTL: 86400, // 24 jam (lebih lama untuk retry)
+            urgency: 'high', // CRITICAL: Wajib 'high' untuk heads-up di Android
+            headers: {
+              'Topic': 'disposisi',
+              'Priority': 'high',
+              'Urgency': 'high',
+              'Content-Encoding': 'aes128gcm'
+            }
+          };
+          
+          await webpush.sendNotification(subscription, payload, options);
           return { success: true, endpoint: sub.endpoint };
         } catch (error) {
           // If subscription is invalid, delete it
@@ -249,15 +257,17 @@ const sendToMultipleUsers = async (req, res) => {
     const payload = JSON.stringify({
       title: title || 'DPMD - Notifikasi Baru',
       body: body || 'Anda memiliki notifikasi baru',
-      icon: '/icon-192x192.png',
-      badge: '/icon-192x192.png',
-      vibrate: [200, 100, 200],
+      icon: '/logo-bogor.png',
+      badge: '/logo-bogor.png',
+      vibrate: [500, 200, 500, 200, 500],
       tag: 'disposisi-notification',
       requireInteraction: true,
+      renotify: true,
+      silent: false,
       data: data || { url: '/dashboard/disposisi' },
       actions: [
-        { action: 'open', title: 'Buka' },
-        { action: 'close', title: 'Tutup' }
+        { action: 'open', title: 'BUKA' },
+        { action: 'close', title: 'TUTUP' }
       ]
     });
 
@@ -268,7 +278,20 @@ const sendToMultipleUsers = async (req, res) => {
           const subscription = typeof sub.subscription === 'string' 
             ? JSON.parse(sub.subscription) 
             : sub.subscription;
-          await webpush.sendNotification(subscription, payload);
+          
+          // Options untuk heads-up notification (priority tinggi)
+          const options = {
+            TTL: 86400, // 24 jam
+            urgency: 'high', // CRITICAL: Wajib 'high' untuk heads-up di Android
+            headers: { 
+              'Topic': 'disposisi',
+              'Priority': 'high',
+              'Urgency': 'high',
+              'Content-Encoding': 'aes128gcm'
+            }
+          };
+          
+          await webpush.sendNotification(subscription, payload, options);
           return { success: true, user_id: sub.user_id };
         } catch (error) {
           if (error.statusCode === 410 || error.statusCode === 404) {
@@ -371,27 +394,56 @@ const sendDisposisiNotification = async (disposisi) => {
     }
 
     // Get surat info from disposisi or fetch from database
-    let suratInfo = disposisi.surat;
+    let suratInfo = disposisi.surat_masuk || disposisi.surat;
     
     if (!suratInfo) {
       console.log('[PUSH NOTIFICATION] Surat info not in disposisi, fetching...');
       const disposisiDetail = await prisma.disposisi.findUnique({
         where: { id: BigInt(id) },
         include: {
-          surat: true
+          surat_masuk: true
         }
       });
-      suratInfo = disposisiDetail?.surat;
+      suratInfo = disposisiDetail?.surat_masuk;
     }
 
     console.log('[PUSH NOTIFICATION] Surat perihal:', suratInfo?.perihal);
 
-    const title = '🔔 Disposisi Surat Baru';
-    const body = `${sender?.name || 'Admin'} mengirim disposisi: ${suratInfo?.perihal || 'Surat baru'}`;
+    // Determine URL based on recipient role
+    let notificationUrl = '/dashboard/disposisi';
+    const recipientRole = recipient.role;
+    
+    if (recipientRole === 'kepala_dinas') {
+      notificationUrl = `/kepala-dinas/disposisi/${id}`;
+    } else if (recipientRole === 'sekretaris_dinas') {
+      notificationUrl = `/sekretaris-dinas/disposisi/${id}`;
+    } else if (recipientRole === 'kepala_bidang') {
+      notificationUrl = `/kepala-bidang/disposisi/${id}`;
+    } else if (recipientRole === 'pegawai') {
+      notificationUrl = `/pegawai/disposisi/${id}`;
+    } else if (recipientRole === 'desa') {
+      notificationUrl = `/desa/disposisi/${id}`;
+    } else {
+      // Default for other roles (sarpras, superadmin, etc) - use core dashboard
+      notificationUrl = `/core-dashboard/disposisi/${id}`;
+    }
+    
+    // Format notification seperti WhatsApp
+    const senderName = sender?.name || 'Admin DPMD';
+    const perihal = suratInfo?.perihal || 'Disposisi Surat Baru';
+    
+    // Title: Nama pengirim saja (seperti WhatsApp)
+    const title = senderName;
+    
+    // Body: Perihal surat (seperti preview pesan di WhatsApp)
+    const body = perihal;
+    
     const data = {
-      url: `/disposisi/${id}`,
+      url: notificationUrl,
       disposisi_id: id.toString(),
       type: 'new_disposisi',
+      sender_name: senderName,
+      perihal: perihal,
       timestamp: new Date().toISOString()
     };
 
@@ -414,15 +466,18 @@ const sendDisposisiNotification = async (disposisi) => {
     const payload = JSON.stringify({
       title,
       body,
-      icon: '/icon-192x192.png',
-      badge: '/icon-192x192.png',
-      vibrate: [200, 100, 200, 100, 200],
+      icon: '/logo-bogor.png',
+      badge: '/logo-bogor.png',
+      image: '/logo-bogor.png',
+      vibrate: [500, 200, 500, 200, 500, 200, 500],
       tag: `disposisi-${id}`,
       requireInteraction: true,
+      silent: false,
+      renotify: true,
       data,
       actions: [
-        { action: 'open', title: 'Buka', icon: '/icon-192x192.png' },
-        { action: 'close', title: 'Tutup', icon: '/icon-192x192.png' }
+        { action: 'open', title: 'BUKA DISPOSISI', icon: '/logo-bogor.png' },
+        { action: 'mark_read', title: 'TANDAI DIBACA', icon: '/logo-bogor.png' }
       ]
     });
 
@@ -436,9 +491,21 @@ const sendDisposisiNotification = async (disposisi) => {
           const subscription = typeof sub.subscription === 'string' 
             ? JSON.parse(sub.subscription) 
             : sub.subscription;
+          
+          // Options untuk heads-up notification (priority tinggi)
+          const options = {
+            TTL: 86400, // 24 jam untuk retry
+            urgency: 'high', // CRITICAL: Wajib 'high' untuk heads-up di Android
+            headers: { 
+              'Topic': 'disposisi',
+              'Priority': 'high',
+              'Urgency': 'high',
+              'Content-Encoding': 'aes128gcm'
+            }
+          };
             
           console.log('[PUSH NOTIFICATION] Sending to endpoint:', sub.endpoint.substring(0, 50) + '...');
-          await webpush.sendNotification(subscription, payload);
+          await webpush.sendNotification(subscription, payload, options);
           console.log('[PUSH NOTIFICATION] ✅ Notification sent successfully to:', sub.endpoint.substring(0, 50) + '...');
           return { success: true, endpoint: sub.endpoint };
         } catch (error) {

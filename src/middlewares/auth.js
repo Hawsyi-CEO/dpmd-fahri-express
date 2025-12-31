@@ -27,15 +27,21 @@ const auth = async (req, res, next) => {
       ? parseInt(decoded.desa_id, 10)
       : null;
 
+    // Coerce bidang_id to integer
+    const bidangId = decoded.bidang_id !== undefined && decoded.bidang_id !== null
+      ? parseInt(decoded.bidang_id, 10)
+      : null;
+
     req.user = {
       id: decoded.id,
       name: decoded.name,
       email: decoded.email,
       role: decoded.role,
-      desa_id: Number.isNaN(desaId) ? null : desaId
+      desa_id: Number.isNaN(desaId) ? null : desaId,
+      bidang_id: Number.isNaN(bidangId) ? null : bidangId
     };
     
-    logger.info(`✅ Auth successful: User ${req.user.id} (${req.user.role})`);
+    logger.info(`✅ Auth successful: User ${req.user.id} (${req.user.role}) - Bidang: ${req.user.bidang_id}`);
     
     next();
   } catch (error) {
@@ -84,7 +90,9 @@ const checkRole = (...roles) => {
 
     // Normalize user role (trim whitespace, lowercase)
     const userRole = String(req.user.role).trim().toLowerCase();
-    const allowedRoles = roles.map(r => String(r).trim().toLowerCase());
+    // Flatten in case array of arrays passed
+    const flatRoles = roles.flat();
+    const allowedRoles = flatRoles.map(r => String(r).trim().toLowerCase());
 
     logger.info(`🔐 Role check - User: ${req.user.email} | User role: "${userRole}" | Allowed roles: [${allowedRoles.join(', ')}]`);
 

@@ -1,6 +1,7 @@
 // src/controllers/bhprd-t2.controller.js
 const fs = require('fs').promises;
 const path = require('path');
+const ActivityLogger = require('../utils/activityLogger');
 
 const uploadBhprdT2Data = async (req, res) => {
   try {
@@ -61,6 +62,22 @@ const uploadBhprdT2Data = async (req, res) => {
 
     await fs.copyFile(req.file.path, targetFile);
     await fs.unlink(req.file.path);
+
+    // Log activity
+    await ActivityLogger.log({
+      userId: req.user.id,
+      userName: req.user.nama || req.user.email,
+      userRole: req.user.role,
+      bidangId: 4, // KKD
+      module: 'bhprd',
+      action: 'upload',
+      entityType: 'bhprd_tahap2',
+      entityName: 'BHPRD Tahap 2',
+      description: `Upload data BHPRD Tahap 2: ${jsonData.length} baris`,
+      newValue: { totalRows: jsonData.length },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent')
+    });
 
     res.json({
       success: true,

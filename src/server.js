@@ -15,12 +15,16 @@ BigInt.prototype.toJSON = function() {
 
 const logger = require('./utils/logger');
 const errorHandler = require('./middlewares/errorHandler');
+const schedulerService = require('./services/scheduler.service');
 
 // Ensure required directories exist
 const requiredDirs = [
   path.join(__dirname, '../storage/uploads/temp'),
   path.join(__dirname, '../storage/uploads/peraturan'),
   path.join(__dirname, '../storage/uploads/produk-hukum'),
+  path.join(__dirname, '../storage/uploads/bumdes_dokumen_badanhukum'),
+  path.join(__dirname, '../storage/uploads/bumdes_laporan_keuangan'),
+  path.join(__dirname, '../storage/uploads/bumdes'),
   path.join(__dirname, '../public/backups')
 ];
 
@@ -186,8 +190,11 @@ app.use('/api/printer', require('./routes/printer.routes'));
 app.use('/api/surat-masuk', require('./routes/surat.routes'));
 app.use('/api/disposisi', require('./routes/disposisi.routes'));
 
-// Push Notifications routes
-app.use('/api/push-notifications', require('./routes/pushNotifications.routes'));
+// Push Notifications routes - Modern Web Push API
+app.use('/api/push-notification', require('./routes/pushNotification'));
+
+// Cron test routes - For testing push notifications manually
+app.use('/api/cron', require('./routes/cron.routes'));
 
 app.use('/api/desa/bumdes', bumdesRoutes);
 app.use('/api/bumdes', bumdesRoutes); // Admin routes
@@ -201,6 +208,7 @@ app.use('/api/perjadin', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/kegiatan', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/hero-gallery', heroGalleryRoutes);
 app.use('/api/kepala-dinas', kepalaDinasRoutes); // Kepala Dinas dashboard
+app.use('/api/jadwal-kegiatan', require('./routes/jadwalKegiatan.routes')); // Jadwal Kegiatan routes
 app.use('/api/berita', require('./routes/berita.routes')); // Berita routes
 app.use('/api/kelembagaan', kelembagaanRoutes); // Kelembagaan routes (admin/global)
 app.use('/api/kelembagaan/activity-logs', require('./routes/kelembagaanActivityLogs.routes')); // Activity logs
@@ -239,6 +247,8 @@ app.listen(PORT, () => {
   logger.info(`🚀 Server running on port ${PORT}`);
   logger.info(`📝 Environment: ${process.env.NODE_ENV}`);
   logger.info(`🔗 CORS enabled for: ${process.env.CORS_ORIGIN}`);
+  
+  // Initialize scheduler for push notifications
+  schedulerService.init();
 });
-
 module.exports = app;

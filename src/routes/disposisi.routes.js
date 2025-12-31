@@ -2,6 +2,43 @@ const express = require('express');
 const router = express.Router();
 const disposisiController = require('../controllers/disposisi.controller');
 const { auth } = require('../middlewares/auth');
+const multer = require('multer');
+const path = require('path');
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'storage/surat_masuk/');
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'surat-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed!'), false);
+    }
+  },
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB max
+});
+
+/**
+ * @route POST /api/disposisi/surat-masuk
+ * @desc Input surat masuk by pegawai sekretariat
+ * @access Pegawai Sekretariat only (bidang_id = 2)
+ */
+router.post(
+  '/surat-masuk',
+  auth,
+  upload.single('file_surat'),
+  disposisiController.createSuratMasuk
+);
 
 /**
  * @route POST /api/disposisi

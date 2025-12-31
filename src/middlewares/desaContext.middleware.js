@@ -24,7 +24,7 @@ const desaContextMiddleware = (req, res, next) => {
     'superadmin',
     'admin',
     'kepala_dinas',
-    'sekretaris_dinas', 
+    'sekretaris_dinas',
     'kepala_bidang',
     'pegawai',
     'pemberdayaan_masyarakat',
