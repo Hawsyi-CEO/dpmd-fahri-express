@@ -742,9 +742,27 @@ exports.createSuratMasuk = async (req, res, next) => {
     if (req.file) {
       file_path = req.file.path.replace(/\\/g, '/');
       console.log('📎 File uploaded:', file_path);
+    } else {
+      console.warn('⚠️  No file uploaded');
+    }
+
+    // Validate required fields
+    if (!nomor_surat || !asal_surat || !perihal_surat || !tanggal_diterima || !ringkasan_isi) {
+      return res.status(400).json({
+        success: false,
+        message: 'Semua field wajib diisi',
+      });
     }
 
     // Create surat masuk record
+    console.log('📝 Creating surat masuk with data:', {
+      nomor_surat,
+      pengirim: asal_surat,
+      perihal: perihal_surat,
+      tanggal_surat: new Date(tanggal_diterima),
+      file_path,
+    });
+
     const suratMasuk = await prisma.surat_masuk.create({
       data: {
         nomor_surat,
