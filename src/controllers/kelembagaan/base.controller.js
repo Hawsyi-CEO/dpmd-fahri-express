@@ -103,15 +103,30 @@ async function logKelembagaanActivity({
 
 /**
  * Get desa_id from request (supports both desa users and admin)
+ * Priority: req.desaId > query.desa_id > user.desa_id
  */
 function getDesaId(req) {
-  return req.desaId || req.user?.desa_id;
+  return req.desaId || req.query?.desa_id || req.user?.desa_id;
 }
 
 /**
  * Validate desa access
+ * Superadmin and admin can access any desa via desa_id parameter
  */
 function validateDesaAccess(req, res) {
+  const user = req.user;
+  
+  // Superadmin and admin can access any desa via desa_id parameter
+  if (user.role === 'superadmin' || user.role === 'pemberdayaan_masyarakat') {
+    const desaId = req.query?.desa_id || req.desaId || req.user?.desa_id;
+    if (!desaId) {
+      res.status(403).json({ success: false, message: 'desa_id parameter diperlukan untuk admin' });
+      return null;
+    }
+    return desaId;
+  }
+  
+  // For desa users, must have desa_id
   const desaId = getDesaId(req);
   if (!desaId) {
     res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });

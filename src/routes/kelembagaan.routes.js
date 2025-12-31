@@ -34,6 +34,12 @@ router.get('/desa/:id/lpm', summaryController.getDesaLPM.bind(summaryController)
 router.get('/desa/:id/satlinmas', summaryController.getDesaSatlinmas.bind(summaryController));
 router.get('/desa/:id/pkk', summaryController.getDesaPKK.bind(summaryController));
 
+// Admin create endpoints - superadmin can create kelembagaan for any desa
+router.post('/desa/:desaId/karang-taruna', karangTarunaController.createByAdmin.bind(karangTarunaController));
+router.post('/desa/:desaId/lpm', lpmController.createByAdmin.bind(lpmController));
+router.post('/desa/:desaId/satlinmas', satlinmasController.createByAdmin.bind(satlinmasController));
+router.post('/desa/:desaId/pkk', pkkController.createByAdmin.bind(pkkController));
+
 // List endpoints (with optional desa_id query parameter)
 router.get('/rw', rwController.listRW.bind(rwController));
 router.get('/rt', rtController.listRT.bind(rtController));
@@ -42,6 +48,32 @@ router.get('/karang-taruna', karangTarunaController.list.bind(karangTarunaContro
 router.get('/lpm', lpmController.list.bind(lpmController));
 router.get('/satlinmas', satlinmasController.list.bind(satlinmasController));
 router.get('/pkk', pkkController.list.bind(pkkController));
+
+// Create endpoints (supports desa_id query parameter for admin)
+router.post('/rw', rwController.createRW.bind(rwController));
+router.post('/rt', rtController.createRT.bind(rtController));
+router.post('/posyandu', posyanduController.createPosyandu.bind(posyanduController));
+
+// Update endpoints (supports desa_id query parameter for admin)
+router.put('/rw/:id', rwController.updateRW.bind(rwController));
+router.put('/rt/:id', rtController.updateRT.bind(rtController));
+router.put('/posyandu/:id', posyanduController.updatePosyandu.bind(posyanduController));
+
+// Toggle endpoints (supports desa_id query parameter for admin)
+router.put('/rw/:id/toggle-status', rwController.toggleStatus.bind(rwController));
+router.put('/rw/:id/toggle-verification', rwController.toggleVerification.bind(rwController));
+router.put('/rt/:id/toggle-status', rtController.toggleStatus.bind(rtController));
+router.put('/rt/:id/toggle-verification', rtController.toggleVerification.bind(rtController));
+router.put('/posyandu/:id/toggle-status', posyanduController.toggleStatus.bind(posyanduController));
+router.put('/posyandu/:id/toggle-verification', posyanduController.toggleVerification.bind(posyanduController));
+router.put('/karang-taruna/:id/toggle-status', karangTarunaController.toggleStatus.bind(karangTarunaController));
+router.put('/karang-taruna/:id/toggle-verification', karangTarunaController.toggleVerification.bind(karangTarunaController));
+router.put('/lpm/:id/toggle-status', lpmController.toggleStatus.bind(lpmController));
+router.put('/lpm/:id/toggle-verification', lpmController.toggleVerification.bind(lpmController));
+router.put('/satlinmas/:id/toggle-status', satlinmasController.toggleStatus.bind(satlinmasController));
+router.put('/satlinmas/:id/toggle-verification', satlinmasController.toggleVerification.bind(satlinmasController));
+router.put('/pkk/:id/toggle-status', pkkController.toggleStatus.bind(pkkController));
+router.put('/pkk/:id/toggle-verification', pkkController.toggleVerification.bind(pkkController));
 
 // Detail endpoints
 router.get('/rw/:id', rwController.showRW.bind(rwController));
@@ -53,8 +85,9 @@ router.get('/satlinmas/:id', satlinmasController.show.bind(satlinmasController))
 router.get('/pkk/:id', pkkController.show.bind(pkkController));
 
 // Pengurus endpoints (polymorphic relation)
-router.get('/pengurus', pengurusController.getPengurusByKelembagaan.bind(pengurusController));
+router.get('/pengurus/by-kelembagaan', pengurusController.getPengurusByKelembagaan.bind(pengurusController));
 router.get('/pengurus/history', pengurusController.getPengurusHistory.bind(pengurusController));
 router.get('/pengurus/:id', pengurusController.showPengurus.bind(pengurusController));
+router.get('/pengurus', pengurusController.getPengurusByKelembagaan.bind(pengurusController));
 
 module.exports = router;
