@@ -45,7 +45,7 @@ class RTController {
         items.map(async (rt) => {
           const ketua = await prisma.pengurus.findFirst({
             where: {
-              pengurusable_type: 'rts',
+              pengurusable_type: 'rt',
               pengurusable_id: rt.id,
               status_jabatan: 'aktif',
               jabatan: {
@@ -384,7 +384,7 @@ class RTController {
         items.map(async (rt) => {
           const ketua = await prisma.pengurus.findFirst({
             where: {
-              pengurusable_type: 'rts',
+              pengurusable_type: 'rt',
               pengurusable_id: rt.id,
               status_jabatan: 'aktif',
               jabatan: {

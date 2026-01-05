@@ -393,18 +393,125 @@ class PengurusController {
    */
   async showPengurus(req, res) {
     try {
+      console.log('🔍 [showPengurus] Getting pengurus with ID:', req.params.id);
+      
       const pengurus = await prisma.pengurus.findUnique({
         where: { id: String(req.params.id) }
       });
 
       if (!pengurus) {
+        console.log('❌ [showPengurus] Pengurus not found');
         return res.status(404).json({ success: false, message: 'Pengurus tidak ditemukan' });
       }
+
+      console.log('📊 [showPengurus] Raw data from database:', {
+        id: pengurus.id,
+        nama_lengkap: pengurus.nama_lengkap,
+        nik: pengurus.nik,
+        status_verifikasi: pengurus.status_verifikasi,
+        status_verifikasi_type: typeof pengurus.status_verifikasi
+      });
+      console.log('📤 [showPengurus] Full pengurus object:', JSON.stringify(pengurus, null, 2));
 
       res.json({ success: true, data: pengurus });
     } catch (error) {
       console.error('Error in showPengurus:', error);
       res.status(500).json({ success: false, message: 'Gagal mengambil data pengurus', error: error.message });
+    }
+  }
+
+  /**
+   * Update pengurus verification status (for admin only)
+   * PUT /api/admin/pengurus/:id/verifikasi
+   */
+  async updateVerifikasi(req, res) {
+    try {
+      console.log('🔐 [updateVerifikasi] Request received');
+      console.log('👤 User:', {
+        id: req.user.id,
+        name: req.user.name,
+        role: req.user.role,
+        bidang_id: req.user.bidang_id
+      });
+      console.log('📋 Params:', req.params);
+      console.log('📦 Body:', req.body);
+      
+      const user = req.user;
+      
+      // Validate admin access (only admin bidang PMD or superadmin)
+      const isAdmin = user.role === 'superadmin' || 
+                     (user.role === 'kepala_bidang' && user.bidang_id === 5) || 
+                     (user.role === 'pegawai' && user.bidang_id === 5);
+      
+      console.log('✅ Is admin check:', isAdmin);
+      
+      if (!isAdmin) {
+        console.log('❌ Access denied - not admin');
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Hanya admin bidang Pemberdayaan Masyarakat yang dapat mengubah status verifikasi' 
+        });
+      }
+
+      const { status_verifikasi } = req.body;
+      
+      if (!status_verifikasi || !['verified', 'unverified'].includes(status_verifikasi)) {
+        console.log('❌ Invalid status_verifikasi:', status_verifikasi);
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Status verifikasi harus "verified" atau "unverified"' 
+        });
+      }
+
+      console.log('🔍 Finding pengurus with ID:', req.params.id);
+      const existing = await prisma.pengurus.findUnique({
+        where: { id: String(req.params.id) }
+      });
+
+      if (!existing) {
+        console.log('❌ Pengurus not found');
+        return res.status(404).json({ success: false, message: 'Pengurus tidak ditemukan' });
+      }
+
+      console.log('📊 Current pengurus:', {
+        id: existing.id,
+        nama_lengkap: existing.nama_lengkap,
+        current_status: existing.status_verifikasi
+      });
+
+      console.log('💾 Updating status to:', status_verifikasi);
+      const updated = await prisma.pengurus.update({
+        where: { id: String(req.params.id) },
+        data: { status_verifikasi }
+      });
+
+      console.log('✅ Pengurus updated successfully');
+
+      // Log activity
+      await logKelembagaanActivity({
+        kelembagaanType: updated.pengurusable_type,
+        kelembagaanId: updated.pengurusable_id,
+        kelembagaanNama: `${updated.pengurusable_type} - ${updated.pengurusable_id}`,
+        desaId: updated.desa_id,
+        activityType: ACTIVITY_TYPES.VERIFY_PENGURUS,
+        entityType: ENTITY_TYPES.PENGURUS,
+        entityId: updated.id,
+        entityName: `${updated.nama_lengkap} (${updated.jabatan})`,
+        oldValue: { status_verifikasi: existing.status_verifikasi },
+        newValue: { status_verifikasi: updated.status_verifikasi },
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role
+      });
+
+      console.log('✅ Activity logged successfully');
+      console.log('📤 Sending response...');
+      
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('❌ Error in updateVerifikasi:', error);
+      console.error('Stack trace:', error.stack);
+      res.status(500).json({ success: false, message: 'Gagal mengubah status verifikasi', error: error.message });
     }
   }
 }

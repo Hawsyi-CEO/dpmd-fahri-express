@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DPMD Database Schema Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            padding: 10px;
+            background: #ecf0f1;
+            border-left: 4px solid #3498db;
+        }
+        .diagram {
+            margin: 30px 0;
+            padding: 20px;
+            background: #fafafa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .info {
+            background: #e8f4f8;
+            padding: 15px;
+            border-left: 4px solid #3498db;
+            margin: 20px 0;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: #3498db;
+            color: white;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .stat-card h3 {
+            margin: 0;
+            font-size: 2em;
+        }
+        .stat-card p {
+            margin: 5px 0 0 0;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 DPMD Database Schema Diagram</h1>
+        <p><strong>Database:</strong> MySQL | <strong>ORM:</strong> Prisma | <strong>Generated:</strong> December 31, 2025</p>
+        
+        <div class="info">
+            <strong>🎯 Project:</strong> DPMD Bogor - Sistem Informasi Pemberdayaan Masyarakat Desa
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <h3>32+</h3>
+                <p>Total Tables</p>
+            </div>
+            <div class="stat-card" style="background: #e74c3c;">
+                <h3>10</h3>
+                <p>Main Modules</p>
+            </div>
+            <div class="stat-card" style="background: #2ecc71;">
+                <h3>8</h3>
+                <p>Kelembagaan Types</p>
+            </div>
+            <div class="stat-card" style="background: #f39c12;">
+                <h3>2</h3>
+                <p>Activity Log Types</p>
+            </div>
+        </div>
+
+        <!-- Module 1: Core User & Auth -->
+        <h2>1. Core User & Auth Module</h2>
+        <div class="diagram">
+            <div class="mermaid">
+erDiagram
+    users ||--o{ kelembagaan_activity_logs : creates
+    users ||--o{ activity_logs : performs
+    users ||--o{ surat_masuk : creates
+    users ||--o{ disposisi : "dari/ke"
+    users ||--o{ lampiran_surat : uploads
+    users ||--o{ push_subscriptions : has
+    users ||--o{ jadwal_kegiatan : "creates/approves"
+    users ||--o| pegawai : "linked to"
+    users ||--o{ app_settings : updates
+    
+    users {
+        bigint id PK
+        string name
+        string email UK
+        string password
+        enum role
+        bigint kecamatan_id
+        bigint desa_id
+        bigint bidang_id
+        bigint pegawai_id FK
+        string avatar
+        boolean is_active
+    }
+    
+    pegawai {
+        bigint id_pegawai PK
+        bigint id_bidang FK
+        string nama_pegawai
+    }
+    
+    bidangs {
+        bigint id PK
+        string nama
+    }
+    
+    pegawai }o--|| bidangs : "belongs to"
+            </div>
+        </div>
+
+        <!-- Module 2: Kelembagaan Main -->
+        <h2>2. Kelembagaan Module (Main Structure)</h2>
+        <div class="diagram">
+            <div class="mermaid">
+erDiagram
+    desas ||--o{ rws : has
+    desas ||--o{ rts : has
+    desas ||--o{ posyandus : has
+    desas ||--o{ karang_tarunas : has
+    desas ||--o{ lpms : has
+    desas ||--o{ pkks : has
+    desas ||--o{ satlinmas : has
+    desas ||--o{ aparatur_desa : has
+    desas ||--o{ pengurus : has
+    desas ||--o{ produk_hukums : has
+    desas ||--o| profil_desas : has
+    desas ||--o{ kelembagaan_activity_logs : tracked
+    
+    kecamatans ||--o{ desas : contains
+    
+    desas {
+        bigint id PK
+        bigint kecamatan_id FK
+        string kode UK
+        string nama
+        enum status_pemerintahan
+        boolean is_musdesus_target
+    }
+    
+    kecamatans {
+        bigint id PK
+        string kode UK
+        string nama
+    }
+            </div>
+        </div>
+
+        <!-- Module 3: RW & RT -->
+        <h2>3. RW & RT Structure</h2>
+        <div class="diagram">
+            <div class="mermaid">
+erDiagram
+    desas ||--o{ rws : "located in"
+    rws ||--o{ rts : contains
+    rws }o--o| produk_hukums : "linked to"
+    rts }o--o| produk_hukums : "linked to"
+    
+    rws {
+        string id PK
+        bigint desa_id FK
+        string nomor
+        string alamat
+        enum status_kelembagaan
+        enum status_verifikasi
+        string produk_hukum_id FK
+    }
+    
+    rts {
+        string id PK
+        string rw_id FK
+        bigint desa_id FK
+        string nomor
+        string alamat
+        enum status_kelembagaan
+        enum status_verifikasi
+        string produk_hukum_id FK
+    }
+            </div>
+        </div>
+
+        <!-- Module 4: Kelembagaan Entities -->
+        <h2>4. Kelembagaan Entities (Posyandu, LPM, PKK, Karang Taruna, Satlinmas)</h2>
+        <div class="diagram">
+            <div class="mermaid">
+erDiagram
+    desas ||--o{ posyandus : has
+    desas ||--o{ karang_tarunas : has
+    desas ||--o{ lpms : has
+    desas ||--o{ pkks : has
+    desas ||--o{ satlinmas : has
+    
+    posyandus }o--o| produk_hukums : "linked to"
+    karang_tarunas }o--o| produk_hukums : "linked to"
+    lpms }o--o| produk_hukums : "linked to"
+    pkks }o--o| produk_hukums : "linked to"
+    satlinmas }o--o| produk_hukums : "linked to"
+    
+    posyandus {
+        string id PK
+        bigint desa_id FK
+        string nama
+        enum status_kelembagaan
+        enum status_verifikasi
+    }
+    
+    lpms {
+        string id PK
+        bigint desa_id FK
+        string nama
+        enum status_kelembagaan
+    }
+    
+    pkks {
+        string id PK
+        bigint desa_id FK
+        string nama
+        enum status_kelembagaan
+    }
+    
+    karang_tarunas {
+        string id PK
+        bigint desa_id FK
+        string nama
+        enum status_kelembagaan
+    }
+    
+    satlinmas {
+        string id PK
+        bigint desa_id FK
+        string nama
+        enum status_kelembagaan
+    }
+            </div>
+        </div>
+
+        <!-- Module 5: Pengurus -->
+        <h2>5. Pengurus (Polymorphic Relation)</h2>
+        <div class="diagram">
+            <div class="mermaid">
+erDiagram
+    desas ||--o{ pengurus : has
+    pengurus }o--o| produk_hukums : "SK pengangkatan"
+    
+    pengurus {
+        string id PK
+        bigint desa_id FK
+        string pengurusable_id
+        string pengurusable_type
+        string jabatan
+        string nama_lengkap
+        string nik
+        date tanggal_mulai_jabatan
+        date tanggal_akhir_jabatan
+        enum status_jabatan
+        enum status_verifikasi
+        string produk_hukum_id FK
+    }
+            </div>
+        </div>
+        <div class="info">
+            <strong>💡 Polymorphic:</strong> pengurusable_type dapat berisi: rws, rts, posyandus, karang_tarunas, lpms, pkks, satlinmas
+        </div>
+
+        <!-- Module 6: Produk Hukum -->
+        <h2>6. Produk Hukum (Legal Documents)</h2>
+        <div class="diagram">
+            <div class="mermaid">
+erDiagram
+    desas ||--o{ produk_hukums : issues
+    produk_hukums ||--o{ aparatur_desa : "for"
+    produk_hukums ||--o{ bumdes : "PERDES/SK"
+    produk_hukums ||--o{ rws : "for"
+    produk_hukums ||--o{ rts : "for"
+    produk_hukums ||--o{ posyandus : "for"
+    
+    produk_hukums {
+        string id PK
+        string uuid UK
+        bigint desa_id FK
+        string judul
+        string nomor
+        int tahun
+        enum jenis
+        enum singkatan_jenis
+        date tanggal_penetapan
+        enum status_peraturan
+        string file
+    }
+            </div>
+        </div>
+
+        <!-- Module 7: BUMDes -->
+        <h2>7. BUMDes Module</h2>
+        <div class="diagram">
+            <div class="mermaid">
+erDiagram
+    bumdes }o--o| produk_hukums : "PERDES"
+    bumdes }o--o| produk_hukums : "SK BUMDes"
+    
+    bumdes {
+        int id PK
+        string kode_desa
+        string namabumdesa
+        enum status
+        string NIB
+        string NPWP
+        string NamaDirektur
+        decimal Omset2024
+        decimal Laba2024
+        string produk_hukum_perdes_id FK
+        string produk_hukum_sk_bumdes_id FK
+    }
+            </div>
+        </div>
+
+        <!-- Module 8: Surat Masuk & Disposisi -->
+        <h2>8. Surat Masuk & Disposisi Module</h2>
+        <div class="diagram">
+            <div class="mermaid">
+erDiagram
+    users ||--o{ surat_masuk : creates
+    surat_masuk ||--o{ disposisi : has
+    surat_masuk ||--o{ lampiran_surat : has
+    users ||--o{ disposisi : "dari"
+    users ||--o{ disposisi : "ke"
+    
+    surat_masuk {
+        bigint id PK
+        string nomor_surat UK
+        date tanggal_surat
+        string pengirim
+        text perihal
+        enum jenis_surat
+        enum status
+        bigint created_by FK
+    }
+    
+    disposisi {
+        bigint id PK
+        bigint surat_id FK
+        bigint dari_user_id FK
+        bigint ke_user_id FK
+        enum instruksi
+        enum status
+        int level_disposisi
+    }
+    
+    lampiran_surat {
+        bigint id PK
+        bigint surat_id FK
+        string file_path
+        bigint uploaded_by FK
+    }
+            </div>
+        </div>
+
+        <!-- Module 9: Jadwal Kegiatan -->
+        <h2>9. Jadwal Kegiatan (Activity Scheduling)</h2>
+        <div class="diagram">
+            <div class="mermaid">
+erDiagram
+    bidangs ||--o{ jadwal_kegiatan : plans
+    users ||--o{ jadwal_kegiatan : creates
+    users ||--o{ jadwal_kegiatan : approves
+    
+    jadwal_kegiatan {
+        bigint id PK
+        string judul
+        bigint bidang_id FK
+        datetime tanggal_mulai
+        datetime tanggal_selesai
+        enum status
+        enum prioritas
+        enum kategori
+        decimal anggaran
+        bigint created_by FK
+        bigint approved_by FK
+    }
+            </div>
+        </div>
+
+        <!-- Module 10: Activity Logs -->
+        <h2>10. Activity Logs Module</h2>
+        <div class="diagram">
+            <div class="mermaid">
+erDiagram
+    users ||--o{ kelembagaan_activity_logs : performs
+    users ||--o{ activity_logs : performs
+    desas ||--o{ kelembagaan_activity_logs : tracked
+    
+    kelembagaan_activity_logs {
+        string id PK
+        string kelembagaan_type
+        string kelembagaan_id
+        bigint desa_id FK
+        string activity_type
+        string entity_type
+        bigint user_id FK
+        json old_value
+        json new_value
+    }
+    
+    activity_logs {
+        bigint id PK
+        bigint user_id FK
+        string module
+        string action
+        string entity_type
+        json old_value
+        json new_value
+    }
+            </div>
+        </div>
+
+        <div class="info">
+            <h3>📌 Key Features</h3>
+            <ul>
+                <li><strong>Polymorphic Relations:</strong> Pengurus dapat terhubung ke berbagai kelembagaan</li>
+                <li><strong>Multi-level Disposisi:</strong> Surat dapat didisposisikan bertingkat</li>
+                <li><strong>Dual Activity Tracking:</strong> Specific kelembagaan logs & general activity logs</li>
+                <li><strong>Comprehensive Status:</strong> status_kelembagaan + status_verifikasi untuk QA</li>
+                <li><strong>Legal Document Linking:</strong> Produk hukum dapat di-link ke berbagai entitas</li>
+            </ul>
+        </div>
+
+        <div style="margin-top: 40px; padding: 20px; background: #ecf0f1; border-radius: 6px;">
+            <h3>🔗 Useful Links</h3>
+            <ul>
+                <li><a href="https://www.prisma.io/docs" target="_blank">Prisma Documentation</a></li>
+                <li><a href="https://mermaid.js.org/" target="_blank">Mermaid Documentation</a></li>
+                <li><a href="../prisma/schema.prisma">View schema.prisma</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#3498db',
+                primaryTextColor: '#2c3e50',
+                primaryBorderColor: '#2980b9',
+                lineColor: '#34495e',
+                secondaryColor: '#ecf0f1',
+                tertiaryColor: '#fff'
+            }
+        });
+    </script>
+</body>
+</html>

@@ -66,7 +66,7 @@ class AppSettingsController {
 
       // Check if user has permission (only superadmin and pemberdayaan_masyarakat)
       const userRole = req.user?.role;
-      const allowedRoles = ['superadmin', 'pemberdayaan_masyarakat', 'pmd'];
+      const allowedRoles = ['superadmin','kepala_bidang'];
       
       console.log('🔐 [App Settings] Update attempt - User role:', userRole, 'Allowed:', allowedRoles);
       

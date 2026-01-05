@@ -90,4 +90,7 @@ router.get('/pengurus/history', pengurusController.getPengurusHistory.bind(pengu
 router.get('/pengurus/:id', pengurusController.showPengurus.bind(pengurusController));
 router.get('/pengurus', pengurusController.getPengurusByKelembagaan.bind(pengurusController));
 
+// Admin only: Update pengurus verification status
+router.put('/pengurus/:id/verifikasi', pengurusController.updateVerifikasi.bind(pengurusController));
+
 module.exports = router;

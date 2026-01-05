@@ -41,7 +41,7 @@ class RWController {
         items.map(async (rw) => {
           const ketua = await prisma.pengurus.findFirst({
             where: {
-              pengurusable_type: 'rws',
+              pengurusable_type: 'rw',
               pengurusable_id: rw.id,
               status_jabatan: 'aktif',
               jabatan: {
@@ -110,7 +110,7 @@ class RWController {
         (item.rts || []).map(async (rt) => {
           const ketua = await prisma.pengurus.findFirst({
             where: {
-              pengurusable_type: 'rts',
+              pengurusable_type: 'rt',
               pengurusable_id: rt.id,
               status_jabatan: 'aktif',
               jabatan: {
@@ -435,7 +435,7 @@ class RWController {
         items.map(async (rw) => {
           const ketua = await prisma.pengurus.findFirst({
             where: {
-              pengurusable_type: 'rws',
+              pengurusable_type: 'rw',
               pengurusable_id: rw.id,
               status_jabatan: 'aktif',
               jabatan: {
@@ -509,7 +509,7 @@ class RWController {
         (rw.rts || []).map(async (rt) => {
           const ketua = await prisma.pengurus.findFirst({
             where: {
-              pengurusable_type: 'rts',
+              pengurusable_type: 'rt',
               pengurusable_id: rt.id,
               status_jabatan: 'aktif',
               jabatan: {

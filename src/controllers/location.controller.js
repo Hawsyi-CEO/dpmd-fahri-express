@@ -60,6 +60,50 @@ class LocationController {
     }
   }
 
+  // GET /api/desas/:id - Get single desa by ID
+  async getDesaById(req, res, next) {
+    try {
+      const { id } = req.params;
+      logger.info(`Fetching desa with ID: ${id}`);
+
+      const desa = await prisma.desas.findUnique({
+        where: { id: BigInt(id) },
+        include: {
+          kecamatans: true
+        }
+      });
+
+      if (!desa) {
+        return res.status(404).json({
+          success: false,
+          message: 'Desa tidak ditemukan'
+        });
+      }
+
+      logger.info(`Found desa: ${desa.nama}`);
+
+      // Convert BigInt to String for JSON serialization
+      const serializedData = {
+        ...desa,
+        id: desa.id.toString(),
+        kecamatan_id: desa.kecamatan_id.toString(),
+        kecamatans: desa.kecamatans ? {
+          ...desa.kecamatans,
+          id: desa.kecamatans.id.toString()
+        } : null
+      };
+
+      return res.json({
+        success: true,
+        data: serializedData
+      });
+
+    } catch (error) {
+      logger.error('Error getting desa by ID:', error);
+      next(error);
+    }
+  }
+
   // GET /api/desas/kecamatan/:kecamatanId - Get desas by kecamatan
   async getDesasByKecamatan(req, res, next) {
     try {

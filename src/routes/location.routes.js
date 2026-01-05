@@ -12,6 +12,9 @@ router.get('/kecamatans', auth, checkRole(...locationRoles), locationController.
 // Get all desas
 router.get('/desas', auth, checkRole(...locationRoles), locationController.getDesas);
 
+// Get single desa by ID
+router.get('/desas/:id', auth, checkRole(...locationRoles), locationController.getDesaById);
+
 // Get desas by kecamatan
 router.get('/desas/kecamatan/:kecamatanId', auth, checkRole(...locationRoles), locationController.getDesasByKecamatan);
 
