@@ -4,7 +4,7 @@ const locationController = require('../controllers/location.controller');
 const { auth, checkRole } = require('../middlewares/auth');
 
 // Define roles yang bisa akses location data (hampir semua role authenticated)
-const locationRoles = ['desa', 'dinas', 'superadmin', 'sarana_prasarana', 'pegawai', 'kepala_bidang', 'ketua_tim', 'kepala_dinas', 'kekayaan_keuangan', 'pemberdayaan_masyarakat', 'pemerintahan_desa'];
+const locationRoles = ['desa', 'kecamatan', 'dinas', 'superadmin', 'sarana_prasarana', 'pegawai', 'kepala_bidang', 'ketua_tim', 'kepala_dinas', 'kekayaan_keuangan', 'pemberdayaan_masyarakat', 'pemerintahan_desa'];
 
 // Get all kecamatans
 router.get('/kecamatans', auth, checkRole(...locationRoles), locationController.getKecamatans);
