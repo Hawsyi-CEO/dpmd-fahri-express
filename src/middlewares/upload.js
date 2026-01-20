@@ -330,6 +330,43 @@ const uploadPengurus = multer({
   }
 });
 
+// Storage configuration for Profil Desa (Foto Kantor Desa)
+const storageProfilDesa = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'storage/uploads/profil_desa');
+  },
+  filename: function (req, file, cb) {
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    const nameWithoutExt = path.basename(file.originalname, ext);
+    const sanitizedName = nameWithoutExt.replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `foto_kantor_desa_${timestamp}${ext}`;
+    
+    cb(null, filename);
+  }
+});
+
+// File filter for Profil Desa (JPG, JPEG, PNG for foto kantor desa)
+const profilDesaFileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const allowedExtensions = ['.jpg', '.jpeg', '.png'];
+  const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+  
+  if (allowedExtensions.includes(ext) && allowedMimeTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Hanya file JPG, JPEG, dan PNG yang diperbolehkan untuk foto kantor desa'), false);
+  }
+};
+
+const uploadProfilDesa = multer({
+  storage: storageProfilDesa,
+  fileFilter: profilDesaFileFilter,
+  limits: {
+    fileSize: 2 * 1024 * 1024 // 2MB for foto kantor desa
+  }
+});
+
 module.exports = {
   uploadBumdes,
   uploadMusdesus,
@@ -339,5 +376,6 @@ module.exports = {
   uploadProdukHukum,
   uploadSuratMasuk,
   uploadAparaturDesa,
-  uploadPengurus
+  uploadPengurus,
+  uploadProfilDesa
 };
