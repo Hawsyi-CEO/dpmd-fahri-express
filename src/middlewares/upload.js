@@ -367,6 +367,47 @@ const uploadProfilDesa = multer({
   }
 });
 
+// Storage configuration for BANKEU PROPOSAL
+const storageBankeuProposal = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const dir = 'storage/uploads/bankeu';
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: function (req, file, cb) {
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    const nameWithoutExt = path.basename(file.originalname, ext)
+      .replace(/[^a-zA-Z0-9]/g, '_')
+      .substring(0, 50);
+    const filename = `${timestamp}_${nameWithoutExt}${ext}`;
+    cb(null, filename);
+  }
+});
+
+// File filter for Bankeu Proposal (PDF, DOC, DOCX)
+const bankeuFileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const allowedExtensions = ['.pdf'];
+  const allowedMimeTypes = ['application/pdf'];
+  
+  if (allowedExtensions.includes(ext) && allowedMimeTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Hanya file PDF yang diperbolehkan untuk proposal'), false);
+  }
+};
+
+const uploadBankeuProposal = multer({
+  storage: storageBankeuProposal,
+  fileFilter: bankeuFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB for proposals
+  }
+});
+
 module.exports = {
   uploadBumdes,
   uploadMusdesus,
@@ -377,5 +418,7 @@ module.exports = {
   uploadSuratMasuk,
   uploadAparaturDesa,
   uploadPengurus,
-  uploadProfilDesa
+  uploadProfilDesa,
+  bankeuProposal: uploadBankeuProposal.single('file')
+}; main
 };

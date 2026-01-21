@@ -68,6 +68,8 @@ const vpnDashboardRoutes = require('./routes/vpnDashboard.routes');
 const vpnCoreDashboardRoutes = require('./routes/vpnCoreDashboard.routes');
 const pegawaiRoutes = require('./routes/pegawai.routes');
 const bidangRoutes = require('./routes/bidang.routes');
+const bankeuProposalRoutes = require('./routes/bankeuProposal.routes');
+const bankeuVerificationRoutes = require('./routes/bankeuVerification.routes');
 
 const app = express();
 
@@ -206,6 +208,8 @@ app.use('/api/desa', desaKelembagaanRoutes); // Desa kelembagaan routes (RW, RT,
 app.use('/api/desa/aparatur-desa', aparaturDesaRoutes); // Aparatur Desa routes
 app.use('/api/profil-desa', profilDesaRoutes); // Profil Desa routes
 app.use('/api/desa/produk-hukum', produkHukumRoutes); // Produk Hukum routes (desa alias)
+app.use('/api/desa/bankeu', bankeuProposalRoutes); // Bankeu proposal routes for desa
+app.use('/api/kecamatan/bankeu', bankeuVerificationRoutes); // Bankeu verification routes for kecamatan
 app.use('/api/perjalanan-dinas', perjalananDinasRoutes);
 app.use('/api/perjadin', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/kegiatan', perjalananDinasRoutes); // Alias for perjadin
