@@ -420,5 +420,4 @@ module.exports = {
   uploadPengurus,
   uploadProfilDesa,
   bankeuProposal: uploadBankeuProposal.single('file')
-}; main
 };
