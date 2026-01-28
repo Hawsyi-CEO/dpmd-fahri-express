@@ -32,13 +32,19 @@ const auth = async (req, res, next) => {
       ? parseInt(decoded.bidang_id, 10)
       : null;
 
+    // Coerce dinas_id to integer
+    const dinasId = decoded.dinas_id !== undefined && decoded.dinas_id !== null
+      ? parseInt(decoded.dinas_id, 10)
+      : null;
+
     req.user = {
       id: decoded.id,
       name: decoded.name,
       email: decoded.email,
       role: decoded.role,
       desa_id: Number.isNaN(desaId) ? null : desaId,
-      bidang_id: Number.isNaN(bidangId) ? null : bidangId
+      bidang_id: Number.isNaN(bidangId) ? null : bidangId,
+      dinas_id: Number.isNaN(dinasId) ? null : dinasId
     };
     
     logger.info(`✅ Auth successful: User ${req.user.id} (${req.user.role}) - Bidang: ${req.user.bidang_id}`);
@@ -129,7 +135,8 @@ const generateToken = (user) => {
       role: user.role,
       desa_id: convertBigInt(user.desa_id),
       kecamatan_id: convertBigInt(user.kecamatan_id),
-      bidang_id: convertBigInt(user.bidang_id)
+      bidang_id: convertBigInt(user.bidang_id),
+      dinas_id: convertBigInt(user.dinas_id)
     },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN }
@@ -222,4 +229,33 @@ const vpnAuth = async (req, res, next) => {
   }
 };
 
-module.exports = { auth, checkRole, generateToken, vpnAuth };
+// Middleware to check if user has dinas_terkait role and dinas_id
+const authorizeDinas = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Unauthorized - No user found'
+    });
+  }
+
+  if (req.user.role !== 'dinas_terkait') {
+    logger.warn(`❌ Dinas access denied - User ${req.user.email} has role ${req.user.role}, expected dinas_terkait`);
+    return res.status(403).json({
+      success: false,
+      message: 'Access forbidden - Requires dinas_terkait role'
+    });
+  }
+
+  if (!req.user.dinas_id) {
+    logger.warn(`❌ Dinas access denied - User ${req.user.email} has no dinas_id assigned`);
+    return res.status(403).json({
+      success: false,
+      message: 'Access forbidden - No dinas assignment found'
+    });
+  }
+
+  logger.info(`✅ Dinas authorization passed - User ${req.user.email} (dinas_id: ${req.user.dinas_id})`);
+  next();
+};
+
+module.exports = { auth, checkRole, generateToken, vpnAuth, authorizeDinas };

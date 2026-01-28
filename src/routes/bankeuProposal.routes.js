@@ -16,7 +16,16 @@ router.get('/proposals', bankeuProposalController.getProposalsByDesa);
 // Upload new proposal
 router.post('/proposals', upload.bankeuProposal, bankeuProposalController.uploadProposal);
 
-// Submit all proposals to kecamatan
+// Update existing proposal (for revision)
+router.patch('/proposals/:id', upload.bankeuProposal, bankeuProposalController.updateProposal);
+
+// Replace file in existing proposal (before submission)
+router.patch('/proposals/:id/replace-file', upload.bankeuProposal, bankeuProposalController.replaceFile);
+
+// Submit all proposals to dinas terkait (NEW FLOW)
+router.post('/submit-to-dinas', bankeuProposalController.submitToDinas);
+
+// Submit all proposals to kecamatan (OLD - keep for backward compatibility)
 router.post('/submit-to-kecamatan', bankeuProposalController.submitToKecamatan);
 
 // Delete proposal

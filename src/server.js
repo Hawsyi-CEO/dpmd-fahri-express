@@ -68,6 +68,7 @@ const pegawaiRoutes = require('./routes/pegawai.routes');
 const bidangRoutes = require('./routes/bidang.routes');
 const bankeuProposalRoutes = require('./routes/bankeuProposal.routes');
 const bankeuVerificationRoutes = require('./routes/bankeuVerification.routes');
+const dinasVerificationRoutes = require('./routes/dinasVerification.routes');
 
 const app = express();
 
@@ -143,6 +144,9 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // Static files - MUST BE BEFORE API ROUTES
+// Handle favicon
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 // Serve uploaded files with CORS headers
 app.use('/storage', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -207,6 +211,8 @@ app.use('/api/desa/aparatur-desa', aparaturDesaRoutes); // Aparatur Desa routes
 app.use('/api/desa/produk-hukum', produkHukumRoutes); // Produk Hukum routes (desa alias)
 app.use('/api/desa/bankeu', bankeuProposalRoutes); // Bankeu proposal routes for desa
 app.use('/api/kecamatan/bankeu', bankeuVerificationRoutes); // Bankeu verification routes for kecamatan
+app.use('/api/dinas/bankeu', dinasVerificationRoutes); // Bankeu verification routes for dinas terkait
+app.use('/api/contoh-proposal', require('./routes/contohProposal.routes')); // Example proposal files
 app.use('/api/perjalanan-dinas', perjalananDinasRoutes);
 app.use('/api/perjadin', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/kegiatan', perjalananDinasRoutes); // Alias for perjadin
