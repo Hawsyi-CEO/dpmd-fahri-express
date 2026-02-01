@@ -22,11 +22,15 @@ router.patch('/proposals/:id', upload.bankeuProposal, bankeuProposalController.u
 // Replace file in existing proposal (before submission)
 router.patch('/proposals/:id/replace-file', upload.bankeuProposal, bankeuProposalController.replaceFile);
 
-// Submit all proposals to dinas terkait (NEW FLOW)
-router.post('/submit-to-dinas', bankeuProposalController.submitToDinas);
+// Submit all proposals to dinas terkait - FIRST TIME SUBMISSION (NEW FLOW 2026-01-30)
+router.post('/submit-to-dinas-terkait', bankeuProposalController.submitToDinasTerkait);
 
-// Submit all proposals to kecamatan (OLD - keep for backward compatibility)
-router.post('/submit-to-kecamatan', bankeuProposalController.submitToKecamatan);
+// Resubmit proposals after revision - UPLOAD ULANG (NEW FLOW 2026-01-30)
+router.post('/resubmit', bankeuProposalController.resubmitProposal);
+
+// OLD ROUTES - Deprecated but kept for backward compatibility
+router.post('/submit-to-dinas', bankeuProposalController.submitToDinasTerkait); // Fallback
+router.post('/submit-to-kecamatan', bankeuProposalController.submitToDinasTerkait); // Redirect to new flow
 
 // Delete proposal
 router.delete('/proposals/:id', bankeuProposalController.deleteProposal);

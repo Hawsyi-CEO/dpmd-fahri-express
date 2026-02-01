@@ -86,17 +86,25 @@ class BankeuProposalController {
           bp.submitted_to_kecamatan,
           bp.submitted_at,
           bp.submitted_to_dinas_at,
+          bp.dinas_status,
+          bp.dinas_catatan,
+          bp.dinas_verified_at,
+          bp.kecamatan_status,
+          bp.kecamatan_catatan,
+          bp.kecamatan_verified_at,
+          bp.dpmd_status,
+          bp.dpmd_catatan,
+          bp.dpmd_verified_at,
           bp.catatan_verifikasi,
           bp.verified_at,
           bp.berita_acara_path,
           bp.berita_acara_generated_at,
-          bp.dinas_status,
-          bp.dinas_catatan,
-          bp.dinas_verified_at,
           bp.created_at,
           bp.updated_at,
           u_verified.name as verified_by_name,
           u_dinas.name as dinas_verified_by_name,
+          u_kecamatan.name as kecamatan_verified_by_name,
+          u_dpmd.name as dpmd_verified_by_name,
           d.nama as desa_nama,
           d.kecamatan_id,
           k.nama as kecamatan_nama,
@@ -105,6 +113,8 @@ class BankeuProposalController {
         FROM bankeu_proposals bp
         LEFT JOIN users u_verified ON bp.verified_by = u_verified.id
         LEFT JOIN users u_dinas ON bp.dinas_verified_by = u_dinas.id
+        LEFT JOIN users u_kecamatan ON bp.kecamatan_verified_by = u_kecamatan.id
+        LEFT JOIN users u_dpmd ON bp.dpmd_verified_by = u_dpmd.id
         LEFT JOIN desas d ON bp.desa_id = d.id
         LEFT JOIN kecamatans k ON d.kecamatan_id = k.id
         LEFT JOIN bankeu_master_kegiatan bmk ON bp.kegiatan_id = bmk.id
@@ -428,23 +438,22 @@ class BankeuProposalController {
         // DON'T reset: verified_by, verified_at (keep for detection)
         replacements.push('pending', false);
       } else {
-        // Returned from Dinas - Reset everything
+        // Returned from Dinas - Keep dinas_status untuk tracking origin
         logger.info(`🔄 Revisi dari Dinas - siap kirim kembali ke Dinas`);
         updates.push(
           'status = ?',
           'submitted_to_kecamatan = ?',
           'submitted_at = NULL',
           'submitted_to_dinas_at = NULL',
-          'verified_by = NULL',
-          'verified_at = NULL',
-          'catatan_verifikasi = NULL',
-          'dinas_status = ?',
-          'dinas_catatan = NULL',
+          // KEEP verified_by and verified_at (track kecamatan approval)
+          // KEEP dinas_status ('rejected'/'revision') untuk tracking bahwa ini dari dinas
+          // KEEP dinas_catatan untuk info
+          // Reset verified_by dan verified_at untuk dinas saja
           'dinas_verified_by = NULL',
           'dinas_verified_at = NULL',
           'updated_at = NOW()'
         );
-        replacements.push('pending', false, 'pending');
+        replacements.push('pending', false);
       }
 
       // Add id at the end for WHERE clause
@@ -732,95 +741,22 @@ class BankeuProposalController {
   }
 
   /**
-   * Submit all proposals to kecamatan (bundle submission)
+   * Submit all proposals to kecamatan (FIRST SUBMISSION - NEW FLOW)
    * POST /api/desa/bankeu/submit-to-kecamatan
+   * Flow: Desa → KECAMATAN → Dinas Terkait → DPMD
    */
-  async submitToKecamatan(req, res) {
-    const transaction = await sequelize.transaction();
-    
-    try {
-      const userId = req.user.id;
-
-      logger.info(`📤 SUBMIT TO KECAMATAN REQUEST - User: ${userId}`);
-
-      // Get desa_id from user
-      const [users] = await sequelize.query(`
-        SELECT desa_id FROM users WHERE id = ?
-      `, { replacements: [userId] });
-
-      if (!users || users.length === 0 || !users[0].desa_id) {
-        await transaction.rollback();
-        return res.status(403).json({
-          success: false,
-          message: 'User tidak terkait dengan desa'
-        });
-      }
-
-      const desaId = users[0].desa_id;
-
-      // Check if there are any proposals from KECAMATAN (verified_at IS NOT NULL)
-      // that are NOT submitted yet (submitted_to_kecamatan = FALSE)
-      const [notSubmittedCount] = await sequelize.query(`
-        SELECT COUNT(*) as total
-        FROM bankeu_proposals
-        WHERE desa_id = ? 
-          AND submitted_to_kecamatan = FALSE
-          AND verified_at IS NOT NULL
-      `, { replacements: [desaId] });
-
-      if (notSubmittedCount[0].total < 1) {
-        await transaction.rollback();
-        return res.status(400).json({
-          success: false,
-          message: 'Tidak ada proposal yang perlu dikirim ke kecamatan'
-        });
-      }
-
-      // Mark ONLY proposals with verified_at (from Kecamatan) as submitted
-      await sequelize.query(`
-        UPDATE bankeu_proposals
-        SET submitted_to_kecamatan = TRUE,
-            submitted_at = NOW()
-        WHERE desa_id = ? 
-          AND submitted_to_kecamatan = FALSE
-          AND verified_at IS NOT NULL
-      `, { 
-        replacements: [desaId],
-        transaction 
-      });
-
-      await transaction.commit();
-
-      logger.info(`✅ Proposals from Kecamatan (desa ${desaId}) submitted to kecamatan`);
-
-      res.json({
-        success: true,
-        message: `${notSubmittedCount[0].total} proposal berhasil dikirim ke kecamatan`
-      });
-    } catch (error) {
-      if (transaction && !transaction.finished) {
-        await transaction.rollback();
-      }
-      logger.error('Error submitting to kecamatan:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Gagal mengirim proposal ke kecamatan',
-        error: error.message
-      });
-    }
-  }
-
   /**
-   * Submit all proposals to DINAS TERKAIT (NEW FLOW)
-   * POST /api/desa/bankeu/submit-to-dinas
+   * Submit proposals to DINAS TERKAIT (FIRST SUBMISSION)
+   * POST /api/desa/bankeu/submit-to-dinas-terkait
+   * NEW FLOW 2026-01-30: Desa → Dinas Terkait (bukan Kecamatan)
    */
-  async submitToDinas(req, res) {
+  async submitToDinasTerkait(req, res) {
     const transaction = await sequelize.transaction();
     
     try {
       const userId = req.user.id;
 
-      logger.info(`📤 SUBMIT TO DINAS REQUEST - User: ${userId}`);
+      logger.info(`📤 SUBMIT TO DINAS TERKAIT (FIRST SUBMISSION) - User: ${userId}`);
 
       // Get desa_id from user
       const [users] = await sequelize.query(`
@@ -837,40 +773,35 @@ class BankeuProposalController {
 
       const desaId = users[0].desa_id;
 
-      // Check if there are any proposals from DINAS (verified_at IS NULL)
-      // Proposals ready to send: submitted_to_kecamatan=FALSE AND submitted_to_dinas_at=NULL AND verified_at=NULL
+      // NEW FLOW 2026-01-30: Submit proposal yang belum pernah submit
+      // Kondisi: submitted_to_dinas_at IS NULL (belum pernah dikirim ke dinas)
       const [notSubmittedCount] = await sequelize.query(`
         SELECT COUNT(*) as total
         FROM bankeu_proposals
         WHERE desa_id = ? 
-          AND submitted_to_kecamatan = FALSE
           AND submitted_to_dinas_at IS NULL
-          AND verified_at IS NULL
+          AND (dinas_status IS NULL OR dinas_status = 'pending')
       `, { replacements: [desaId] });
 
       if (notSubmittedCount[0].total < 1) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Tidak ada proposal yang perlu dikirim ke dinas'
+          message: 'Tidak ada proposal yang perlu dikirim'
         });
       }
 
       const count = notSubmittedCount[0].total;
 
-      // Mark all unsent proposals as submitted to dinas (only from dinas, not from kecamatan)
-      // Set dinas_status to 'pending' for review
+      // Submit to Dinas Terkait
       await sequelize.query(`
         UPDATE bankeu_proposals
         SET submitted_to_dinas_at = NOW(),
             dinas_status = 'pending',
-            dinas_catatan = NULL,
-            dinas_verified_by = NULL,
-            dinas_verified_at = NULL
+            status = 'pending'
         WHERE desa_id = ? 
-          AND submitted_to_kecamatan = FALSE
           AND submitted_to_dinas_at IS NULL
-          AND verified_at IS NULL
+          AND (dinas_status IS NULL OR dinas_status = 'pending')
       `, { 
         replacements: [desaId],
         transaction 
@@ -878,11 +809,11 @@ class BankeuProposalController {
 
       await transaction.commit();
 
-      logger.info(`✅ ${count} proposals from desa ${desaId} submitted to dinas terkait`);
+      logger.info(`✅ ${count} proposals from desa ${desaId} submitted to DINAS TERKAIT`);
 
       res.json({
         success: true,
-        message: `${count} proposal berhasil dikirim ke dinas terkait`
+        message: `${count} proposal berhasil dikirim ke Dinas Terkait`
       });
     } catch (error) {
       if (transaction && !transaction.finished) {
@@ -895,6 +826,168 @@ class BankeuProposalController {
         error: error.message
       });
     }
+  }
+
+  /**
+   * DEPRECATED: Kept for backward compatibility
+   * Use submitToDinasTerkait instead
+   */
+  async submitToKecamatan(req, res) {
+    return this.submitToDinasTerkait(req, res);
+  }
+
+  /**
+   * Resubmit proposals (REVISI dari Dinas/Kecamatan/DPMD)
+   * POST /api/desa/bankeu/resubmit
+   * NEW FLOW 2026-01-30: Desa upload ulang → Dinas Terkait
+   */
+  async resubmitProposal(req, res) {
+    const transaction = await sequelize.transaction();
+    
+    try {
+      const userId = req.user.id;
+
+      logger.info(`📤 RESUBMIT PROPOSAL (REVISI) - User: ${userId}`);
+
+      // Get desa_id from user
+      const [users] = await sequelize.query(`
+        SELECT desa_id FROM users WHERE id = ?
+      `, { replacements: [userId] });
+
+      if (!users || users.length === 0 || !users[0].desa_id) {
+        await transaction.rollback();
+        return res.status(403).json({
+          success: false,
+          message: 'User tidak terkait dengan desa'
+        });
+      }
+
+      const desaId = users[0].desa_id;
+
+      // Get all revision proposals to detect origin
+      // Proposal yang SUDAH UPLOAD ULANG: status='pending' tapi punya dinas_status/kecamatan_status/dpmd_status
+      // DAN belum dikirim ulang (submitted_to_dinas_at IS NULL AND submitted_to_kecamatan = FALSE)
+      const [proposals] = await sequelize.query(`
+        SELECT id, dinas_status, kecamatan_status, dpmd_status, status
+        FROM bankeu_proposals
+        WHERE desa_id = ? 
+          AND status = 'pending'
+          AND submitted_to_dinas_at IS NULL
+          AND submitted_to_kecamatan = FALSE
+          AND (dinas_status IS NOT NULL OR kecamatan_status IS NOT NULL OR dpmd_status IS NOT NULL)
+      `, { replacements: [desaId] });
+
+      if (proposals.length < 1) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Tidak ada proposal revisi yang perlu dikirim ulang. Upload ulang proposal yang ditolak terlebih dahulu.'
+        });
+      }
+
+      // Detect rejection origin from first proposal (all should be same level)
+      const firstProposal = proposals[0];
+      const fromDPMD = firstProposal.dpmd_status && 
+                       ['rejected', 'revision'].includes(firstProposal.dpmd_status);
+      const fromKecamatan = !fromDPMD && 
+                           firstProposal.kecamatan_status && 
+                           ['rejected', 'revision'].includes(firstProposal.kecamatan_status);
+      const fromDinas = !fromDPMD && !fromKecamatan && 
+                       firstProposal.dinas_status && 
+                       ['rejected', 'revision'].includes(firstProposal.dinas_status);
+
+      logger.info(`🔍 Rejection Origin - DPMD: ${fromDPMD}, Kecamatan: ${fromKecamatan}, Dinas: ${fromDinas}`);
+
+      let updateQuery = '';
+      let destination = '';
+
+      if (fromKecamatan) {
+        // REJECT DARI KECAMATAN → Kirim langsung ke Kecamatan (skip Dinas)
+        destination = 'Kecamatan';
+        updateQuery = `
+          UPDATE bankeu_proposals
+          SET submitted_to_kecamatan = TRUE,
+              submitted_to_dinas_at = NOW(),
+              kecamatan_status = 'pending',
+              kecamatan_catatan = NULL,
+              kecamatan_verified_by = NULL,
+              kecamatan_verified_at = NULL,
+              dpmd_status = NULL,
+              dpmd_catatan = NULL,
+              dpmd_verified_by = NULL,
+              dpmd_verified_at = NULL,
+              submitted_to_dpmd = FALSE,
+              status = 'pending',
+              updated_at = NOW()
+          WHERE desa_id = ? 
+            AND status = 'pending'
+            AND submitted_to_dinas_at IS NULL
+            AND submitted_to_kecamatan = FALSE
+            AND (dinas_status IS NOT NULL OR kecamatan_status IS NOT NULL OR dpmd_status IS NOT NULL)
+        `;
+      } else {
+        // REJECT DARI DINAS atau DPMD → Kirim ke Dinas (flow normal dari awal)
+        destination = fromDPMD ? 'Dinas Terkait (dari DPMD)' : 'Dinas Terkait';
+        updateQuery = `
+          UPDATE bankeu_proposals
+          SET submitted_to_dinas_at = NOW(),
+              dinas_status = 'pending',
+              dinas_catatan = NULL,
+              dinas_verified_by = NULL,
+              dinas_verified_at = NULL,
+              kecamatan_status = NULL,
+              kecamatan_catatan = NULL,
+              kecamatan_verified_by = NULL,
+              kecamatan_verified_at = NULL,
+              dpmd_status = NULL,
+              dpmd_catatan = NULL,
+              dpmd_verified_by = NULL,
+              dpmd_verified_at = NULL,
+              submitted_to_kecamatan = FALSE,
+              submitted_to_dpmd = FALSE,
+              status = 'pending',
+              updated_at = NOW()
+          WHERE desa_id = ? 
+            AND status = 'pending'
+            AND submitted_to_dinas_at IS NULL
+            AND submitted_to_kecamatan = FALSE
+            AND (dinas_status IS NOT NULL OR kecamatan_status IS NOT NULL OR dpmd_status IS NOT NULL)
+        `;
+      }
+
+      await sequelize.query(updateQuery, { 
+        replacements: [desaId],
+        transaction 
+      });
+
+      await transaction.commit();
+
+      const count = proposals.length;
+      logger.info(`✅ ${count} revised proposals from desa ${desaId} resubmitted to ${destination}`);
+
+      res.json({
+        success: true,
+        message: `${count} proposal revisi berhasil dikirim ulang ke ${destination}`
+      });
+    } catch (error) {
+      if (transaction && !transaction.finished) {
+        await transaction.rollback();
+      }
+      logger.error('Error resubmitting proposals:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Gagal mengirim ulang proposal',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * DEPRECATED: Kept for backward compatibility
+   * Use resubmitProposal instead
+   */
+  async submitToDinas(req, res) {
+    return this.resubmitProposal(req, res);
   }
 }
 

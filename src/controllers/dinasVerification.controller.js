@@ -334,29 +334,43 @@ const submitVerification = async (req, res) => {
       });
     }
 
-    // Update proposal dinas status
+    // NEW FLOW (2026-01-30): Desa → Dinas → Kecamatan → DPMD
+    // - approved → kirim ke KECAMATAN (submitted_to_kecamatan=TRUE, kecamatan_status='pending')
+    // - rejected/revision → RETURN TO DESA (reset submitted_to_dinas_at=NULL)
+    // STATUS tetap 'pending' sampai DPMD approve (final)
     const updatedProposal = await prisma.bankeu_proposals.update({
       where: { id: BigInt(proposalId) },
       data: {
         dinas_status: action,
-        dinas_verified_by: parseInt(user_id), // Convert string to Int
+        dinas_verified_by: parseInt(user_id),
         dinas_verified_at: new Date(),
         dinas_catatan: catatan_umum || null,
-        // If approved, automatically submit to kecamatan
+        // If approved → send to KECAMATAN
         submitted_to_kecamatan: action === 'approved' ? true : false,
-        submitted_at: action === 'approved' ? new Date() : null,
-        // If rejected/revision, return to desa (reset submission and set status)
-        submitted_to_dinas_at: action === 'approved' ? new Date() : null,
+        kecamatan_status: action === 'approved' ? 'pending' : null,
+        // If rejected/revision → RETURN TO DESA
+        submitted_to_dinas_at: action === 'approved' ? proposal.submitted_to_dinas_at : null,
+        // Status TETAP pending sampai DPMD approve
         status: action === 'approved' ? 'pending' : action
       }
     });
 
+    let message = '';
+    if (action === 'approved') {
+      message = 'Verifikasi disetujui. Proposal diteruskan ke Kecamatan.';
+    } else if (action === 'rejected') {
+      message = 'Verifikasi ditolak. Proposal dikembalikan ke Desa.';
+    } else {
+      message = 'Verifikasi perlu revisi. Proposal dikembalikan ke Desa.';
+    }
+
     return res.json({
       success: true,
-      message: `Verifikasi ${action === 'approved' ? 'disetujui' : action === 'rejected' ? 'ditolak' : 'perlu revisi'}`,
+      message,
       data: {
         proposal: updatedProposal,
-        questionnaire
+        questionnaire,
+        returned_to: action === 'approved' ? 'kecamatan' : 'desa'
       }
     });
 

@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS bankeu_proposals (
     
     -- Status Verifikasi
     status ENUM('pending', 'verified', 'rejected', 'revision') DEFAULT 'pending',
+    submitted_to_kecamatan BOOLEAN DEFAULT FALSE COMMENT 'Flag whether proposal has been submitted to kecamatan',
+    submitted_at TIMESTAMP NULL DEFAULT NULL COMMENT 'When proposal was submitted to kecamatan',
     catatan_verifikasi TEXT DEFAULT NULL,
     verified_by BIGINT UNSIGNED DEFAULT NULL COMMENT 'User ID kecamatan yang verifikasi',
     verified_at TIMESTAMP NULL DEFAULT NULL,

@@ -30,13 +30,19 @@ class BankeuVerificationController {
 
       const kecamatanId = users[0].kecamatan_id;
 
-      // Query: Show ALL proposals submitted to kecamatan (first time OR revision)
-      // Don't filter by dinas_status because revised proposals still have dinas_status = 'approved'
-      let whereClause = 'WHERE d.kecamatan_id = ? AND bp.submitted_to_kecamatan = TRUE';
+      // NEW FLOW 2026-01-30: Desa → Dinas → Kecamatan → DPMD
+      // Show proposals where:
+      // 1. dinas_status = 'approved' (sudah disetujui Dinas)
+      // 2. submitted_to_kecamatan = TRUE (dikirim ke Kecamatan)
+      // 3. kecamatan_status IS NULL or 'pending' or 'in_review' (belum diproses Kecamatan)
+      let whereClause = `WHERE d.kecamatan_id = ? 
+        AND bp.submitted_to_kecamatan = TRUE 
+        AND bp.dinas_status = 'approved'
+        AND (bp.kecamatan_status IS NULL OR bp.kecamatan_status IN ('pending', 'in_review'))`;
       const replacements = [kecamatanId];
 
       if (status) {
-        whereClause += ' AND bp.status = ?';
+        whereClause += ' AND bp.kecamatan_status = ?';
         replacements.push(status);
       }
 
@@ -56,6 +62,11 @@ class BankeuVerificationController {
           bp.file_size,
           bp.anggaran_usulan,
           bp.status,
+          bp.dinas_status,
+          bp.dinas_catatan,
+          bp.dinas_verified_at,
+          bp.kecamatan_status,
+          bp.kecamatan_catatan,
           bp.submitted_to_kecamatan,
           bp.submitted_at,
           bp.catatan_verifikasi,
@@ -66,16 +77,19 @@ class BankeuVerificationController {
           bp.updated_at,
           u_created.name as created_by_name,
           u_verified.name as verified_by_name,
+          u_dinas.name as dinas_verifier_name,
           d.nama as desa_nama,
           d.kecamatan_id,
           k.nama as kecamatan_nama,
           bmk.jenis_kegiatan,
-          bmk.nama_kegiatan
+          bmk.nama_kegiatan,
+          bmk.dinas_terkait
         FROM bankeu_proposals bp
         INNER JOIN desas d ON bp.desa_id = d.id
         INNER JOIN bankeu_master_kegiatan bmk ON bp.kegiatan_id = bmk.id
         LEFT JOIN users u_created ON bp.created_by = u_created.id
         LEFT JOIN users u_verified ON bp.verified_by = u_verified.id
+        LEFT JOIN users u_dinas ON bp.dinas_verified_by = u_dinas.id
         LEFT JOIN kecamatans k ON d.kecamatan_id = k.id
         ${whereClause}
         ORDER BY bp.created_at DESC
@@ -103,23 +117,15 @@ class BankeuVerificationController {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      const { status, catatan_verifikasi, return_to } = req.body; // Tambah return_to
+      const { action, catatan } = req.body; // action: 'approved', 'rejected', 'revision'
 
-      logger.info(`🔍 VERIFY PROPOSAL REQUEST - ID: ${id}, Status: ${status}, Return to: ${return_to || 'not specified'}, User: ${userId}`);
+      logger.info(`🔍 KECAMATAN VERIFY - ID: ${id}, Action: ${action}, User: ${userId}`);
 
-      // Validate status
-      if (!['verified', 'rejected', 'revision'].includes(status)) {
+      // Validate action
+      if (!['approved', 'rejected', 'revision'].includes(action)) {
         return res.status(400).json({
           success: false,
-          message: 'Status tidak valid. Gunakan: verified, rejected, atau revision'
-        });
-      }
-
-      // Validate return_to for rejection/revision
-      if ((status === 'rejected' || status === 'revision') && !['dinas', 'desa'].includes(return_to)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Parameter return_to harus diisi dengan "dinas" atau "desa" untuk rejection/revision'
+          message: 'Action tidak valid. Gunakan: approved, rejected, atau revision'
         });
       }
 
@@ -136,7 +142,6 @@ class BankeuVerificationController {
       }
 
       const kecamatanId = users[0].kecamatan_id;
-      const verifierName = users[0].name;
 
       // Get proposal
       const [proposals] = await sequelize.query(`
@@ -156,95 +161,66 @@ class BankeuVerificationController {
 
       const proposal = proposals[0];
 
-      // If rejected or revision
-      if (status === 'rejected' || status === 'revision') {
-        if (return_to === 'dinas') {
-          // Return to Dinas Terkait
-          logger.info(`⬅️ Returning proposal ${id} to Dinas Terkait`);
-          
-          await sequelize.query(`
-            UPDATE bankeu_proposals
-            SET 
-              status = 'pending',
-              catatan_verifikasi = ?,
-              dinas_catatan = ?,
-              verified_by = NULL,
-              verified_at = NULL,
-              submitted_to_kecamatan = FALSE,
-              dinas_status = ?,
-              dinas_verified_by = NULL,
-              dinas_verified_at = NULL
-            WHERE id = ?
-          `, {
-            replacements: [catatan_verifikasi || null, catatan_verifikasi || null, status, id]
-          });
+      // NEW FLOW 2026-01-30: Desa → Dinas → Kecamatan → DPMD
+      // Reject Kecamatan → RETURN to DESA (Desa upload ulang → Kecamatan langsung)
+      // Reset submitted flags dan keep status untuk tracking
+      if (action === 'rejected' || action === 'revision') {
+        logger.info(`⬅️ Kecamatan returning proposal ${id} to DESA`);
+        
+        await sequelize.query(`
+          UPDATE bankeu_proposals
+          SET 
+            kecamatan_status = ?,
+            kecamatan_catatan = ?,
+            kecamatan_verified_by = ?,
+            kecamatan_verified_at = NOW(),
+            submitted_to_kecamatan = FALSE,
+            submitted_to_dinas_at = NULL,
+            status = ?
+          WHERE id = ?
+        `, {
+          replacements: [action, catatan || null, userId, action, id]
+        });
 
-          logger.info(`✅ Proposal ${id} dikembalikan ke Dinas dengan status ${status}`);
+        logger.info(`✅ Proposal ${id} dikembalikan ke Desa dengan status ${action}`);
 
-          return res.json({
-            success: true,
-            message: `Proposal dikembalikan ke Dinas Terkait untuk ${status === 'rejected' ? 'perbaikan' : 'revisi'}`,
-            data: {
-              id,
-              status: 'pending',
-              dinas_status: status,
-              returned_to: 'dinas'
-            }
-          });
-        } else {
-          // Return to Desa
-          logger.info(`⬅️ Returning proposal ${id} to Desa`);
-          
-          await sequelize.query(`
-            UPDATE bankeu_proposals
-            SET 
-              status = ?,
-              catatan_verifikasi = ?,
-              verified_by = ?,
-              verified_at = NOW(),
-              submitted_to_kecamatan = FALSE,
-              submitted_to_dinas_at = NULL,
-              dinas_status = 'pending'
-            WHERE id = ?
-          `, {
-            replacements: [status, catatan_verifikasi || null, userId, id]
-          });
-
-          logger.info(`✅ Proposal ${id} dikembalikan ke Desa dengan status ${status}`);
-
-          return res.json({
-            success: true,
-            message: `Proposal dikembalikan ke Desa untuk ${status === 'rejected' ? 'diperbaiki' : 'direvisi'}`,
-            data: {
-              id,
-              status,
-              returned_to: 'desa'
-            }
-          });
-        }
+        return res.json({
+          success: true,
+          message: `Proposal dikembalikan ke Desa untuk ${action === 'rejected' ? 'diperbaiki' : 'direvisi'}`,
+          data: {
+            id,
+            kecamatan_status: action,
+            returned_to: 'desa'
+          }
+        });
       }
 
-      // If verified/approved, keep at Kecamatan
+      // NEW FLOW: If approved → SUBMIT to DPMD (status tetap pending sampai DPMD approve)
       await sequelize.query(`
         UPDATE bankeu_proposals
         SET 
-          status = ?,
-          catatan_verifikasi = ?,
-          verified_by = ?,
-          verified_at = NOW()
+          kecamatan_status = 'approved',
+          kecamatan_catatan = ?,
+          kecamatan_verified_by = ?,
+          kecamatan_verified_at = NOW(),
+          submitted_to_dpmd = TRUE,
+          submitted_to_dpmd_at = NOW(),
+          dpmd_status = 'pending',
+          status = 'pending'
         WHERE id = ?
       `, {
-        replacements: [status, catatan_verifikasi || null, userId, id]
+        replacements: [catatan || null, userId, id]
       });
 
-      logger.info(`✅ Bankeu proposal ${status}: ${id} by user ${userId}`);
+      logger.info(`✅ Kecamatan approved proposal ${id} - SUBMITTED TO DPMD`);
 
       res.json({
         success: true,
-        message: `Proposal berhasil di${status === 'verified' ? 'verifikasi' : status === 'rejected' ? 'tolak' : 'minta revisi'}`,
+        message: `Proposal disetujui dan dikirim ke DPMD`,
         data: {
           id,
-          status
+          kecamatan_status: 'approved',
+          submitted_to_dpmd: true
         }
       });
     } catch (error) {

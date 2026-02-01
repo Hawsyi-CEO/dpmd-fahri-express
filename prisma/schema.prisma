@@ -118,6 +118,14 @@ model bankeu_proposals {
   dinas_verified_at                         DateTime?                            @db.Timestamp(0)
   dinas_verified_by                         Int?
   dinas_catatan                             String?                              @db.Text
+  kecamatan_status                          bankeu_proposals_dinas_status?
+  kecamatan_verified_at                     DateTime?                            @db.Timestamp(0)
+  kecamatan_verified_by                     BigInt?                              @db.UnsignedBigInt
+  kecamatan_catatan                         String?                              @db.Text
+  dpmd_status                               bankeu_proposals_dinas_status?
+  dpmd_verified_at                          DateTime?                            @db.Timestamp(0)
+  dpmd_verified_by                          BigInt?                              @db.UnsignedBigInt
+  dpmd_catatan                              String?                              @db.Text
   submitted_to_kecamatan                    Boolean?                             @default(false)
   submitted_at                              DateTime?                            @db.Timestamp(0)
   submitted_to_dpmd                         Boolean?                             @default(false)
@@ -133,12 +141,18 @@ model bankeu_proposals {
   users_bankeu_proposals_created_byTousers  users                                @relation("bankeu_proposals_created_byTousers", fields: [created_by], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_bankeu_proposals_created_by")
   desas                                     desas                                @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_bankeu_proposals_desa")
   users_bankeu_proposals_verified_byTousers users?                               @relation("bankeu_proposals_verified_byTousers", fields: [verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_proposals_verified_by")
+  users_bankeu_kecamatan_verified_by        users?                               @relation("bankeu_proposals_kecamatan_verified_by", fields: [kecamatan_verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_kecamatan_verified_by")
+  users_bankeu_dpmd_verified_by             users?                               @relation("bankeu_proposals_dpmd_verified_by", fields: [dpmd_verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_dpmd_verified_by")
   bankeu_verification_questionnaires        bankeu_verification_questionnaires[]
 
   @@index([created_by], map: "idx_created_by")
   @@index([desa_id], map: "idx_desa")
   @@index([dinas_status], map: "idx_dinas_status")
   @@index([dinas_verified_by], map: "idx_dinas_verified_by")
+  @@index([kecamatan_status], map: "idx_kecamatan_status")
+  @@index([kecamatan_verified_by], map: "idx_kecamatan_verified_by")
+  @@index([dpmd_status], map: "idx_dpmd_status")
+  @@index([dpmd_verified_by], map: "idx_dpmd_verified_by")
   @@index([status], map: "idx_status")
   @@index([submitted_to_dpmd], map: "idx_submitted_to_dpmd")
   @@index([submitted_to_kecamatan], map: "idx_submitted_to_kecamatan")
@@ -890,6 +904,8 @@ model users {
   app_settings                                         app_settings[]
   bankeu_proposals_bankeu_proposals_created_byTousers  bankeu_proposals[]          @relation("bankeu_proposals_created_byTousers")
   bankeu_proposals_bankeu_proposals_verified_byTousers bankeu_proposals[]          @relation("bankeu_proposals_verified_byTousers")
+  bankeu_proposals_kecamatan_verified_by               bankeu_proposals[]          @relation("bankeu_proposals_kecamatan_verified_by")
+  bankeu_proposals_dpmd_verified_by                    bankeu_proposals[]          @relation("bankeu_proposals_dpmd_verified_by")
   disposisi_disposisi_dari_user_idTousers              disposisi[]                 @relation("disposisi_dari_user_idTousers")
   disposisi_disposisi_ke_user_idTousers                disposisi[]                 @relation("disposisi_ke_user_idTousers")
   jadwal_kegiatan_jadwal_kegiatan_approved_byTousers   jadwal_kegiatan[]           @relation("jadwal_kegiatan_approved_byTousers")
