@@ -21,8 +21,8 @@ class SchedulerService {
     this.jobs.morningReminder = cron.schedule('0 7 * * *', async () => {
       console.log('⏰ Running morning reminder job at 7:00 AM');
       try {
-        const result = await pushNotificationService.sendTodayReminder();
-        console.log(`✅ Morning reminder sent successfully: ${result.sent} notifications`);
+        const result = await pushNotificationService.sendTodayScheduleReminder();
+        console.log(`✅ Morning reminder sent successfully: ${result.schedulesCount} schedules`);
       } catch (error) {
         console.error('❌ Error sending morning reminder:', error);
       }
@@ -35,8 +35,8 @@ class SchedulerService {
     this.jobs.eveningReminder = cron.schedule('0 21 * * *', async () => {
       console.log('⏰ Running evening reminder job at 9:00 PM');
       try {
-        const result = await pushNotificationService.sendTomorrowReminder();
-        console.log(`✅ Evening reminder sent successfully: ${result.sent} notifications`);
+        const result = await pushNotificationService.sendTomorrowScheduleReminder();
+        console.log(`✅ Evening reminder sent successfully: ${result.schedulesCount} schedules`);
       } catch (error) {
         console.error('❌ Error sending evening reminder:', error);
       }

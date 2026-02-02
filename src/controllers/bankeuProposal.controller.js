@@ -78,6 +78,9 @@ class BankeuProposalController {
           bp.id,
           bp.kegiatan_id,
           bp.judul_proposal,
+          bp.nama_kegiatan_spesifik,
+          bp.volume,
+          bp.lokasi,
           bp.deskripsi,
           bp.file_proposal,
           bp.file_size,
@@ -146,6 +149,9 @@ class BankeuProposalController {
       const {
         kegiatan_id,
         judul_proposal,
+        nama_kegiatan_spesifik,
+        volume,
+        lokasi,
         deskripsi,
         anggaran_usulan
       } = req.body;
@@ -217,6 +223,9 @@ class BankeuProposalController {
           UPDATE bankeu_proposals
           SET 
             judul_proposal = ?,
+            nama_kegiatan_spesifik = ?,
+            volume = ?,
+            lokasi = ?,
             deskripsi = ?,
             file_proposal = ?,
             file_size = ?,
@@ -234,6 +243,9 @@ class BankeuProposalController {
         `, {
           replacements: [
             judul_proposal,
+            nama_kegiatan_spesifik || null,
+            volume || null,
+            lokasi || null,
             deskripsi || null,
             filePath,
             fileSize,
@@ -250,18 +262,24 @@ class BankeuProposalController {
             desa_id,
             kegiatan_id,
             judul_proposal,
+            nama_kegiatan_spesifik,
+            volume,
+            lokasi,
             deskripsi,
             file_proposal,
             file_size,
             anggaran_usulan,
             created_by,
             status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
         `, {
           replacements: [
             desaId,
             kegiatan_id,
             judul_proposal,
+            nama_kegiatan_spesifik || null,
+            volume || null,
+            lokasi || null,
             deskripsi || null,
             filePath,
             fileSize,
@@ -308,7 +326,7 @@ class BankeuProposalController {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      const { anggaran_usulan } = req.body;
+      const { anggaran_usulan, nama_kegiatan_spesifik, volume, lokasi } = req.body;
 
       logger.info(`♻️ UPDATE REVISION REQUEST - ID: ${id}, User: ${userId}, Anggaran: ${anggaran_usulan}`);
 
@@ -402,6 +420,24 @@ class BankeuProposalController {
       if (anggaran_usulan) {
         updates.push('anggaran_usulan = ?');
         replacements.push(anggaran_usulan);
+      }
+
+      // Update nama kegiatan spesifik if provided
+      if (nama_kegiatan_spesifik) {
+        updates.push('nama_kegiatan_spesifik = ?');
+        replacements.push(nama_kegiatan_spesifik);
+      }
+
+      // Update volume if provided
+      if (volume) {
+        updates.push('volume = ?');
+        replacements.push(volume);
+      }
+
+      // Update lokasi if provided
+      if (lokasi) {
+        updates.push('lokasi = ?');
+        replacements.push(lokasi);
       }
 
       // Update file if uploaded

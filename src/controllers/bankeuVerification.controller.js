@@ -30,20 +30,20 @@ class BankeuVerificationController {
 
       const kecamatanId = users[0].kecamatan_id;
 
-      // NEW FLOW 2026-01-30: Desa → Dinas → Kecamatan → DPMD
-      // Show proposals where:
-      // 1. dinas_status = 'approved' (sudah disetujui Dinas)
-      // 2. submitted_to_kecamatan = TRUE (dikirim ke Kecamatan)
-      // 3. kecamatan_status IS NULL or 'pending' or 'in_review' (belum diproses Kecamatan)
+      // Show ALL proposals from desa in this kecamatan
+      // Filter: proposals that have been submitted (submitted_to_dinas_at IS NOT NULL)
       let whereClause = `WHERE d.kecamatan_id = ? 
-        AND bp.submitted_to_kecamatan = TRUE 
-        AND bp.dinas_status = 'approved'
-        AND (bp.kecamatan_status IS NULL OR bp.kecamatan_status IN ('pending', 'in_review'))`;
+        AND bp.submitted_to_dinas_at IS NOT NULL`;
       const replacements = [kecamatanId];
 
       if (status) {
-        whereClause += ' AND bp.kecamatan_status = ?';
+        whereClause += ' AND bp.status = ?';
         replacements.push(status);
+      }
+
+      if (jenis_kegiatan) {
+        whereClause += ' AND bmk.jenis_kegiatan = ?';
+        replacements.push(jenis_kegiatan);
       }
 
       if (desa_id) {
@@ -57,6 +57,9 @@ class BankeuVerificationController {
           bp.desa_id,
           bp.kegiatan_id,
           bp.judul_proposal,
+          bp.nama_kegiatan_spesifik,
+          bp.volume,
+          bp.lokasi,
           bp.deskripsi,
           bp.file_proposal,
           bp.file_size,

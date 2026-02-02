@@ -29,9 +29,9 @@ const getDinasProposals = async (req, res) => {
     }
 
     // Get proposals where kegiatan.dinas_terkait contains this dinas kode
-    // Show ONLY if: 
+    // Show ALL proposals that:
     // 1. Submitted to Dinas (submitted_to_dinas_at IS NOT NULL)
-    // 2. AND (NOT yet sent to Kecamatan OR returned from Kecamatan to Dinas)
+    // 2. Related to this dinas based on kegiatan.dinas_terkait
     const proposals = await prisma.$queryRaw`
       SELECT 
         bp.*,
@@ -51,10 +51,6 @@ const getDinasProposals = async (req, res) => {
       LEFT JOIN users u_verifier ON bp.dinas_verified_by = u_verifier.id
       WHERE FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0
         AND bp.submitted_to_dinas_at IS NOT NULL
-        AND (
-          bp.submitted_to_kecamatan = FALSE
-          OR bp.dinas_status IN ('pending', 'rejected', 'revision')
-        )
       ORDER BY bp.created_at DESC
     `;
 
