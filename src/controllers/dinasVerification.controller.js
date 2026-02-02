@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { copyFileToReference } = require('../utils/fileHelper');
 
 /**
  * Get all proposals for a specific dinas
@@ -334,6 +335,31 @@ const submitVerification = async (req, res) => {
     // - approved → kirim ke KECAMATAN (submitted_to_kecamatan=TRUE, kecamatan_status='pending')
     // - rejected/revision → RETURN TO DESA (reset submitted_to_dinas_at=NULL)
     // STATUS tetap 'pending' sampai DPMD approve (final)
+    
+    // FILE MIRRORING (2026-02-02): Copy file when Dinas approves
+    // This creates permanent reference for Kecamatan verification
+    let fileMirroringSuccess = false;
+    if (action === 'approved' && proposal.file_proposal) {
+      try {
+        console.log('[Dinas Verification] Attempting file mirroring for:', proposal.file_proposal);
+        await copyFileToReference(proposal.file_proposal);
+        fileMirroringSuccess = true;
+        console.log('[Dinas Verification] File mirroring successful');
+      } catch (error) {
+        console.error('[Dinas Verification] File mirroring failed:', error.message);
+        console.error('[Dinas Verification] Error stack:', error.stack);
+        // Log error but don't block approval - file mirroring is enhancement feature
+        // Continue with approval even if file copy fails
+      }
+    }
+
+    console.log('[Dinas Verification] Updating proposal with data:', {
+      proposalId,
+      action,
+      dinas_verified_by: parseInt(user_id),
+      fileMirroringSuccess
+    });
+
     const updatedProposal = await prisma.bankeu_proposals.update({
       where: { id: BigInt(proposalId) },
       data: {
@@ -347,9 +373,14 @@ const submitVerification = async (req, res) => {
         // If rejected/revision → RETURN TO DESA
         submitted_to_dinas_at: action === 'approved' ? proposal.submitted_to_dinas_at : null,
         // Status TETAP pending sampai DPMD approve
-        status: action === 'approved' ? 'pending' : action
+        status: action === 'approved' ? 'pending' : action,
+        // FILE MIRRORING: Set reference file and timestamp only if copy succeeded
+        dinas_reviewed_file: (action === 'approved' && fileMirroringSuccess) ? proposal.file_proposal : null,
+        dinas_reviewed_at: (action === 'approved' && fileMirroringSuccess) ? new Date() : null
       }
     });
+
+    console.log('[Dinas Verification] Proposal updated successfully');
 
     let message = '';
     if (action === 'approved') {
@@ -360,22 +391,39 @@ const submitVerification = async (req, res) => {
       message = 'Verifikasi perlu revisi. Proposal dikembalikan ke Desa.';
     }
 
+    // Serialize BigInt fields to string for JSON response
+    const serializedProposal = {
+      ...updatedProposal,
+      id: updatedProposal.id.toString(),
+      kegiatan_id: updatedProposal.kegiatan_id?.toString() || null,
+      desa_id: updatedProposal.desa_id?.toString() || null,
+      anggaran_usulan: updatedProposal.anggaran_usulan?.toString() || null
+    };
+
+    const serializedQuestionnaire = {
+      ...questionnaire,
+      id: questionnaire.id.toString(),
+      proposal_id: questionnaire.proposal_id.toString()
+    };
+
     return res.json({
       success: true,
       message,
       data: {
-        proposal: updatedProposal,
-        questionnaire,
+        proposal: serializedProposal,
+        questionnaire: serializedQuestionnaire,
         returned_to: action === 'approved' ? 'kecamatan' : 'desa'
       }
     });
 
   } catch (error) {
     console.error('Error submitting verification:', error);
+    console.error('Error stack:', error.stack);
     return res.status(500).json({
       success: false,
       message: 'Gagal submit verifikasi',
-      error: error.message
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };

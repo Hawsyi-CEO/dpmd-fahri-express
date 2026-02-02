@@ -31,9 +31,10 @@ class BankeuVerificationController {
       const kecamatanId = users[0].kecamatan_id;
 
       // Show ALL proposals from desa in this kecamatan
-      // Filter: proposals that have been submitted (submitted_to_dinas_at IS NOT NULL)
+      // NEW FLOW 2026-02-02: Show proposals that have been submitted to Kecamatan
+      // Filter: submitted_to_kecamatan = TRUE (approved by Dinas)
       let whereClause = `WHERE d.kecamatan_id = ? 
-        AND bp.submitted_to_dinas_at IS NOT NULL`;
+        AND bp.submitted_to_kecamatan = TRUE`;
       const replacements = [kecamatanId];
 
       if (status) {
@@ -68,6 +69,8 @@ class BankeuVerificationController {
           bp.dinas_status,
           bp.dinas_catatan,
           bp.dinas_verified_at,
+          bp.dinas_reviewed_file,
+          bp.dinas_reviewed_at,
           bp.kecamatan_status,
           bp.kecamatan_catatan,
           bp.submitted_to_kecamatan,

@@ -83,6 +83,8 @@ class BankeuProposalController {
           bp.lokasi,
           bp.deskripsi,
           bp.file_proposal,
+          bp.surat_pengantar,
+          bp.surat_permohonan,
           bp.file_size,
           bp.anggaran_usulan,
           bp.status,
@@ -194,7 +196,7 @@ class BankeuProposalController {
       const desaId = users[0].desa_id;
       const kecamatanId = users[0].kecamatan_id;
 
-      const filePath = `bankeu/${req.file.filename}`;
+      const filePath = req.file.filename; // Hanya filename tanpa folder prefix
       const fileSize = req.file.size;
 
       // Check if proposal already exists for this kegiatan_id and desa_id
@@ -442,36 +444,53 @@ class BankeuProposalController {
 
       // Update file if uploaded
       if (req.file) {
-        const filePath = `bankeu/${req.file.filename}`;
+        const filePath = req.file.filename; // Hanya filename tanpa folder prefix
         const fileSize = req.file.size;
 
         updates.push('file_proposal = ?', 'file_size = ?');
         replacements.push(filePath, fileSize);
 
-        // Delete old file
+        // Move old file to reference folder (for comparison) instead of deleting
         const oldFilePath = proposal.file_proposal;
         if (oldFilePath) {
-          const fullPath = path.join(__dirname, '../../storage/uploads', oldFilePath);
-          if (fs.existsSync(fullPath)) {
-            fs.unlinkSync(fullPath);
-            logger.info(`🗑️ Deleted old file: ${oldFilePath}`);
+          const fullOldPath = path.join(__dirname, '../../storage/uploads/bankeu', oldFilePath);
+          const referenceDir = path.join(__dirname, '../../storage/uploads/bankeu_reference');
+          const fullNewPath = path.join(referenceDir, oldFilePath);
+          
+          // Ensure reference directory exists
+          if (!fs.existsSync(referenceDir)) {
+            fs.mkdirSync(referenceDir, { recursive: true });
+          }
+          
+          if (fs.existsSync(fullOldPath)) {
+            // Move file to reference folder
+            fs.renameSync(fullOldPath, fullNewPath);
+            logger.info(`📦 Moved old file to reference: ${oldFilePath}`);
+            
+            // Save old file to dinas_reviewed_file for comparison purpose
+            // Note: Field ini dual-purpose:
+            // 1. Untuk file yang sudah direview Dinas (original purpose)
+            // 2. Untuk file referensi lama ketika Kecamatan reject dan Desa upload ulang
+            updates.push('dinas_reviewed_file = ?', 'dinas_reviewed_at = NOW()');
+            replacements.push(oldFilePath);
           }
         }
       }
 
       // Reset status to pending, clear verification data
-      // IMPORTANT: Keep verified_at for Kecamatan case so frontend can detect it
+      // IMPORTANT: Set verified_at to NOW() for Kecamatan case so frontend can detect reupload
       if (returnedFromKecamatan) {
-        // Returned from Kecamatan - Keep verified_at and verified_by to track origin
+        // Returned from Kecamatan - SET verified_at untuk detection
         logger.info(`🔄 Revisi dari Kecamatan - siap kirim kembali ke Kecamatan`);
         updates.push(
           'status = ?',
           'submitted_to_kecamatan = ?',  // Set to FALSE, will submit manually
           'submitted_at = NULL',
           'catatan_verifikasi = NULL',
+          'verified_at = NOW()',  // CRITICAL: Set this so frontend can detect reupload
           'updated_at = NOW()'
         );
-        // DON'T reset: verified_by, verified_at (keep for detection)
+        // Keep verified_by for tracking who approved before Kecamatan rejection
         replacements.push('pending', false);
       } else {
         // Returned from Dinas - Keep dinas_status untuk tracking origin
@@ -629,7 +648,7 @@ class BankeuProposalController {
         });
       }
 
-      const filePath = `bankeu/${req.file.filename}`;
+      const filePath = req.file.filename; // Hanya filename tanpa folder prefix
       const fileSize = req.file.size;
       const oldFilePath = proposal.file_proposal;
 
@@ -771,6 +790,132 @@ class BankeuProposalController {
       res.status(500).json({
         success: false,
         message: 'Gagal menghapus proposal',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Upload surat pengantar or surat permohonan
+   * POST /api/desa/bankeu/proposals/:id/upload-surat
+   * Body: { jenis: 'pengantar' | 'permohonan' }
+   */
+  async uploadSurat(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const { jenis } = req.body; // 'pengantar' or 'permohonan'
+
+      // Validate file upload
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'File surat wajib diupload'
+        });
+      }
+
+      // Validate jenis
+      if (!jenis || !['pengantar', 'permohonan'].includes(jenis)) {
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(400).json({
+          success: false,
+          message: 'Jenis surat harus "pengantar" atau "permohonan"'
+        });
+      }
+
+      // Get desa_id from user
+      const [users] = await sequelize.query(`
+        SELECT desa_id FROM users WHERE id = ?
+      `, { replacements: [userId] });
+
+      if (!users || users.length === 0 || !users[0].desa_id) {
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(403).json({
+          success: false,
+          message: 'User tidak terkait dengan desa'
+        });
+      }
+
+      const desaId = users[0].desa_id;
+
+      // Get existing proposal
+      const [existingProposal] = await sequelize.query(`
+        SELECT surat_pengantar, surat_permohonan, desa_id 
+        FROM bankeu_proposals
+        WHERE id = ?
+      `, { replacements: [id] });
+
+      if (!existingProposal || existingProposal.length === 0) {
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal tidak ditemukan'
+        });
+      }
+
+      const proposal = existingProposal[0];
+
+      // Check ownership
+      if (proposal.desa_id !== desaId) {
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(403).json({
+          success: false,
+          message: 'Anda tidak memiliki akses untuk proposal ini'
+        });
+      }
+
+      const filePath = req.file.filename; // Hanya filename tanpa folder prefix
+      const fieldName = jenis === 'pengantar' ? 'surat_pengantar' : 'surat_permohonan';
+      const oldFilePath = proposal[fieldName];
+
+      // Delete old file if exists
+      if (oldFilePath) {
+        const fullPath = path.join(__dirname, '../../storage/uploads/bankeu', oldFilePath);
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+          logger.info(`🗑️ Deleted old ${jenis}: ${oldFilePath}`);
+        }
+      }
+
+      // Update proposal
+      await sequelize.query(`
+        UPDATE bankeu_proposals
+        SET ${fieldName} = ?, updated_at = NOW()
+        WHERE id = ?
+      `, { replacements: [filePath, id] });
+
+      logger.info(`✅ Surat ${jenis} uploaded for proposal ${id} by user ${userId}`);
+
+      res.json({
+        success: true,
+        message: `Surat ${jenis} berhasil diupload`,
+        data: {
+          id: parseInt(id),
+          [fieldName]: filePath
+        }
+      });
+    } catch (error) {
+      // Delete uploaded file on error
+      if (req.file && req.file.path) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (unlinkError) {
+          logger.error('Error deleting file:', unlinkError);
+        }
+      }
+
+      logger.error('Error uploading surat:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Gagal mengupload surat',
         error: error.message
       });
     }
@@ -945,7 +1090,8 @@ class BankeuProposalController {
           SET submitted_to_kecamatan = TRUE,
               submitted_to_dinas_at = NOW(),
               kecamatan_status = 'pending',
-              kecamatan_catatan = NULL,
+              /* IMPORTANT: KEEP kecamatan_catatan untuk detection tombol Bandingkan */
+              /* kecamatan_catatan = NULL, */ 
               kecamatan_verified_by = NULL,
               kecamatan_verified_at = NULL,
               dpmd_status = NULL,

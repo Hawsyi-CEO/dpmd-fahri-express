@@ -113,6 +113,10 @@ model bankeu_proposals {
   lokasi                                    String?                              @db.VarChar(255)
   deskripsi                                 String?                              @db.Text
   file_proposal                             String                               @db.VarChar(255)
+  surat_pengantar                           String?                              @db.VarChar(255)
+  surat_permohonan                          String?                              @db.VarChar(255)
+  dinas_reviewed_file                       String?                              @db.VarChar(255)
+  dinas_reviewed_at                         DateTime?                            @db.Timestamp(0)
   file_size                                 Int?                                 @db.UnsignedInt
   anggaran_usulan                           Decimal?                             @db.Decimal(15, 2)
   status                                    bankeu_proposals_status?             @default(pending)
@@ -341,6 +345,7 @@ model desas {
   updated_at                DateTime?                   @db.Timestamp(0)
   aparatur_desa             aparatur_desa[]
   bankeu_proposals          bankeu_proposals[]
+  desa_bankeu_surat         desa_bankeu_surat[]
   kecamatans                kecamatans                  @relation(fields: [kecamatan_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "desas_kecamatan_id_foreign")
   karang_tarunas            karang_tarunas[]
   kelembagaan_activity_logs kelembagaan_activity_logs[]
@@ -356,6 +361,37 @@ model desas {
   satlinmas                 satlinmas[]
 
   @@index([kecamatan_id], map: "desas_kecamatan_id_foreign")
+}
+
+/// Model untuk surat pengantar dan surat permohonan per desa
+model desa_bankeu_surat {
+  id                     BigInt                                        @id @default(autoincrement()) @db.UnsignedBigInt
+  desa_id                BigInt                                        @db.UnsignedBigInt
+  tahun                  Int                                           @default(2025) @db.Year
+  surat_pengantar        String?                                       @db.VarChar(255)
+  surat_permohonan       String?                                       @db.VarChar(255)
+  submitted_to_kecamatan Boolean                                       @default(false)
+  submitted_at           DateTime?                                     @db.Timestamp(0)
+  kecamatan_status       desa_bankeu_surat_kecamatan_status?           @default(pending)
+  kecamatan_reviewed_by  BigInt?                                       @db.UnsignedBigInt
+  kecamatan_reviewed_at  DateTime?                                     @db.Timestamp(0)
+  kecamatan_catatan      String?                                       @db.Text
+  created_at             DateTime?                                     @default(now()) @db.Timestamp(0)
+  updated_at             DateTime?                                     @default(now()) @db.Timestamp(0)
+  desas                  desas                                         @relation(fields: [desa_id], references: [id], onDelete: Cascade, map: "fk_desa_bankeu_surat_desa")
+  reviewer               users?                                        @relation(fields: [kecamatan_reviewed_by], references: [id], onDelete: SetNull, map: "fk_desa_bankeu_surat_reviewer")
+
+  @@unique([desa_id, tahun], map: "unique_desa_tahun")
+  @@index([desa_id], map: "idx_desa_id")
+  @@index([tahun], map: "idx_tahun")
+  @@index([submitted_to_kecamatan], map: "idx_submitted")
+  @@index([kecamatan_status], map: "idx_kecamatan_status")
+}
+
+enum desa_bankeu_surat_kecamatan_status {
+  pending
+  approved
+  rejected
 }
 
 model dinas {
@@ -917,6 +953,7 @@ model users {
   lampiran_surat                                       lampiran_surat[]
   push_subscriptions                                   push_subscriptions[]
   surat_masuk                                          surat_masuk[]
+  reviewed_desa_surat                                  desa_bankeu_surat[]
   pegawai                                              pegawai?                    @relation(fields: [pegawai_id], references: [id_pegawai], onDelete: Cascade, onUpdate: NoAction, map: "users_pegawai_id_foreign")
 
   @@index([pegawai_id], map: "users_pegawai_id_index")

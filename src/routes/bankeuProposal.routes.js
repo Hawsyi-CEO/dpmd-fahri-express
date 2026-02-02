@@ -22,6 +22,9 @@ router.patch('/proposals/:id', upload.bankeuProposal, bankeuProposalController.u
 // Replace file in existing proposal (before submission)
 router.patch('/proposals/:id/replace-file', upload.bankeuProposal, bankeuProposalController.replaceFile);
 
+// Upload surat pengantar or surat permohonan
+router.post('/proposals/:id/upload-surat', upload.bankeuProposal, bankeuProposalController.uploadSurat);
+
 // Submit all proposals to dinas terkait - FIRST TIME SUBMISSION (NEW FLOW 2026-01-30)
 router.post('/submit-to-dinas-terkait', bankeuProposalController.submitToDinasTerkait);
 

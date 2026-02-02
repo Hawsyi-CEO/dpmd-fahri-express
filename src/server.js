@@ -67,6 +67,8 @@ const vpnCoreDashboardRoutes = require('./routes/vpnCoreDashboard.routes');
 const pegawaiRoutes = require('./routes/pegawai.routes');
 const bidangRoutes = require('./routes/bidang.routes');
 const bankeuProposalRoutes = require('./routes/bankeuProposal.routes');
+const desaBankeuSuratRoutes = require('./routes/desaBankeuSurat.routes');
+const kecamatanBankeuSuratRoutes = require('./routes/kecamatanBankeuSurat.routes');
 const bankeuVerificationRoutes = require('./routes/bankeuVerification.routes');
 const dinasVerificationRoutes = require('./routes/dinasVerification.routes');
 
@@ -210,6 +212,8 @@ app.use('/api/desa', desaKelembagaanRoutes); // Desa kelembagaan routes (RW, RT,
 app.use('/api/desa/aparatur-desa', aparaturDesaRoutes); // Aparatur Desa routes
 app.use('/api/desa/produk-hukum', produkHukumRoutes); // Produk Hukum routes (desa alias)
 app.use('/api/desa/bankeu', bankeuProposalRoutes); // Bankeu proposal routes for desa
+app.use('/api/desa/bankeu/surat', desaBankeuSuratRoutes); // Surat pengantar & permohonan (desa-level)
+app.use('/api/kecamatan/bankeu/surat', kecamatanBankeuSuratRoutes); // Kecamatan review surat desa
 app.use('/api/kecamatan/bankeu', bankeuVerificationRoutes); // Bankeu verification routes for kecamatan
 app.use('/api/dinas/bankeu', dinasVerificationRoutes); // Bankeu verification routes for dinas terkait
 app.use('/api/contoh-proposal', require('./routes/contohProposal.routes')); // Example proposal files
