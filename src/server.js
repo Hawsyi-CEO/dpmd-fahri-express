@@ -25,6 +25,7 @@ const requiredDirs = [
   path.join(__dirname, '../storage/uploads/bumdes_dokumen_badanhukum'),
   path.join(__dirname, '../storage/uploads/bumdes_laporan_keuangan'),
   path.join(__dirname, '../storage/uploads/bumdes'),
+  path.join(__dirname, '../storage/uploads/profil_desa'),
   path.join(__dirname, '../public/backups')
 ];
 
@@ -48,6 +49,7 @@ const kepalaDinasRoutes = require('./routes/kepalaDinas.routes');
 const kelembagaanRoutes = require('./routes/kelembagaan.routes');
 const desaKelembagaanRoutes = require('./routes/desa.kelembagaan.routes');
 const aparaturDesaRoutes = require('./routes/aparatur-desa.routes');
+const profilDesaRoutes = require('./routes/profil-desa.routes');
 const produkHukumRoutes = require('./routes/produkHukum.routes');
 const bankeuT1Routes = require('./routes/bankeu-t1.routes');
 const bankeuT2Routes = require('./routes/bankeu-t2.routes');
@@ -210,6 +212,7 @@ app.use('/api/desa/musdesus', musdesusRoutes);
 app.use('/api/musdesus', musdesusRoutes); // Admin routes
 app.use('/api/desa', desaKelembagaanRoutes); // Desa kelembagaan routes (RW, RT, Posyandu, etc.)
 app.use('/api/desa/aparatur-desa', aparaturDesaRoutes); // Aparatur Desa routes
+app.use('/api/profil-desa', profilDesaRoutes); // Profil Desa routes
 app.use('/api/desa/produk-hukum', produkHukumRoutes); // Produk Hukum routes (desa alias)
 app.use('/api/desa/bankeu', bankeuProposalRoutes); // Bankeu proposal routes for desa
 app.use('/api/desa/bankeu/surat', desaBankeuSuratRoutes); // Surat pengantar & permohonan (desa-level)
