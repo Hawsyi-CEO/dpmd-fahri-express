@@ -97,6 +97,7 @@ model bankeu_master_kegiatan {
   dinas_terkait  String?                               @db.VarChar(255)
   is_active      Boolean?                              @default(true)
   created_at     DateTime?                             @default(now()) @db.Timestamp(0)
+  bankeu_proposal_kegiatan bankeu_proposal_kegiatan[]
 
   @@index([dinas_terkait], map: "idx_dinas_terkait")
   @@index([jenis_kegiatan], map: "idx_jenis")
@@ -106,7 +107,7 @@ model bankeu_master_kegiatan {
 model bankeu_proposals {
   id                                        BigInt                               @id @default(autoincrement()) @db.UnsignedBigInt
   desa_id                                   BigInt                               @db.UnsignedBigInt
-  kegiatan_id                               Int                                  @db.UnsignedTinyInt
+  kegiatan_id                               Int?                                 @db.UnsignedTinyInt
   judul_proposal                            String                               @db.VarChar(255)
   nama_kegiatan_spesifik                    String?                              @db.VarChar(255)
   volume                                    String?                              @db.VarChar(255)
@@ -151,6 +152,7 @@ model bankeu_proposals {
   users_bankeu_dpmd_verified_by             users?                               @relation("bankeu_proposals_dpmd_verified_by", fields: [dpmd_verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_dpmd_verified_by")
   users_bankeu_kecamatan_verified_by        users?                               @relation("bankeu_proposals_kecamatan_verified_by", fields: [kecamatan_verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_kecamatan_verified_by")
   bankeu_verification_questionnaires        bankeu_verification_questionnaires[]
+  bankeu_proposal_kegiatan                  bankeu_proposal_kegiatan[]
 
   @@index([created_by], map: "idx_created_by")
   @@index([desa_id], map: "idx_desa")
@@ -1204,4 +1206,18 @@ enum bankeu_verification_questionnaires_overall_recommendation {
 enum bankeu_verification_questionnaires_status {
   draft
   submitted
+}
+
+model bankeu_proposal_kegiatan {
+  id           BigInt                   @id @default(autoincrement()) @db.UnsignedBigInt
+  proposal_id  BigInt                   @db.UnsignedBigInt
+  kegiatan_id  Int                      @db.UnsignedTinyInt
+  created_at   DateTime?                @default(now()) @db.Timestamp(0)
+  
+  bankeu_proposals         bankeu_proposals         @relation(fields: [proposal_id], references: [id], onDelete: Cascade, map: "fk_proposal_kegiatan_proposal")
+  bankeu_master_kegiatan   bankeu_master_kegiatan   @relation(fields: [kegiatan_id], references: [id], onDelete: Cascade, map: "fk_proposal_kegiatan_kegiatan")
+
+  @@unique([proposal_id, kegiatan_id], map: "unique_proposal_kegiatan")
+  @@index([proposal_id], map: "idx_proposal_id")
+  @@index([kegiatan_id], map: "idx_kegiatan_id")
 }

@@ -112,9 +112,7 @@ class BankeuProposalController {
           u_dpmd.name as dpmd_verified_by_name,
           d.nama as desa_nama,
           d.kecamatan_id,
-          k.nama as kecamatan_nama,
-          bmk.jenis_kegiatan,
-          bmk.nama_kegiatan
+          k.nama as kecamatan_nama
         FROM bankeu_proposals bp
         LEFT JOIN users u_verified ON bp.verified_by = u_verified.id
         LEFT JOIN users u_dinas ON bp.dinas_verified_by = u_dinas.id
@@ -122,10 +120,25 @@ class BankeuProposalController {
         LEFT JOIN users u_dpmd ON bp.dpmd_verified_by = u_dpmd.id
         LEFT JOIN desas d ON bp.desa_id = d.id
         LEFT JOIN kecamatans k ON d.kecamatan_id = k.id
-        LEFT JOIN bankeu_master_kegiatan bmk ON bp.kegiatan_id = bmk.id
         WHERE bp.desa_id = ?
         ORDER BY bp.created_at DESC
       `, { replacements: [desaId] });
+
+      // Get kegiatan for each proposal
+      for (const proposal of proposals) {
+        const [kegiatan] = await sequelize.query(`
+          SELECT 
+            bmk.id,
+            bmk.jenis_kegiatan,
+            bmk.nama_kegiatan
+          FROM bankeu_proposal_kegiatan bpk
+          JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
+          WHERE bpk.proposal_id = ?
+          ORDER BY bmk.jenis_kegiatan, bmk.urutan
+        `, { replacements: [proposal.id] });
+
+        proposal.kegiatan_list = kegiatan;
+      }
 
       res.json({
         success: true,
@@ -149,7 +162,7 @@ class BankeuProposalController {
     try {
       const userId = req.user.id;
       const {
-        kegiatan_id,
+        kegiatan_ids, // Changed to array of kegiatan IDs
         judul_proposal,
         nama_kegiatan_spesifik,
         volume,
@@ -158,11 +171,26 @@ class BankeuProposalController {
         anggaran_usulan
       } = req.body;
 
+      // Parse kegiatan_ids if it's a string
+      let kegiatanIdsArray = [];
+      if (typeof kegiatan_ids === 'string') {
+        try {
+          kegiatanIdsArray = JSON.parse(kegiatan_ids);
+        } catch (e) {
+          return res.status(400).json({
+            success: false,
+            message: 'Format kegiatan_ids tidak valid'
+          });
+        }
+      } else if (Array.isArray(kegiatan_ids)) {
+        kegiatanIdsArray = kegiatan_ids;
+      }
+
       // Validate required fields
-      if (!kegiatan_id || !judul_proposal) {
+      if (!kegiatanIdsArray || kegiatanIdsArray.length === 0 || !judul_proposal) {
         return res.status(400).json({
           success: false,
-          message: 'Kegiatan ID dan judul proposal wajib diisi'
+          message: 'Minimal 1 kegiatan dan judul proposal wajib diisi'
         });
       }
 
@@ -199,100 +227,49 @@ class BankeuProposalController {
       const filePath = req.file.filename; // Hanya filename tanpa folder prefix
       const fileSize = req.file.size;
 
-      // Check if proposal already exists for this kegiatan_id and desa_id
-      const [existingProposal] = await sequelize.query(`
-        SELECT id, file_proposal FROM bankeu_proposals
-        WHERE desa_id = ? AND kegiatan_id = ?
-      `, { replacements: [desaId, kegiatan_id] });
+      // Insert new proposal (removed duplicate kegiatan check - allow multiple proposals)
+      const [result] = await sequelize.query(`
+        INSERT INTO bankeu_proposals (
+          desa_id,
+          judul_proposal,
+          nama_kegiatan_spesifik,
+          volume,
+          lokasi,
+          deskripsi,
+          file_proposal,
+          file_size,
+          anggaran_usulan,
+          created_by,
+          status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+      `, {
+        replacements: [
+          desaId,
+          judul_proposal,
+          nama_kegiatan_spesifik || null,
+          volume || null,
+          lokasi || null,
+          deskripsi || null,
+          filePath,
+          fileSize,
+          anggaran_usulan || null,
+          userId
+        ]
+      });
 
-      let proposalId;
+      const proposalId = result.insertId;
 
-      if (existingProposal.length > 0) {
-        // Update existing proposal (replace file)
-        proposalId = existingProposal[0].id;
-        const oldFilePath = existingProposal[0].file_proposal;
-
-        // Delete old file if exists
-        if (oldFilePath) {
-          const fullPath = path.join(__dirname, '../../storage/uploads', oldFilePath);
-          if (fs.existsSync(fullPath)) {
-            fs.unlinkSync(fullPath);
-            logger.info(`🗑️ Deleted old file: ${oldFilePath}`);
-          }
-        }
-
+      // Insert kegiatan relationships
+      for (const kegiatanId of kegiatanIdsArray) {
         await sequelize.query(`
-          UPDATE bankeu_proposals
-          SET 
-            judul_proposal = ?,
-            nama_kegiatan_spesifik = ?,
-            volume = ?,
-            lokasi = ?,
-            deskripsi = ?,
-            file_proposal = ?,
-            file_size = ?,
-            anggaran_usulan = ?,
-            status = 'pending',
-            submitted_to_kecamatan = FALSE,
-            submitted_at = NULL,
-            verified_by = NULL,
-            verified_at = NULL,
-            catatan_verifikasi = NULL,
-            berita_acara_path = NULL,
-            berita_acara_generated_at = NULL,
-            updated_at = NOW()
-          WHERE id = ?
+          INSERT INTO bankeu_proposal_kegiatan (proposal_id, kegiatan_id)
+          VALUES (?, ?)
         `, {
-          replacements: [
-            judul_proposal,
-            nama_kegiatan_spesifik || null,
-            volume || null,
-            lokasi || null,
-            deskripsi || null,
-            filePath,
-            fileSize,
-            anggaran_usulan || null,
-            proposalId
-          ]
+          replacements: [proposalId, kegiatanId]
         });
-
-        logger.info(`♻️ Bankeu proposal updated (replaced): ${proposalId} by user ${userId}`);
-      } else {
-        // Insert new proposal
-        const [result] = await sequelize.query(`
-          INSERT INTO bankeu_proposals (
-            desa_id,
-            kegiatan_id,
-            judul_proposal,
-            nama_kegiatan_spesifik,
-            volume,
-            lokasi,
-            deskripsi,
-            file_proposal,
-            file_size,
-            anggaran_usulan,
-            created_by,
-            status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-        `, {
-          replacements: [
-            desaId,
-            kegiatan_id,
-            judul_proposal,
-            nama_kegiatan_spesifik || null,
-            volume || null,
-            lokasi || null,
-            deskripsi || null,
-            filePath,
-            fileSize,
-            anggaran_usulan || null,
-            userId
-          ]
-        });
-
-        proposalId = result.insertId;
-        logger.info(`✅ Bankeu proposal uploaded (new): ${proposalId} by user ${userId}`);
       }
+
+      logger.info(`✅ Bankeu proposal uploaded: ${proposalId} with ${kegiatanIdsArray.length} kegiatan by user ${userId}`);
 
       res.status(201).json({
         success: true,
