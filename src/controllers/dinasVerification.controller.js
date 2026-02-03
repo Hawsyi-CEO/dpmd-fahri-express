@@ -32,28 +32,53 @@ const getDinasProposals = async (req, res) => {
     // Get proposals where kegiatan.dinas_terkait contains this dinas kode
     // Show ALL proposals that:
     // 1. Submitted to Dinas (submitted_to_dinas_at IS NOT NULL)
-    // 2. Related to this dinas based on kegiatan.dinas_terkait
+    // 2. Related to this dinas based on kegiatan.dinas_terkait (via many-to-many)
     const proposals = await prisma.$queryRaw`
-      SELECT 
+      SELECT DISTINCT
         bp.*,
         d.nama as nama_desa,
         d.kecamatan_id,
         k.nama as nama_kecamatan,
-        bmk.nama_kegiatan,
-        bmk.jenis_kegiatan,
-        bmk.dinas_terkait,
         u.name as created_by_name,
         u_verifier.name as dinas_verifier_name
       FROM bankeu_proposals bp
       INNER JOIN desas d ON bp.desa_id = d.id
       INNER JOIN kecamatans k ON d.kecamatan_id = k.id
-      INNER JOIN bankeu_master_kegiatan bmk ON bp.kegiatan_id = bmk.id
+      INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
+      INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
       LEFT JOIN users u ON bp.created_by = u.id
       LEFT JOIN users u_verifier ON bp.dinas_verified_by = u_verifier.id
       WHERE FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0
         AND bp.submitted_to_dinas_at IS NOT NULL
       ORDER BY bp.created_at DESC
     `;
+
+    // Get kegiatan list for each proposal
+    const proposalIds = proposals.map(p => p.id);
+    if (proposalIds.length > 0) {
+      const kegiatanList = await prisma.bankeu_proposal_kegiatan.findMany({
+        where: {
+          proposal_id: {
+            in: proposalIds
+          }
+        },
+        include: {
+          bankeu_master_kegiatan: true
+        }
+      });
+
+      // Attach kegiatan_list to each proposal
+      proposals.forEach(proposal => {
+        proposal.kegiatan_list = kegiatanList
+          .filter(k => k.proposal_id === proposal.id)
+          .map(k => ({
+            id: k.bankeu_master_kegiatan.id,
+            nama_kegiatan: k.bankeu_master_kegiatan.nama_kegiatan,
+            jenis_kegiatan: k.bankeu_master_kegiatan.jenis_kegiatan,
+            dinas_terkait: k.bankeu_master_kegiatan.dinas_terkait
+          }));
+      });
+    }
 
     return res.json({
       success: true,
@@ -108,6 +133,11 @@ const getDinasProposalDetail = async (req, res) => {
             name: true,
             email: true
           }
+        },
+        bankeu_proposal_kegiatan: {
+          include: {
+            bankeu_master_kegiatan: true
+          }
         }
       }
     });
@@ -119,16 +149,23 @@ const getDinasProposalDetail = async (req, res) => {
       });
     }
 
-    // Get kegiatan info
-    const kegiatan = await prisma.bankeu_master_kegiatan.findUnique({
-      where: { id: proposal.kegiatan_id }
-    });
+    // Transform kegiatan list
+    proposal.kegiatan_list = proposal.bankeu_proposal_kegiatan.map(pk => ({
+      id: pk.bankeu_master_kegiatan.id,
+      nama_kegiatan: pk.bankeu_master_kegiatan.nama_kegiatan,
+      jenis_kegiatan: pk.bankeu_master_kegiatan.jenis_kegiatan,
+      dinas_terkait: pk.bankeu_master_kegiatan.dinas_terkait
+    }));
 
-    // Verify this dinas has access to this kegiatan
-    if (!kegiatan.dinas_terkait || !kegiatan.dinas_terkait.includes(dinas.kode_dinas)) {
+    // Verify this dinas has access to at least one kegiatan from this proposal
+    const hasAccess = proposal.kegiatan_list.some(k => 
+      k.dinas_terkait && k.dinas_terkait.includes(dinas.kode_dinas)
+    );
+    
+    if (!hasAccess) {
       return res.status(403).json({
         success: false,
-        message: 'Dinas tidak memiliki akses ke kegiatan ini'
+        message: 'Dinas tidak memiliki akses ke proposal ini'
       });
     }
 
@@ -136,7 +173,6 @@ const getDinasProposalDetail = async (req, res) => {
       success: true,
       data: {
         ...proposal,
-        bankeu_master_kegiatan: kegiatan,
         kecamatan: proposal.desas?.kecamatans
       }
     });
@@ -523,18 +559,20 @@ const getDinasStatistics = async (req, res) => {
       where: { id: dinas_id }
     });
 
-    // Count proposals by status
+    // Count proposals by status (many-to-many)
     const stats = await prisma.$queryRaw`
       SELECT 
-        COUNT(*) as total,
+        COUNT(DISTINCT bp.id) as total,
         SUM(CASE WHEN bp.dinas_status IS NULL OR bp.dinas_status = 'pending' THEN 1 ELSE 0 END) as pending,
         SUM(CASE WHEN bp.dinas_status = 'in_review' THEN 1 ELSE 0 END) as in_review,
         SUM(CASE WHEN bp.dinas_status = 'approved' THEN 1 ELSE 0 END) as approved,
         SUM(CASE WHEN bp.dinas_status = 'rejected' THEN 1 ELSE 0 END) as rejected,
         SUM(CASE WHEN bp.dinas_status = 'revision' THEN 1 ELSE 0 END) as revision
       FROM bankeu_proposals bp
-      INNER JOIN bankeu_master_kegiatan bmk ON bp.kegiatan_id = bmk.id
+      INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
+      INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
       WHERE FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0
+        AND bp.submitted_to_dinas_at IS NOT NULL
     `;
 
     return res.json({

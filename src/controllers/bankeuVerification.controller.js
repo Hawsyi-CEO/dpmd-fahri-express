@@ -53,10 +53,9 @@ class BankeuVerificationController {
       }
 
       const [proposals] = await sequelize.query(`
-        SELECT 
+        SELECT DISTINCT
           bp.id,
           bp.desa_id,
-          bp.kegiatan_id,
           bp.judul_proposal,
           bp.nama_kegiatan_spesifik,
           bp.volume,
@@ -86,13 +85,11 @@ class BankeuVerificationController {
           u_dinas.name as dinas_verifier_name,
           d.nama as desa_nama,
           d.kecamatan_id,
-          k.nama as kecamatan_nama,
-          bmk.jenis_kegiatan,
-          bmk.nama_kegiatan,
-          bmk.dinas_terkait
+          k.nama as kecamatan_nama
         FROM bankeu_proposals bp
         INNER JOIN desas d ON bp.desa_id = d.id
-        INNER JOIN bankeu_master_kegiatan bmk ON bp.kegiatan_id = bmk.id
+        INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
+        INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
         LEFT JOIN users u_created ON bp.created_by = u_created.id
         LEFT JOIN users u_verified ON bp.verified_by = u_verified.id
         LEFT JOIN users u_dinas ON bp.dinas_verified_by = u_dinas.id
@@ -100,6 +97,18 @@ class BankeuVerificationController {
         ${whereClause}
         ORDER BY bp.created_at DESC
       `, { replacements });
+
+      // Fetch kegiatan_list for each proposal (many-to-many)
+      for (const proposal of proposals) {
+        const [kegiatan] = await sequelize.query(`
+          SELECT bmk.id, bmk.jenis_kegiatan, bmk.nama_kegiatan, bmk.dinas_terkait
+          FROM bankeu_proposal_kegiatan bpk
+          JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
+          WHERE bpk.proposal_id = ?
+        `, { replacements: [proposal.id] });
+        
+        proposal.kegiatan_list = kegiatan;
+      }
 
       res.json({
         success: true,

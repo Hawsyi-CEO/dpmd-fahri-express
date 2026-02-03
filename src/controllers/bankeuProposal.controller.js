@@ -1,3 +1,5 @@
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 const sequelize = require('../config/database');
 const logger = require('../utils/logger');
 const path = require('path');
@@ -171,15 +173,22 @@ class BankeuProposalController {
         anggaran_usulan
       } = req.body;
 
+      console.log('=== DEBUG UPLOAD PROPOSAL ===');
+      console.log('req.body:', req.body);
+      console.log('kegiatan_ids type:', typeof kegiatan_ids);
+      console.log('kegiatan_ids value:', kegiatan_ids);
+
       // Parse kegiatan_ids if it's a string
       let kegiatanIdsArray = [];
       if (typeof kegiatan_ids === 'string') {
         try {
           kegiatanIdsArray = JSON.parse(kegiatan_ids);
+          console.log('Parsed kegiatan_ids:', kegiatanIdsArray);
         } catch (e) {
+          console.error('Error parsing kegiatan_ids:', e);
           return res.status(400).json({
             success: false,
-            message: 'Format kegiatan_ids tidak valid'
+            message: 'Format kegiatan_ids tidak valid: ' + e.message
           });
         }
       } else if (Array.isArray(kegiatan_ids)) {
@@ -227,47 +236,32 @@ class BankeuProposalController {
       const filePath = req.file.filename; // Hanya filename tanpa folder prefix
       const fileSize = req.file.size;
 
-      // Insert new proposal (removed duplicate kegiatan check - allow multiple proposals)
-      const [result] = await sequelize.query(`
-        INSERT INTO bankeu_proposals (
-          desa_id,
-          judul_proposal,
-          nama_kegiatan_spesifik,
-          volume,
-          lokasi,
-          deskripsi,
-          file_proposal,
-          file_size,
-          anggaran_usulan,
-          created_by,
-          status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-      `, {
-        replacements: [
-          desaId,
-          judul_proposal,
-          nama_kegiatan_spesifik || null,
-          volume || null,
-          lokasi || null,
-          deskripsi || null,
-          filePath,
-          fileSize,
-          anggaran_usulan || null,
-          userId
-        ]
+      // Use Prisma transaction to insert proposal and kegiatan relationships
+      const proposal = await prisma.bankeu_proposals.create({
+        data: {
+          desa_id: desaId,
+          judul_proposal: judul_proposal,
+          nama_kegiatan_spesifik: nama_kegiatan_spesifik || null,
+          volume: volume || null,
+          lokasi: lokasi || null,
+          deskripsi: deskripsi || null,
+          file_proposal: filePath,
+          file_size: fileSize,
+          anggaran_usulan: anggaran_usulan ? parseInt(anggaran_usulan.replace(/\D/g, '')) : null,
+          created_by: userId,
+          status: 'pending',
+          bankeu_proposal_kegiatan: {
+            create: kegiatanIdsArray.map(kegiatanId => ({
+              kegiatan_id: kegiatanId
+            }))
+          }
+        }
       });
 
-      const proposalId = result.insertId;
-
-      // Insert kegiatan relationships
-      for (const kegiatanId of kegiatanIdsArray) {
-        await sequelize.query(`
-          INSERT INTO bankeu_proposal_kegiatan (proposal_id, kegiatan_id)
-          VALUES (?, ?)
-        `, {
-          replacements: [proposalId, kegiatanId]
-        });
-      }
+      const proposalId = Number(proposal.id);
+      
+      console.log('✅ Proposal created:', proposalId);
+      console.log('✅ Kegiatan relationships created:', kegiatanIdsArray.length);
 
       logger.info(`✅ Bankeu proposal uploaded: ${proposalId} with ${kegiatanIdsArray.length} kegiatan by user ${userId}`);
 
@@ -289,6 +283,8 @@ class BankeuProposalController {
       }
 
       logger.error('Error uploading proposal:', error);
+      console.error('FULL ERROR:', error);
+      console.error('ERROR STACK:', error.stack);
       res.status(500).json({
         success: false,
         message: 'Gagal mengupload proposal',
