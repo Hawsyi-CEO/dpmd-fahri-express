@@ -195,6 +195,10 @@ class BankeuProposalController {
         kegiatanIdsArray = kegiatan_ids;
       }
 
+      // Convert all IDs to integers
+      kegiatanIdsArray = kegiatanIdsArray.map(id => parseInt(id));
+      console.log('Converted kegiatan_ids to integers:', kegiatanIdsArray);
+
       // Validate required fields
       if (!kegiatanIdsArray || kegiatanIdsArray.length === 0 || !judul_proposal) {
         return res.status(400).json({
@@ -240,6 +244,7 @@ class BankeuProposalController {
       const proposal = await prisma.bankeu_proposals.create({
         data: {
           desa_id: desaId,
+          kegiatan_id: kegiatanIdsArray[0], // Primary kegiatan reference
           judul_proposal: judul_proposal,
           nama_kegiatan_spesifik: nama_kegiatan_spesifik || null,
           volume: volume || null,
