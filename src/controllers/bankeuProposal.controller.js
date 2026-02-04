@@ -999,14 +999,16 @@ class BankeuProposalController {
    * Resubmit proposals (REVISI dari Dinas/Kecamatan/DPMD)
    * POST /api/desa/bankeu/resubmit
    * NEW FLOW 2026-01-30: Desa upload ulang → Dinas Terkait
+   * UPDATED 2026-02-04: Support destination parameter untuk split Kecamatan vs Dinas
    */
   async resubmitProposal(req, res) {
     const transaction = await sequelize.transaction();
     
     try {
       const userId = req.user.id;
+      const { destination } = req.body; // 'kecamatan' atau 'dinas'
 
-      logger.info(`📤 RESUBMIT PROPOSAL (REVISI) - User: ${userId}`);
+      logger.info(`📤 RESUBMIT PROPOSAL (REVISI) - User: ${userId}, Destination: ${destination || 'auto-detect'}`);
 
       // Get desa_id from user
       const [users] = await sequelize.query(`
@@ -1044,25 +1046,40 @@ class BankeuProposalController {
         });
       }
 
-      // Detect rejection origin from first proposal (all should be same level)
-      const firstProposal = proposals[0];
-      const fromDPMD = firstProposal.dpmd_status && 
-                       ['rejected', 'revision'].includes(firstProposal.dpmd_status);
-      const fromKecamatan = !fromDPMD && 
-                           firstProposal.kecamatan_status && 
-                           ['rejected', 'revision'].includes(firstProposal.kecamatan_status);
-      const fromDinas = !fromDPMD && !fromKecamatan && 
-                       firstProposal.dinas_status && 
-                       ['rejected', 'revision'].includes(firstProposal.dinas_status);
+      // Detect rejection origin
+      let fromDPMD = false;
+      let fromKecamatan = false;
+      let fromDinas = false;
 
-      logger.info(`🔍 Rejection Origin - DPMD: ${fromDPMD}, Kecamatan: ${fromKecamatan}, Dinas: ${fromDinas}`);
+      if (destination) {
+        // Jika ada parameter destination, gunakan itu (prioritas tinggi)
+        if (destination === 'kecamatan') {
+          fromKecamatan = true;
+        } else if (destination === 'dinas') {
+          fromDinas = true;
+        }
+        logger.info(`✅ Using explicit destination parameter: ${destination}`);
+      } else {
+        // Fallback: Auto-detect dari proposal pertama (legacy behavior)
+        const firstProposal = proposals[0];
+        fromDPMD = firstProposal.dpmd_status && 
+                   ['rejected', 'revision'].includes(firstProposal.dpmd_status);
+        fromKecamatan = !fromDPMD && 
+                       firstProposal.kecamatan_status && 
+                       ['rejected', 'revision'].includes(firstProposal.kecamatan_status);
+        fromDinas = !fromDPMD && !fromKecamatan && 
+                   firstProposal.dinas_status && 
+                   ['rejected', 'revision'].includes(firstProposal.dinas_status);
+        logger.info(`🔍 Auto-detected Origin - DPMD: ${fromDPMD}, Kecamatan: ${fromKecamatan}, Dinas: ${fromDinas}`);
+      }
 
       let updateQuery = '';
-      let destination = '';
+      let destinationLabel = '';
 
       if (fromKecamatan) {
         // REJECT DARI KECAMATAN → Kirim langsung ke Kecamatan (skip Dinas)
-        destination = 'Kecamatan';
+        // IMPORTANT: Hanya update proposal yang MEMANG dari Kecamatan (ada kecamatan_status rejection tapi TIDAK ada dinas_status rejection)
+        destinationLabel = 'Kecamatan';
         updateQuery = `
           UPDATE bankeu_proposals
           SET submitted_to_kecamatan = TRUE,
@@ -1083,11 +1100,14 @@ class BankeuProposalController {
             AND status = 'pending'
             AND submitted_to_dinas_at IS NULL
             AND submitted_to_kecamatan = FALSE
-            AND (dinas_status IS NOT NULL OR kecamatan_status IS NOT NULL OR dpmd_status IS NOT NULL)
+            AND kecamatan_status IN ('rejected', 'revision')
+            AND (dinas_status IS NULL OR dinas_status NOT IN ('rejected', 'revision'))
+            AND dpmd_status IS NULL
         `;
       } else {
         // REJECT DARI DINAS atau DPMD → Kirim ke Dinas (flow normal dari awal)
-        destination = fromDPMD ? 'Dinas Terkait (dari DPMD)' : 'Dinas Terkait';
+        // IMPORTANT: Hanya update proposal yang dari Dinas atau DPMD (ada dinas_status/dpmd_status rejection)
+        destinationLabel = fromDPMD ? 'Dinas Terkait (dari DPMD)' : 'Dinas Terkait';
         updateQuery = `
           UPDATE bankeu_proposals
           SET submitted_to_dinas_at = NOW(),
@@ -1111,7 +1131,10 @@ class BankeuProposalController {
             AND status = 'pending'
             AND submitted_to_dinas_at IS NULL
             AND submitted_to_kecamatan = FALSE
-            AND (dinas_status IS NOT NULL OR kecamatan_status IS NOT NULL OR dpmd_status IS NOT NULL)
+            AND (
+              dinas_status IN ('rejected', 'revision') 
+              OR dpmd_status IS NOT NULL
+            )
         `;
       }
 
@@ -1123,16 +1146,15 @@ class BankeuProposalController {
       await transaction.commit();
 
       const count = proposals.length;
-      logger.info(`✅ ${count} revised proposals from desa ${desaId} resubmitted to ${destination}`);
+      logger.info(`✅ ${count} revised proposals from desa ${desaId} resubmitted to ${destinationLabel}`);
 
       res.json({
         success: true,
-        message: `${count} proposal revisi berhasil dikirim ulang ke ${destination}`
+        message: `${count} proposal revisi berhasil dikirim ulang ke ${destinationLabel}`,
+        data: { count, destination: destinationLabel }
       });
     } catch (error) {
-      if (transaction && !transaction.finished) {
-        await transaction.rollback();
-      }
+      await transaction.rollback();
       logger.error('Error resubmitting proposals:', error);
       res.status(500).json({
         success: false,

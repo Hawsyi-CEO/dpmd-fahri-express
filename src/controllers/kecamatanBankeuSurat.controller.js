@@ -35,7 +35,7 @@ exports.getAllDesaSurat = async (req, res) => {
       SELECT 
         dbs.*,
         d.nama AS nama_desa,
-        d.kode_desa,
+        d.kode AS kode_desa,
         k.nama AS kecamatan_name,
         u.name AS reviewer_name
       FROM desa_bankeu_surat dbs
@@ -84,8 +84,8 @@ exports.getDesaSuratDetail = async (req, res) => {
     const query = `
       SELECT 
         dbs.*,
-        d.nama_desa,
-        d.kode_desa,
+        d.nama AS nama_desa,
+        d.kode AS kode_desa,
         d.kecamatan_id,
         k.nama AS kecamatan_name,
         u.name AS reviewer_name
@@ -150,7 +150,7 @@ exports.reviewSurat = async (req, res) => {
 
     // Check apakah surat ada dan milik kecamatan ini
     const checkQuery = `
-      SELECT dbs.*, d.nama_desa, d.kecamatan_id
+      SELECT dbs.*, d.nama AS nama_desa, d.kecamatan_id
       FROM desa_bankeu_surat dbs
       INNER JOIN desas d ON dbs.desa_id = d.id
       WHERE dbs.id = ? AND d.kecamatan_id = ?

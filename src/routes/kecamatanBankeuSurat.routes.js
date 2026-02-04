@@ -4,16 +4,19 @@ const router = express.Router();
 const kecamatanBankeuSuratController = require('../controllers/kecamatanBankeuSurat.controller');
 const { auth, checkRole } = require('../middlewares/auth');
 
+// Allowed roles untuk kecamatan
+const KECAMATAN_ROLES = ['kecamatan', 'superadmin', 'camat'];
+
 // GET all surat from desas in kecamatan
-router.get('/', auth, checkRole('kecamatan'), kecamatanBankeuSuratController.getAllDesaSurat);
+router.get('/', auth, checkRole(...KECAMATAN_ROLES), kecamatanBankeuSuratController.getAllDesaSurat);
 
 // GET statistics surat
-router.get('/statistics', auth, checkRole('kecamatan'), kecamatanBankeuSuratController.getSuratStatistics);
+router.get('/statistics', auth, checkRole(...KECAMATAN_ROLES), kecamatanBankeuSuratController.getSuratStatistics);
 
 // GET single surat detail
-router.get('/:id', auth, checkRole('kecamatan'), kecamatanBankeuSuratController.getDesaSuratDetail);
+router.get('/:id', auth, checkRole(...KECAMATAN_ROLES), kecamatanBankeuSuratController.getDesaSuratDetail);
 
 // POST review surat (approve/reject)
-router.post('/:id/review', auth, checkRole('kecamatan'), kecamatanBankeuSuratController.reviewSurat);
+router.post('/:id/review', auth, checkRole(...KECAMATAN_ROLES), kecamatanBankeuSuratController.reviewSurat);
 
 module.exports = router;

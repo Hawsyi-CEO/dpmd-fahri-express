@@ -53,7 +53,7 @@ class BankeuVerificationController {
       }
 
       const [proposals] = await sequelize.query(`
-        SELECT DISTINCT
+        SELECT 
           bp.id,
           bp.desa_id,
           bp.judul_proposal,
@@ -88,8 +88,6 @@ class BankeuVerificationController {
           k.nama as kecamatan_nama
         FROM bankeu_proposals bp
         INNER JOIN desas d ON bp.desa_id = d.id
-        INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
-        INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
         LEFT JOIN users u_created ON bp.created_by = u_created.id
         LEFT JOIN users u_verified ON bp.verified_by = u_verified.id
         LEFT JOIN users u_dinas ON bp.dinas_verified_by = u_dinas.id
@@ -412,6 +410,7 @@ class BankeuVerificationController {
   async generateBeritaAcaraDesa(req, res) {
     try {
       const { desaId } = req.params;
+      const { kegiatanId } = req.body; // Optional: untuk generate per kegiatan
       const userId = req.user.id;
 
       // Get user info
@@ -445,19 +444,32 @@ class BankeuVerificationController {
       // Use service to generate berita acara
       const filePath = await beritaAcaraService.generateBeritaAcaraVerifikasi({
         desaId: parseInt(desaId),
-        kecamatanId
+        kecamatanId,
+        kegiatanId: kegiatanId ? parseInt(kegiatanId) : null
       });
 
       // Update proposals with berita acara path
-      await sequelize.query(`
-        UPDATE bankeu_proposals
-        SET 
-          berita_acara_path = ?,
-          berita_acara_generated_at = NOW()
-        WHERE desa_id = ?
-      `, { replacements: [filePath, desaId] });
+      if (kegiatanId) {
+        // Update only specific kegiatan
+        await sequelize.query(`
+          UPDATE bankeu_proposals
+          SET 
+            berita_acara_path = ?,
+            berita_acara_generated_at = NOW()
+          WHERE desa_id = ? AND kegiatan_id = ?
+        `, { replacements: [filePath, desaId, kegiatanId] });
+      } else {
+        // Update all proposals for desa
+        await sequelize.query(`
+          UPDATE bankeu_proposals
+          SET 
+            berita_acara_path = ?,
+            berita_acara_generated_at = NOW()
+          WHERE desa_id = ?
+        `, { replacements: [filePath, desaId] });
+      }
 
-      logger.info(`✅ Berita Acara generated for desa ${desaId}: ${filePath}`);
+      logger.info(`✅ Berita Acara generated for desa ${desaId}${kegiatanId ? ` kegiatan ${kegiatanId}` : ''}: ${filePath}`);
 
       res.json({
         success: true,

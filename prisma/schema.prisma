@@ -974,6 +974,7 @@ enum pejabat_ttd_jenis_pejabat {
 enum bankeu_verification_questionnaires_verifikasi_type {
   kecamatan
   dinas
+  kecamatan_tim
 }
 
 enum desas_status_pemerintahan {
@@ -1066,6 +1067,7 @@ enum users_role {
   desa
   kecamatan
   dinas_terkait
+  verifikator_dinas
 }
 
 enum berita_kategori {
