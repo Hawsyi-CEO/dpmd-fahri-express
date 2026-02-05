@@ -229,7 +229,7 @@ const vpnAuth = async (req, res, next) => {
   }
 };
 
-// Middleware to check if user has dinas_terkait role and dinas_id
+// Middleware to check if user has dinas_terkait or verifikator_dinas role and dinas_id
 const authorizeDinas = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({
@@ -238,11 +238,12 @@ const authorizeDinas = (req, res, next) => {
     });
   }
 
-  if (req.user.role !== 'dinas_terkait') {
-    logger.warn(`❌ Dinas access denied - User ${req.user.email} has role ${req.user.role}, expected dinas_terkait`);
+  const allowedDinasRoles = ['dinas_terkait', 'verifikator_dinas'];
+  if (!allowedDinasRoles.includes(req.user.role)) {
+    logger.warn(`❌ Dinas access denied - User ${req.user.email} has role ${req.user.role}, expected one of: ${allowedDinasRoles.join(', ')}`);
     return res.status(403).json({
       success: false,
-      message: 'Access forbidden - Requires dinas_terkait role'
+      message: 'Access forbidden - Requires dinas role'
     });
   }
 
@@ -254,7 +255,7 @@ const authorizeDinas = (req, res, next) => {
     });
   }
 
-  logger.info(`✅ Dinas authorization passed - User ${req.user.email} (dinas_id: ${req.user.dinas_id})`);
+  logger.info(`✅ Dinas authorization passed - User ${req.user.email} (dinas_id: ${req.user.dinas_id}, role: ${req.user.role})`);
   next();
 };
 

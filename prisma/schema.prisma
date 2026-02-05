@@ -361,6 +361,7 @@ model desas {
   rts                       rts[]
   rws                       rws[]
   satlinmas                 satlinmas[]
+  verifikator_akses_desa    verifikator_akses_desa[]
 
   @@index([kecamatan_id], map: "desas_kecamatan_id_foreign")
 }
@@ -514,13 +515,14 @@ model kecamatan_bankeu_config {
 }
 
 model kecamatans {
-  id                 BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
-  kode               String               @unique(map: "kecamatans_kode_unique") @db.VarChar(255)
-  nama               String               @db.VarChar(255)
-  created_at         DateTime?            @db.Timestamp(0)
-  updated_at         DateTime?            @db.Timestamp(0)
-  desas              desas[]
-  petugas_monitoring petugas_monitoring[]
+  id                     BigInt                   @id @default(autoincrement()) @db.UnsignedBigInt
+  kode                   String                   @unique(map: "kecamatans_kode_unique") @db.VarChar(255)
+  nama                   String                   @db.VarChar(255)
+  created_at             DateTime?                @db.Timestamp(0)
+  updated_at             DateTime?                @db.Timestamp(0)
+  desas                  desas[]
+  petugas_monitoring     petugas_monitoring[]
+  verifikator_akses_desa verifikator_akses_desa[]
 }
 
 model kegiatan {
@@ -631,9 +633,51 @@ model master_dinas {
   created_at                         DateTime?                            @default(now()) @db.Timestamp(0)
   updated_at                         DateTime?                            @default(now()) @db.Timestamp(0)
   bankeu_verification_questionnaires bankeu_verification_questionnaires[]
+  dinas_verifikator                  dinas_verifikator[]
 
   @@index([is_active], map: "idx_is_active")
   @@index([kode_dinas], map: "idx_kode_dinas")
+}
+
+/// Tabel untuk tracking verifikator yang ditunjuk oleh dinas
+model dinas_verifikator {
+  id                      BigInt                    @id @default(autoincrement()) @db.UnsignedBigInt
+  dinas_id                Int
+  user_id                 BigInt                    @db.UnsignedBigInt
+  nama                    String                    @db.VarChar(255)
+  nip                     String?                   @db.VarChar(50)
+  jabatan                 String                    @db.VarChar(255)
+  pangkat_golongan        String?                   @db.VarChar(100)
+  email                   String                    @db.VarChar(255)
+  ttd_path                String?                   @db.VarChar(255)
+  is_active               Boolean?                  @default(true)
+  created_by              BigInt                    @db.UnsignedBigInt
+  created_at              DateTime?                 @default(now()) @db.Timestamp(0)
+  updated_at              DateTime?                 @db.Timestamp(0)
+  master_dinas            master_dinas              @relation(fields: [dinas_id], references: [id], onDelete: Cascade)
+  verifikator_akses_desa  verifikator_akses_desa[]
+
+  @@unique([dinas_id, user_id], map: "unique_user_per_dinas")
+  @@index([dinas_id], map: "idx_dinas_id")
+  @@index([user_id], map: "idx_user_id")
+  @@index([is_active], map: "idx_is_active_dv")
+}
+
+model verifikator_akses_desa {
+  id                BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
+  verifikator_id    BigInt            @db.UnsignedBigInt
+  desa_id           BigInt            @db.UnsignedBigInt
+  kecamatan_id      BigInt            @db.UnsignedBigInt
+  created_at        DateTime?         @default(now()) @db.Timestamp(0)
+  updated_at        DateTime?         @default(now()) @db.Timestamp(0)
+  dinas_verifikator dinas_verifikator @relation(fields: [verifikator_id], references: [id], onDelete: Cascade, map: "fk_verifikator_akses_verifikator")
+  desas             desas             @relation(fields: [desa_id], references: [id], onDelete: Cascade, map: "fk_verifikator_akses_desa")
+  kecamatans        kecamatans        @relation(fields: [kecamatan_id], references: [id], onDelete: Cascade, map: "fk_verifikator_akses_kecamatan")
+
+  @@unique([verifikator_id, desa_id], map: "unique_verifikator_desa")
+  @@index([verifikator_id], map: "idx_verifikator_id")
+  @@index([desa_id], map: "idx_desa_id")
+  @@index([kecamatan_id], map: "idx_kecamatan_id")
 }
 
 model pegawai {

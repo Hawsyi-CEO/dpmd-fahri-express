@@ -8,7 +8,7 @@ const { copyFileToReference } = require('../utils/fileHelper');
  */
 const getDinasProposals = async (req, res) => {
   try {
-    const { dinas_id } = req.user; // dari JWT token
+    const { dinas_id, id: userId, role } = req.user; // dari JWT token
 
     if (!dinas_id) {
       return res.status(403).json({
@@ -29,29 +29,173 @@ const getDinasProposals = async (req, res) => {
       });
     }
 
+    // Check if user is verifikator_dinas and get their akses desa
+    let accessibleDesaIds = null;
+    if (role === 'verifikator_dinas') {
+      // Get verifikator record
+      const verifikator = await prisma.dinas_verifikator.findFirst({
+        where: {
+          user_id: BigInt(userId),
+          dinas_id: dinas_id
+        }
+      });
+
+      if (!verifikator) {
+        return res.status(403).json({
+          success: false,
+          message: 'Verifikator tidak ditemukan'
+        });
+      }
+
+      // Get accessible desa IDs
+      const aksesDesaList = await prisma.verifikator_akses_desa.findMany({
+        where: {
+          verifikator_id: verifikator.id
+        },
+        select: {
+          desa_id: true
+        }
+      });
+
+      accessibleDesaIds = aksesDesaList.map(akses => akses.desa_id);
+
+      // If verifikator has no akses desa, return empty
+      if (accessibleDesaIds.length === 0) {
+        return res.json({
+          success: true,
+          data: [],
+          dinas_info: {
+            kode: dinas.kode_dinas,
+            nama: dinas.nama_dinas,
+            singkatan: dinas.singkatan
+          },
+          message: 'Anda belum diberikan akses ke desa manapun. Hubungi admin dinas untuk mendapatkan akses.'
+        });
+      }
+    }
+
     // Get proposals where kegiatan.dinas_terkait contains this dinas kode
-    // Show ALL proposals that:
+    // Show proposals that:
     // 1. Submitted to Dinas (submitted_to_dinas_at IS NOT NULL)
     // 2. Related to this dinas based on kegiatan.dinas_terkait (via many-to-many)
-    const proposals = await prisma.$queryRaw`
-      SELECT DISTINCT
-        bp.*,
-        d.nama as nama_desa,
-        d.kecamatan_id,
-        k.nama as nama_kecamatan,
-        u.name as created_by_name,
-        u_verifier.name as dinas_verifier_name
-      FROM bankeu_proposals bp
-      INNER JOIN desas d ON bp.desa_id = d.id
-      INNER JOIN kecamatans k ON d.kecamatan_id = k.id
-      INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
-      INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
-      LEFT JOIN users u ON bp.created_by = u.id
-      LEFT JOIN users u_verifier ON bp.dinas_verified_by = u_verifier.id
-      WHERE FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0
-        AND bp.submitted_to_dinas_at IS NOT NULL
-      ORDER BY bp.created_at DESC
-    `;
+    // 3. For verifikator_dinas: Only desa they have access to
+    // 4. For dinas_terkait: Only desa that NO verifikator has access to (or all if no verifikator exists)
+    let proposals;
+    
+    if (role === 'verifikator_dinas' && accessibleDesaIds) {
+      // VERIFIKATOR: Filter by accessible desa IDs for verifikator
+      proposals = await prisma.$queryRaw`
+        SELECT DISTINCT
+          bp.*,
+          d.nama as nama_desa,
+          d.kecamatan_id,
+          k.nama as nama_kecamatan,
+          u.name as created_by_name,
+          u_verifier.name as dinas_verifier_name,
+          dv.nama as dinas_verifikator_nama,
+          dv.jabatan as dinas_verifikator_jabatan,
+          dv.pangkat_golongan as dinas_verifikator_pangkat,
+          dv.ttd_path as dinas_verifikator_ttd
+        FROM bankeu_proposals bp
+        INNER JOIN desas d ON bp.desa_id = d.id
+        INNER JOIN kecamatans k ON d.kecamatan_id = k.id
+        INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
+        INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
+        LEFT JOIN users u ON bp.created_by = u.id
+        LEFT JOIN users u_verifier ON bp.dinas_verified_by = u_verifier.id
+        LEFT JOIN dinas_verifikator dv ON u_verifier.id = dv.user_id AND u_verifier.dinas_id = dv.dinas_id
+        WHERE FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0
+          AND bp.submitted_to_dinas_at IS NOT NULL
+          AND bp.desa_id IN (${accessibleDesaIds.join(',')})
+        ORDER BY bp.created_at DESC
+      `;
+    } else {
+      // DINAS STAFF: Show proposals from desa that NO verifikator has access to
+      // Get all desa IDs that any verifikator has access to for this dinas
+      const verifikatorsForDinas = await prisma.dinas_verifikator.findMany({
+        where: {
+          dinas_id: dinas_id,
+          is_active: true
+        },
+        select: {
+          id: true
+        }
+      });
+
+      const verifikatorIds = verifikatorsForDinas.map(v => v.id);
+      let excludedDesaIds = [];
+
+      if (verifikatorIds.length > 0) {
+        // Get all desa IDs that have been assigned to any verifikator
+        const assignedDesas = await prisma.verifikator_akses_desa.findMany({
+          where: {
+            verifikator_id: {
+              in: verifikatorIds
+            }
+          },
+          select: {
+            desa_id: true
+          }
+        });
+
+        excludedDesaIds = [...new Set(assignedDesas.map(ad => ad.desa_id))];
+      }
+
+      // Query proposals: exclude desa that have been assigned to verifikator
+      if (excludedDesaIds.length > 0) {
+        proposals = await prisma.$queryRaw`
+          SELECT DISTINCT
+            bp.*,
+            d.nama as nama_desa,
+            d.kecamatan_id,
+            k.nama as nama_kecamatan,
+            u.name as created_by_name,
+            u_verifier.name as dinas_verifier_name,
+            dv.nama as dinas_verifikator_nama,
+            dv.jabatan as dinas_verifikator_jabatan,
+            dv.pangkat_golongan as dinas_verifikator_pangkat,
+            dv.ttd_path as dinas_verifikator_ttd
+          FROM bankeu_proposals bp
+          INNER JOIN desas d ON bp.desa_id = d.id
+          INNER JOIN kecamatans k ON d.kecamatan_id = k.id
+          INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
+          INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
+          LEFT JOIN users u ON bp.created_by = u.id
+          LEFT JOIN users u_verifier ON bp.dinas_verified_by = u_verifier.id
+          LEFT JOIN dinas_verifikator dv ON u_verifier.id = dv.user_id AND u_verifier.dinas_id = dv.dinas_id
+          WHERE FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0
+            AND bp.submitted_to_dinas_at IS NOT NULL
+            AND bp.desa_id NOT IN (${excludedDesaIds.join(',')})
+          ORDER BY bp.created_at DESC
+        `;
+      } else {
+        // No verifikator or no assigned desa, show all proposals
+        proposals = await prisma.$queryRaw`
+          SELECT DISTINCT
+            bp.*,
+            d.nama as nama_desa,
+            d.kecamatan_id,
+            k.nama as nama_kecamatan,
+            u.name as created_by_name,
+            u_verifier.name as dinas_verifier_name,
+            dv.nama as dinas_verifikator_nama,
+            dv.jabatan as dinas_verifikator_jabatan,
+            dv.pangkat_golongan as dinas_verifikator_pangkat,
+            dv.ttd_path as dinas_verifikator_ttd
+          FROM bankeu_proposals bp
+          INNER JOIN desas d ON bp.desa_id = d.id
+          INNER JOIN kecamatans k ON d.kecamatan_id = k.id
+          INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
+          INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
+          LEFT JOIN users u ON bp.created_by = u.id
+          LEFT JOIN users u_verifier ON bp.dinas_verified_by = u_verifier.id
+          LEFT JOIN dinas_verifikator dv ON u_verifier.id = dv.user_id AND u_verifier.dinas_id = dv.dinas_id
+          WHERE FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0
+            AND bp.submitted_to_dinas_at IS NOT NULL
+          ORDER BY bp.created_at DESC
+        `;
+      }
+    }
 
     // Get kegiatan list for each proposal
     const proposalIds = proposals.map(p => p.id);
@@ -106,7 +250,7 @@ const getDinasProposals = async (req, res) => {
 const getDinasProposalDetail = async (req, res) => {
   try {
     const { proposalId } = req.params;
-    const { dinas_id } = req.user;
+    const { dinas_id, id: userId, role } = req.user;
 
     if (!dinas_id) {
       return res.status(403).json({
@@ -169,6 +313,38 @@ const getDinasProposalDetail = async (req, res) => {
       });
     }
 
+    // Additional check for verifikator_dinas - must have access to the desa
+    if (role === 'verifikator_dinas') {
+      const verifikator = await prisma.dinas_verifikator.findFirst({
+        where: {
+          user_id: BigInt(userId),
+          dinas_id: dinas_id
+        }
+      });
+
+      if (!verifikator) {
+        return res.status(403).json({
+          success: false,
+          message: 'Verifikator tidak ditemukan'
+        });
+      }
+
+      // Check if verifikator has access to this desa
+      const hasDesaAccess = await prisma.verifikator_akses_desa.findFirst({
+        where: {
+          verifikator_id: verifikator.id,
+          desa_id: proposal.desa_id
+        }
+      });
+
+      if (!hasDesaAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Anda tidak memiliki akses ke proposal dari desa ini'
+        });
+      }
+    }
+
     return res.json({
       success: true,
       data: {
@@ -193,7 +369,7 @@ const getDinasProposalDetail = async (req, res) => {
 const saveQuestionnaire = async (req, res) => {
   try {
     const { proposalId } = req.params;
-    const { dinas_id, id: user_id } = req.user;
+    const { dinas_id, id: user_id, role } = req.user;
     const { answers, catatan_umum } = req.body;
 
     if (!dinas_id) {
@@ -213,6 +389,37 @@ const saveQuestionnaire = async (req, res) => {
         success: false,
         message: 'Proposal tidak ditemukan'
       });
+    }
+
+    // Additional check for verifikator_dinas - must have access to the desa
+    if (role === 'verifikator_dinas') {
+      const verifikator = await prisma.dinas_verifikator.findFirst({
+        where: {
+          user_id: BigInt(user_id),
+          dinas_id: dinas_id
+        }
+      });
+
+      if (!verifikator) {
+        return res.status(403).json({
+          success: false,
+          message: 'Verifikator tidak ditemukan'
+        });
+      }
+
+      const hasDesaAccess = await prisma.verifikator_akses_desa.findFirst({
+        where: {
+          verifikator_id: verifikator.id,
+          desa_id: proposal.desa_id
+        }
+      });
+
+      if (!hasDesaAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Anda tidak memiliki akses untuk memverifikasi proposal dari desa ini'
+        });
+      }
     }
 
     // Convert answers array to q1-q13 format
@@ -287,7 +494,7 @@ const saveQuestionnaire = async (req, res) => {
 const submitVerification = async (req, res) => {
   try {
     const { proposalId } = req.params;
-    const { dinas_id, id: user_id } = req.user;
+    const { dinas_id, id: user_id, role } = req.user;
     const { action, answers, catatan_umum } = req.body; // action: 'approved' | 'rejected' | 'revision'
 
     if (!dinas_id) {
@@ -315,6 +522,56 @@ const submitVerification = async (req, res) => {
         success: false,
         message: 'Proposal tidak ditemukan'
       });
+    }
+
+    // Additional check for verifikator_dinas - must have access to the desa
+    let verifikator = null;
+    if (role === 'verifikator_dinas') {
+      verifikator = await prisma.dinas_verifikator.findFirst({
+        where: {
+          user_id: BigInt(user_id),
+          dinas_id: dinas_id
+        }
+      });
+
+      if (!verifikator) {
+        return res.status(403).json({
+          success: false,
+          message: 'Verifikator tidak ditemukan'
+        });
+      }
+
+      const hasDesaAccess = await prisma.verifikator_akses_desa.findFirst({
+        where: {
+          verifikator_id: verifikator.id,
+          desa_id: proposal.desa_id
+        }
+      });
+
+      if (!hasDesaAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Anda tidak memiliki akses untuk memverifikasi proposal dari desa ini'
+        });
+      }
+
+      // VALIDATION: Verifikator must complete profile before approving
+      if (action === 'approved') {
+        if (!verifikator.ttd_path) {
+          return res.status(400).json({
+            success: false,
+            message: 'Anda harus melengkapi profil dan upload tanda tangan terlebih dahulu sebelum dapat menyetujui proposal. Silakan ke menu Profil Verifikator.'
+          });
+        }
+
+        // Check other required fields
+        if (!verifikator.nama || !verifikator.jabatan) {
+          return res.status(400).json({
+            success: false,
+            message: 'Profil verifikator belum lengkap. Silakan lengkapi nama dan jabatan di menu Profil Verifikator.'
+          });
+        }
+      }
     }
 
     // Convert answers array to q1-q13 format

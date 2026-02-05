@@ -77,6 +77,7 @@ const kecamatanBankeuSuratRoutes = require('./routes/kecamatanBankeuSurat.routes
 const bankeuVerificationRoutes = require('./routes/bankeuVerification.routes');
 const dinasVerificationRoutes = require('./routes/dinasVerification.routes');
 const dinasVerifikatorRoutes = require('./routes/dinasVerifikator.routes');
+const verifikatorAksesDesaRoutes = require('./routes/verifikatorAksesDesa.routes');
 
 const app = express();
 
@@ -225,6 +226,8 @@ app.use('/api/kecamatan/bankeu', bankeuVerificationRoutes); // Bankeu verificati
 app.use('/api/dinas/bankeu', dinasVerificationRoutes); // Bankeu verification routes for dinas terkait
 app.use('/api/dinas', require('./routes/dinasConfig.routes')); // Dinas configuration (TTD + PIC)
 app.use('/api/dinas', dinasVerifikatorRoutes); // Dinas verifikator management
+app.use('/api/dinas/verifikator', verifikatorAksesDesaRoutes); // Verifikator akses desa management
+app.use('/api/verifikator/profile', require('./routes/verifikatorProfile.routes')); // Verifikator profile & TTD
 app.use('/api/kecamatan', require('./routes/kecamatanBankeuTimConfig.routes')); // Kecamatan tim verifikasi config
 app.use('/api/bankeu/questionnaire', require('./routes/bankeuQuestionnaire.routes')); // Verification questionnaire
 app.use('/api/contoh-proposal', require('./routes/contohProposal.routes')); // Example proposal files
