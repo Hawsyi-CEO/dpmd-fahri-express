@@ -74,10 +74,13 @@ class BankeuVerificationController {
           bp.kecamatan_catatan,
           bp.submitted_to_kecamatan,
           bp.submitted_at,
+          bp.submitted_to_dpmd,
+          bp.submitted_to_dpmd_at,
           bp.catatan_verifikasi,
           bp.verified_at,
           bp.berita_acara_path,
           bp.berita_acara_generated_at,
+          bp.surat_pengantar,
           bp.created_at,
           bp.updated_at,
           u_created.name as created_by_name,
@@ -415,7 +418,7 @@ class BankeuVerificationController {
   async generateBeritaAcaraDesa(req, res) {
     try {
       const { desaId } = req.params;
-      const { kegiatanId } = req.body; // Optional: untuk generate per kegiatan
+      const { kegiatanId, proposalId } = req.body; // proposalId untuk tim verifikasi per proposal
       const userId = req.user.id;
 
       // Get user info
@@ -446,15 +449,34 @@ class BankeuVerificationController {
         });
       }
 
+      // Get checklist data from questionnaires
+      let checklistData = null;
+      if (proposalId) {
+        // Get aggregated checklist for this proposal
+        const BeritaAcaraHelper = require('../services/beritaAcaraHelper');
+        checklistData = await BeritaAcaraHelper.getAggregatedChecklistData(proposalId, kecamatanId);
+      }
+
       // Use service to generate berita acara
       const filePath = await beritaAcaraService.generateBeritaAcaraVerifikasi({
         desaId: parseInt(desaId),
         kecamatanId,
-        kegiatanId: kegiatanId ? parseInt(kegiatanId) : null
+        kegiatanId: kegiatanId ? parseInt(kegiatanId) : null,
+        proposalId: proposalId ? parseInt(proposalId) : null,
+        checklistData
       });
 
       // Update proposals with berita acara path
-      if (kegiatanId) {
+      if (proposalId) {
+        // Update specific proposal
+        await sequelize.query(`
+          UPDATE bankeu_proposals
+          SET 
+            berita_acara_path = ?,
+            berita_acara_generated_at = NOW()
+          WHERE id = ?
+        `, { replacements: [filePath, proposalId] });
+      } else if (kegiatanId) {
         // Update only specific kegiatan
         await sequelize.query(`
           UPDATE bankeu_proposals
@@ -474,7 +496,7 @@ class BankeuVerificationController {
         `, { replacements: [filePath, desaId] });
       }
 
-      logger.info(`✅ Berita Acara generated for desa ${desaId}${kegiatanId ? ` kegiatan ${kegiatanId}` : ''}: ${filePath}`);
+      logger.info(`✅ Berita Acara generated for desa ${desaId}${proposalId ? ` proposal ${proposalId}` : kegiatanId ? ` kegiatan ${kegiatanId}` : ''}: ${filePath}`);
 
       res.json({
         success: true,
@@ -540,11 +562,14 @@ class BankeuVerificationController {
         });
       }
 
-      // Check if all proposals have been reviewed (no pending status)
+      // Check if all proposals have been reviewed (no pending kecamatan_status)
       const [pendingCount] = await sequelize.query(`
         SELECT COUNT(*) as total
-        FROM bankeu_proposals
-        WHERE desa_id = ? AND kecamatan_id = ? AND status = 'pending'
+        FROM bankeu_proposals bp
+        INNER JOIN desas d ON bp.desa_id = d.id
+        WHERE bp.desa_id = ? AND d.kecamatan_id = ? 
+          AND bp.submitted_to_kecamatan = TRUE
+          AND (bp.kecamatan_status = 'pending' OR bp.kecamatan_status IS NULL)
       `, { replacements: [desaId, kecamatanId] });
 
       if (pendingCount[0].total > 0) {
@@ -554,11 +579,12 @@ class BankeuVerificationController {
         });
       }
 
-      // Check if there are any proposals at all
+      // Check if there are any proposals submitted to kecamatan
       const [totalCount] = await sequelize.query(`
         SELECT COUNT(*) as total
-        FROM bankeu_proposals
-        WHERE desa_id = ? AND kecamatan_id = ?
+        FROM bankeu_proposals bp
+        INNER JOIN desas d ON bp.desa_id = d.id
+        WHERE bp.desa_id = ? AND d.kecamatan_id = ? AND bp.submitted_to_kecamatan = TRUE
       `, { replacements: [desaId, kecamatanId] });
 
       if (totalCount[0].total === 0) {
@@ -568,23 +594,83 @@ class BankeuVerificationController {
         });
       }
 
+      // For submit to DPMD: Check berita acara and surat pengantar
+      if (action === 'submit') {
+        // Check if all proposals have berita acara
+        const [missingBeritaAcara] = await sequelize.query(`
+          SELECT COUNT(*) as total
+          FROM bankeu_proposals bp
+          INNER JOIN desas d ON bp.desa_id = d.id
+          WHERE bp.desa_id = ? AND d.kecamatan_id = ? 
+            AND bp.submitted_to_kecamatan = TRUE
+            AND (bp.berita_acara_path IS NULL OR bp.berita_acara_path = '')
+        `, { replacements: [desaId, kecamatanId] });
+
+        if (missingBeritaAcara[0].total > 0) {
+          return res.status(400).json({
+            success: false,
+            message: `Masih ada ${missingBeritaAcara[0].total} proposal yang belum memiliki Berita Acara. Generate Berita Acara terlebih dahulu sebelum mengirim ke DPMD.`
+          });
+        }
+
+        // Check if all proposals have surat pengantar kecamatan
+        const [missingSuratPengantar] = await sequelize.query(`
+          SELECT COUNT(*) as total
+          FROM bankeu_proposals bp
+          INNER JOIN desas d ON bp.desa_id = d.id
+          WHERE bp.desa_id = ? AND d.kecamatan_id = ? 
+            AND bp.submitted_to_kecamatan = TRUE
+            AND (bp.surat_pengantar IS NULL OR bp.surat_pengantar = '')
+        `, { replacements: [desaId, kecamatanId] });
+
+        if (missingSuratPengantar[0].total > 0) {
+          return res.status(400).json({
+            success: false,
+            message: `Masih ada ${missingSuratPengantar[0].total} proposal yang belum memiliki Surat Pengantar. Generate Surat Pengantar terlebih dahulu sebelum mengirim ke DPMD.`
+          });
+        }
+        
+        // Check surat pengantar dari desa
+        const [suratDesa] = await sequelize.query(`
+          SELECT surat_pengantar, surat_permohonan
+          FROM desa_bankeu_surat
+          WHERE desa_id = ? AND tahun = YEAR(CURDATE())
+        `, { replacements: [desaId] });
+
+        if (!suratDesa || suratDesa.length === 0 || !suratDesa[0].surat_pengantar) {
+          return res.status(400).json({
+            success: false,
+            message: `Desa belum mengunggah Surat Pengantar Desa. Hubungi desa untuk mengunggah Surat Pengantar terlebih dahulu sebelum mengirim ke DPMD.`
+          });
+        }
+
+        if (!suratDesa[0].surat_permohonan) {
+          return res.status(400).json({
+            success: false,
+            message: `Desa belum mengunggah Surat Permohonan Desa. Hubungi desa untuk mengunggah Surat Permohonan terlebih dahulu sebelum mengirim ke DPMD.`
+          });
+        }
+      }
+
       // Update submitted_to_kecamatan based on action
       if (action === 'return') {
         // Kembalikan ke desa: set submitted_to_kecamatan = FALSE
         // Ini memungkinkan desa untuk upload ulang dan submit lagi
         await sequelize.query(`
-          UPDATE bankeu_proposals
-          SET submitted_to_kecamatan = FALSE, submitted_at = NULL
-          WHERE desa_id = ? AND kecamatan_id = ?
+          UPDATE bankeu_proposals bp
+          INNER JOIN desas d ON bp.desa_id = d.id
+          SET bp.submitted_to_kecamatan = FALSE, bp.submitted_at = NULL
+          WHERE bp.desa_id = ? AND d.kecamatan_id = ?
         `, { replacements: [desaId, kecamatanId] });
         
         logger.info(`🔙 ${totalCount[0].total} proposals returned to desa ${desaId} by user ${userId}`);
       } else {
         // Kirim ke DPMD: set submitted_to_dpmd = TRUE (tetap submitted_to_kecamatan = TRUE)
         await sequelize.query(`
-          UPDATE bankeu_proposals
-          SET submitted_to_dpmd = TRUE, submitted_to_dpmd_at = NOW()
-          WHERE desa_id = ? AND kecamatan_id = ?
+          UPDATE bankeu_proposals bp
+          INNER JOIN desas d ON bp.desa_id = d.id
+          SET bp.submitted_to_dpmd = TRUE, bp.submitted_to_dpmd_at = NOW()
+          WHERE bp.desa_id = ? AND d.kecamatan_id = ?
         `, { replacements: [desaId, kecamatanId] });
         
         logger.info(`✅ ${totalCount[0].total} proposals submitted to DPMD from desa ${desaId} by user ${userId}`);
@@ -1266,3 +1352,5 @@ class BankeuVerificationController {
 }
 
 module.exports = new BankeuVerificationController();
+
+

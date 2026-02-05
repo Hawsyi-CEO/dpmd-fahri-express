@@ -75,9 +75,13 @@ const bankeuProposalRoutes = require('./routes/bankeuProposal.routes');
 const desaBankeuSuratRoutes = require('./routes/desaBankeuSurat.routes');
 const kecamatanBankeuSuratRoutes = require('./routes/kecamatanBankeuSurat.routes');
 const bankeuVerificationRoutes = require('./routes/bankeuVerification.routes');
+const bankeuMasterKegiatanRoutes = require('./routes/bankeuMasterKegiatan.routes');
+const dinasRoutes = require('./routes/dinas.routes');
 const dinasVerificationRoutes = require('./routes/dinasVerification.routes');
+const dpmdVerificationRoutes = require('./routes/dpmdVerification.routes');
 const dinasVerifikatorRoutes = require('./routes/dinasVerifikator.routes');
 const verifikatorAksesDesaRoutes = require('./routes/verifikatorAksesDesa.routes');
+const beritaAcaraRoutes = require('./routes/beritaAcara.routes');
 
 const app = express();
 
@@ -224,12 +228,16 @@ app.use('/api/desa/bankeu/surat', desaBankeuSuratRoutes); // Surat pengantar & p
 app.use('/api/kecamatan/bankeu/surat', kecamatanBankeuSuratRoutes); // Kecamatan review surat desa
 app.use('/api/kecamatan/bankeu', bankeuVerificationRoutes); // Bankeu verification routes for kecamatan
 app.use('/api/dinas/bankeu', dinasVerificationRoutes); // Bankeu verification routes for dinas terkait
+app.use('/api/dpmd/bankeu', dpmdVerificationRoutes); // Bankeu verification routes for DPMD/SPKED
+app.use('/api/bankeu/master-kegiatan', bankeuMasterKegiatanRoutes); // Master kegiatan CRUD
+app.use('/api/master/dinas', dinasRoutes); // Dinas master data CRUD
 app.use('/api/dinas', require('./routes/dinasConfig.routes')); // Dinas configuration (TTD + PIC)
 app.use('/api/dinas', dinasVerifikatorRoutes); // Dinas verifikator management
 app.use('/api/dinas/verifikator', verifikatorAksesDesaRoutes); // Verifikator akses desa management
 app.use('/api/verifikator/profile', require('./routes/verifikatorProfile.routes')); // Verifikator profile & TTD
 app.use('/api/kecamatan', require('./routes/kecamatanBankeuTimConfig.routes')); // Kecamatan tim verifikasi config
 app.use('/api/bankeu/questionnaire', require('./routes/bankeuQuestionnaire.routes')); // Verification questionnaire
+app.use('/api/berita-acara', beritaAcaraRoutes); // Berita Acara routes
 app.use('/api/contoh-proposal', require('./routes/contohProposal.routes')); // Example proposal files
 app.use('/api/perjalanan-dinas', perjalananDinasRoutes);
 app.use('/api/perjadin', perjalananDinasRoutes); // Alias for perjadin

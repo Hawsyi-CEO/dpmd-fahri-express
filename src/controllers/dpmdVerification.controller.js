@@ -69,15 +69,26 @@ class DPMDVerificationController {
         }
       });
 
-      // Get kegiatan info for each proposal
+      // Get kegiatan info and surat desa for each proposal
       const proposalsWithKegiatan = await Promise.all(
         proposals.map(async (proposal) => {
           const kegiatan = await prisma.bankeu_master_kegiatan.findUnique({
             where: { id: proposal.kegiatan_id }
           });
+          
+          // Get surat pengantar & permohonan from desa
+          const suratDesa = await prisma.desa_bankeu_surat.findFirst({
+            where: {
+              desa_id: proposal.desa_id,
+              tahun: new Date().getFullYear()
+            }
+          });
+          
           return {
             ...proposal,
-            bankeu_master_kegiatan: kegiatan
+            bankeu_master_kegiatan: kegiatan,
+            surat_pengantar_desa: suratDesa?.surat_pengantar || null,
+            surat_permohonan_desa: suratDesa?.surat_permohonan || null
           };
         })
       );
@@ -305,9 +316,10 @@ class DPMDVerificationController {
         where: {
           submitted_to_dpmd: true,
           kecamatan_status: 'approved',
-          dpmd_status: {
-            in: [null, 'pending']
-          }
+          OR: [
+            { dpmd_status: null },
+            { dpmd_status: 'pending' }
+          ]
         }
       });
 

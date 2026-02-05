@@ -37,6 +37,11 @@ const auth = async (req, res, next) => {
       ? parseInt(decoded.dinas_id, 10)
       : null;
 
+    // Coerce kecamatan_id to integer
+    const kecamatanId = decoded.kecamatan_id !== undefined && decoded.kecamatan_id !== null
+      ? parseInt(decoded.kecamatan_id, 10)
+      : null;
+
     req.user = {
       id: decoded.id,
       name: decoded.name,
@@ -44,10 +49,11 @@ const auth = async (req, res, next) => {
       role: decoded.role,
       desa_id: Number.isNaN(desaId) ? null : desaId,
       bidang_id: Number.isNaN(bidangId) ? null : bidangId,
-      dinas_id: Number.isNaN(dinasId) ? null : dinasId
+      dinas_id: Number.isNaN(dinasId) ? null : dinasId,
+      kecamatan_id: Number.isNaN(kecamatanId) ? null : kecamatanId
     };
     
-    logger.info(`✅ Auth successful: User ${req.user.id} (${req.user.role}) - Bidang: ${req.user.bidang_id}`);
+    logger.info(`✅ Auth successful: User ${req.user.id} (${req.user.role}) - Bidang: ${req.user.bidang_id} - Kecamatan: ${req.user.kecamatan_id}`);
     
     next();
   } catch (error) {

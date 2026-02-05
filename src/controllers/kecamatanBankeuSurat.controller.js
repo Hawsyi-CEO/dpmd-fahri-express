@@ -1,10 +1,12 @@
 // Controller untuk Kecamatan review Surat Pengantar & Surat Permohonan dari Desa
 const sequelize = require('../config/database');
 const logger = require('../utils/logger');
+const fs = require('fs');
+const path = require('path');
 
 /**
- * GET all surat from all desas in kecamatan
- * Untuk kecamatan lihat semua surat yang sudah dikirim desa
+ * GET all surat bundles from all desas in kecamatan
+ * Setiap bundle berisi: surat pengantar, surat permohonan, dan semua proposals
  */
 exports.getAllDesaSurat = async (req, res) => {
   try {
@@ -31,7 +33,8 @@ exports.getAllDesaSurat = async (req, res) => {
       params.push(status);
     }
 
-    const query = `
+    // Get surat bundles
+    const suratQuery = `
       SELECT 
         dbs.*,
         d.nama AS nama_desa,
@@ -46,28 +49,63 @@ exports.getAllDesaSurat = async (req, res) => {
       ORDER BY dbs.submitted_at DESC, d.nama ASC
     `;
 
-    const suratList = await sequelize.query(query, {
+    const suratList = await sequelize.query(suratQuery, {
       replacements: params,
       type: sequelize.QueryTypes.SELECT
     });
 
-    logger.info(`Kecamatan ${kecamatan_id} fetched ${suratList.length} desa surat (tahun=${tahun}, status=${status || 'all'})`);
+    // Get proposals for each surat bundle
+    const bundleList = await Promise.all(suratList.map(async (surat) => {
+      const proposalsQuery = `
+        SELECT 
+          bp.id,
+          bp.judul_proposal,
+          bp.nama_kegiatan_spesifik,
+          bp.volume,
+          bp.lokasi,
+          bp.anggaran_usulan,
+          bp.file_proposal,
+          bp.status,
+          bp.kecamatan_status,
+          bp.kecamatan_catatan,
+          bp.created_at
+        FROM bankeu_proposals bp
+        WHERE bp.desa_id = ? 
+          AND YEAR(bp.created_at) = ?
+          AND bp.submitted_to_kecamatan = TRUE
+        ORDER BY bp.created_at DESC
+      `;
+      
+      const proposals = await sequelize.query(proposalsQuery, {
+        replacements: [surat.desa_id, surat.tahun],
+        type: sequelize.QueryTypes.SELECT
+      });
+
+      return {
+        ...surat,
+        proposals,
+        total_proposals: proposals.length,
+        total_anggaran: proposals.reduce((sum, p) => sum + (parseFloat(p.anggaran_usulan) || 0), 0)
+      };
+    }));
+
+    logger.info(`Kecamatan ${kecamatan_id} fetched ${bundleList.length} desa bundles (tahun=${tahun}, status=${status || 'all'})`);
 
     res.json({
       success: true,
-      data: suratList,
+      data: bundleList,
       meta: {
-        total: suratList.length,
+        total: bundleList.length,
         tahun,
         status: status || 'all'
       }
     });
 
   } catch (error) {
-    logger.error('Error fetching desa surat for kecamatan:', error);
+    logger.error('Error fetching desa surat bundles for kecamatan:', error);
     res.status(500).json({
       success: false,
-      message: 'Gagal memuat data surat desa',
+      message: 'Gagal memuat data bundle desa',
       error: error.message
     });
   }
@@ -176,26 +214,62 @@ exports.reviewSurat = async (req, res) => {
       });
     }
 
-    // Jika reject, reset submitted_to_kecamatan agar desa bisa upload ulang
+    // Jika reject, reset submitted_to_kecamatan dan hapus file surat agar desa wajib upload ulang
     const resetSubmitted = status === 'rejected';
 
-    const updateQuery = `
-      UPDATE desa_bankeu_surat
-      SET 
-        kecamatan_status = ?,
-        kecamatan_reviewed_by = ?,
-        kecamatan_reviewed_at = NOW(),
-        kecamatan_catatan = ?,
-        submitted_to_kecamatan = ?
-      WHERE id = ?
-    `;
+    // Jika reject, hapus file surat yang ada
+    if (resetSubmitted) {
+      const uploadDir = path.join(__dirname, '../../storage/uploads/bankeu');
+      
+      // Hapus surat pengantar
+      if (surat.surat_pengantar) {
+        const pengantarPath = path.join(uploadDir, surat.surat_pengantar);
+        if (fs.existsSync(pengantarPath)) {
+          fs.unlinkSync(pengantarPath);
+          logger.info(`🗑️ Deleted surat pengantar: ${surat.surat_pengantar}`);
+        }
+      }
+      
+      // Hapus surat permohonan
+      if (surat.surat_permohonan) {
+        const permohonanPath = path.join(uploadDir, surat.surat_permohonan);
+        if (fs.existsSync(permohonanPath)) {
+          fs.unlinkSync(permohonanPath);
+          logger.info(`🗑️ Deleted surat permohonan: ${surat.surat_permohonan}`);
+        }
+      }
+    }
+
+    // Update query - jika reject, reset juga surat_pengantar dan surat_permohonan ke NULL
+    const updateQuery = resetSubmitted 
+      ? `
+        UPDATE desa_bankeu_surat
+        SET 
+          kecamatan_status = ?,
+          kecamatan_reviewed_by = ?,
+          kecamatan_reviewed_at = NOW(),
+          kecamatan_catatan = ?,
+          submitted_to_kecamatan = FALSE,
+          surat_pengantar = NULL,
+          surat_permohonan = NULL
+        WHERE id = ?
+      `
+      : `
+        UPDATE desa_bankeu_surat
+        SET 
+          kecamatan_status = ?,
+          kecamatan_reviewed_by = ?,
+          kecamatan_reviewed_at = NOW(),
+          kecamatan_catatan = ?,
+          submitted_to_kecamatan = TRUE
+        WHERE id = ?
+      `;
 
     await sequelize.query(updateQuery, {
       replacements: [
         status,
         reviewer_id,
         catatan || null,
-        !resetSubmitted,
         id
       ]
     });

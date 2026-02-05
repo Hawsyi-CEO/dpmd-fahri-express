@@ -107,9 +107,10 @@ exports.createVerifikator = async (req, res) => {
     // Create verifikator record
     const newUserId = BigInt(newUser.id);
     const nipValue = nip || null;
+    const now = new Date();
     const verifikator = await prisma.$executeRaw`
-      INSERT INTO dinas_verifikator (dinas_id, user_id, nama, nip, jabatan, email, created_by)
-      VALUES (${dinasIdInt}, ${newUserId}, ${nama}, ${nipValue}, ${jabatan}, ${email}, ${createdBy})
+      INSERT INTO dinas_verifikator (dinas_id, user_id, nama, nip, jabatan, email, created_by, created_at, updated_at)
+      VALUES (${dinasIdInt}, ${newUserId}, ${nama}, ${nipValue}, ${jabatan}, ${email}, ${createdBy}, ${now}, ${now})
     `;
 
     logger.info(`Verifikator created: ${nama} (${email}) by user ${createdBy}`);

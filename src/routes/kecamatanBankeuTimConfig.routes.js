@@ -48,4 +48,7 @@ router.post('/:kecamatanId/bankeu/tim-config/:posisi/upload-ttd', auth, upload.s
 // Delete TTD
 router.delete('/:kecamatanId/bankeu/tim-config/:posisi/ttd', auth, kecamatanBankeuTimConfigController.deleteTTD);
 
+// Delete anggota (only for proposal-specific anggota)
+router.delete('/:kecamatanId/bankeu/tim-config/:posisi', auth, kecamatanBankeuTimConfigController.deleteAnggota);
+
 module.exports = router;
