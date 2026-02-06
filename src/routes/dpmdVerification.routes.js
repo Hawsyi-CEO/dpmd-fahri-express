@@ -30,4 +30,10 @@ router.patch('/proposals/:id/verify', dpmdVerificationController.verifyProposal)
 // Get statistics
 router.get('/statistics', dpmdVerificationController.getStatistics);
 
+// Delete single proposal (DPMD troubleshooting)
+router.delete('/proposals/:id', dpmdVerificationController.deleteProposal);
+
+// Delete all proposals from a desa (DPMD bulk delete)
+router.delete('/desa/:desaId/proposals', dpmdVerificationController.deleteDesaProposals);
+
 module.exports = router;

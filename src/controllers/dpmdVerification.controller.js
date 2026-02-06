@@ -1,6 +1,8 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const logger = require('../utils/logger');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * DPMD Verification Controller
@@ -352,6 +354,165 @@ class DPMDVerificationController {
       return res.status(500).json({
         success: false,
         message: 'Gagal mengambil statistik',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Delete proposal by DPMD (for troubleshooting)
+   * DELETE /api/dpmd/bankeu/proposals/:id
+   */
+  async deleteProposal(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+
+      logger.info(`🗑️ DPMD DELETE - Proposal ID: ${id}, User: ${userId}`);
+
+      // Check if proposal exists
+      const proposal = await prisma.bankeu_proposals.findUnique({
+        where: { id: BigInt(id) },
+        include: {
+          desas: true
+        }
+      });
+
+      if (!proposal) {
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal tidak ditemukan'
+        });
+      }
+
+      // Delete related questionnaires first
+      await prisma.bankeu_verification_questionnaires.deleteMany({
+        where: { proposal_id: BigInt(id) }
+      });
+
+      // Delete physical files
+      const filesToDelete = [];
+      if (proposal.file_proposal) {
+        filesToDelete.push(path.join(__dirname, '../../storage/uploads/bankeu', proposal.file_proposal));
+      }
+      if (proposal.berita_acara_path) {
+        filesToDelete.push(path.join(__dirname, '../../storage', proposal.berita_acara_path));
+      }
+      if (proposal.surat_pengantar) {
+        filesToDelete.push(path.join(__dirname, '../../storage', proposal.surat_pengantar));
+      }
+
+      filesToDelete.forEach(filePath => {
+        try {
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            logger.info(`🗑️ Deleted file: ${filePath}`);
+          }
+        } catch (err) {
+          logger.warn(`⚠️ Failed to delete file: ${filePath}`, err.message);
+        }
+      });
+
+      // Delete proposal from database
+      await prisma.bankeu_proposals.delete({
+        where: { id: BigInt(id) }
+      });
+
+      logger.info(`✅ DPMD deleted proposal ${id} (${proposal.judul_proposal}) from desa ${proposal.desas?.nama}`);
+
+      return res.json({
+        success: true,
+        message: `Proposal "${proposal.judul_proposal}" berhasil dihapus`
+      });
+
+    } catch (error) {
+      logger.error('Error DPMD deleting proposal:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Gagal menghapus proposal',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Delete all proposals from a specific desa (bulk delete for troubleshooting)
+   * DELETE /api/dpmd/bankeu/desa/:desaId/proposals
+   */
+  async deleteDesaProposals(req, res) {
+    try {
+      const { desaId } = req.params;
+      const userId = req.user.id;
+
+      logger.info(`🗑️ DPMD BULK DELETE - Desa ID: ${desaId}, User: ${userId}`);
+
+      // Get all proposals for this desa that are submitted to DPMD
+      const proposals = await prisma.bankeu_proposals.findMany({
+        where: {
+          desa_id: BigInt(desaId),
+          submitted_to_dpmd: true
+        },
+        include: { desas: true }
+      });
+
+      if (proposals.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Tidak ada proposal dari desa ini'
+        });
+      }
+
+      const desaName = proposals[0].desas?.nama || 'Unknown';
+
+      // Delete related questionnaires
+      const proposalIds = proposals.map(p => p.id);
+      await prisma.bankeu_verification_questionnaires.deleteMany({
+        where: { proposal_id: { in: proposalIds } }
+      });
+
+      // Delete physical files
+      proposals.forEach(proposal => {
+        const filesToDelete = [];
+        if (proposal.file_proposal) {
+          filesToDelete.push(path.join(__dirname, '../../storage/uploads/bankeu', proposal.file_proposal));
+        }
+        if (proposal.berita_acara_path) {
+          filesToDelete.push(path.join(__dirname, '../../storage', proposal.berita_acara_path));
+        }
+        if (proposal.surat_pengantar) {
+          filesToDelete.push(path.join(__dirname, '../../storage', proposal.surat_pengantar));
+        }
+        filesToDelete.forEach(filePath => {
+          try {
+            if (fs.existsSync(filePath)) {
+              fs.unlinkSync(filePath);
+            }
+          } catch (err) {
+            logger.warn(`⚠️ Failed to delete file: ${filePath}`, err.message);
+          }
+        });
+      });
+
+      // Delete all proposals
+      await prisma.bankeu_proposals.deleteMany({
+        where: {
+          desa_id: BigInt(desaId),
+          submitted_to_dpmd: true
+        }
+      });
+
+      logger.info(`✅ DPMD bulk deleted ${proposals.length} proposals from desa ${desaName} (ID: ${desaId})`);
+
+      return res.json({
+        success: true,
+        message: `${proposals.length} proposal dari Desa ${desaName} berhasil dihapus`
+      });
+
+    } catch (error) {
+      logger.error('Error DPMD bulk deleting proposals:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Gagal menghapus proposal desa',
         error: error.message
       });
     }
