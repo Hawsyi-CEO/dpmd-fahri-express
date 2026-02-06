@@ -830,6 +830,15 @@ exports.createSuratMasuk = async (req, res, next) => {
     });
   } catch (error) {
     console.error('❌ [SURAT MASUK] Error:', error);
+    
+    // Handle duplicate nomor surat
+    if (error.code === 'P2002' && error.meta?.target?.includes('nomor_surat')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nomor surat sudah terdaftar. Gunakan nomor surat yang berbeda.',
+      });
+    }
+    
     next(error);
   }
 };
