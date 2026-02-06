@@ -812,9 +812,10 @@ exports.createSuratMasuk = async (req, res, next) => {
           title: '📨 Surat Masuk Baru',
           body: `${perihal_surat} dari ${asal_surat}`,
           data: {
-            type: 'disposisi',
+            type: 'new_disposisi',
             disposisi_id: disposisi.id.toString(),
             surat_id: suratMasuk.id.toString(),
+            url: '/kepala-dinas/disposisi',
           },
         });
         console.log('✅ [PUSH] Notification sent to Kepala Dinas');
