@@ -164,6 +164,19 @@ exports.submitSuratToKecamatan = async (req, res) => {
 
     logger.info(`📨 Submit surat ke kecamatan - Desa ID: ${desaId}, Tahun: ${tahun}`);
 
+    // Check if submission is open
+    const submissionSetting = await prisma.app_settings.findUnique({
+      where: { setting_key: 'bankeu_submission_desa' }
+    });
+    
+    if (submissionSetting && submissionSetting.setting_value === 'false') {
+      logger.warn(`⛔ Surat submission blocked - submission is closed by DPMD`);
+      return res.status(403).json({
+        success: false,
+        message: 'Pengajuan saat ini ditutup oleh DPMD. Silakan hubungi DPMD untuk informasi lebih lanjut.'
+      });
+    }
+
     // Check surat exists and complete
     const [surat] = await sequelize.query(`
       SELECT * FROM desa_bankeu_surat 

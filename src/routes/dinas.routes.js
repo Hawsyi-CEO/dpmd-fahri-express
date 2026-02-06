@@ -1,9 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
-// Get all dinas
+// Helper function to generate random password
+const generatePassword = (length = 8) => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let password = '';
+  for (let i = 0; i < length; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+};
+
+// Get all dinas with associated user account
 router.get('/', async (req, res) => {
   try {
     const dinas = await prisma.master_dinas.findMany({
@@ -11,17 +22,43 @@ router.get('/', async (req, res) => {
       orderBy: { nama_dinas: 'asc' }
     });
 
-    res.json({
-      success: true,
-      data: dinas.map(d => ({
+    // Get user accounts and verifikator counts for all dinas
+    const dinasWithAccounts = await Promise.all(dinas.map(async (d) => {
+      const [userAccount, verifikatorCount] = await Promise.all([
+        prisma.users.findFirst({
+          where: { 
+            dinas_id: d.id,
+            role: 'dinas_terkait'
+          },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            is_active: true,
+            created_at: true
+          }
+        }),
+        prisma.dinas_verifikator.count({
+          where: { dinas_id: d.id, is_active: true }
+        })
+      ]);
+
+      return {
         id: d.id,
         kode_dinas: d.kode_dinas,
         nama: d.nama_dinas,
         singkatan: d.singkatan,
         is_active: d.is_active,
         created_at: d.created_at,
-        updated_at: d.updated_at
-      }))
+        updated_at: d.updated_at,
+        user_account: userAccount || null,
+        verifikator_count: verifikatorCount
+      };
+    }));
+
+    res.json({
+      success: true,
+      data: dinasWithAccounts
     });
   } catch (error) {
     console.error('Error fetching dinas:', error);
@@ -260,6 +297,138 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Gagal menghapus dinas',
+      error: error.message
+    });
+  }
+});
+
+// Reset password for dinas account
+router.post('/:id/reset-password', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Find user account for this dinas
+    const userAccount = await prisma.users.findFirst({
+      where: { 
+        dinas_id: parseInt(id),
+        role: 'dinas_terkait'
+      }
+    });
+
+    if (!userAccount) {
+      return res.status(404).json({
+        success: false,
+        message: 'Akun dinas tidak ditemukan'
+      });
+    }
+
+    // Generate new password
+    const newPassword = generatePassword(10);
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await prisma.users.update({
+      where: { id: userAccount.id },
+      data: { 
+        password: hashedPassword,
+        updated_at: new Date()
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Password baru berhasil dibuat',
+      data: {
+        newPassword: newPassword
+      }
+    });
+  } catch (error) {
+    console.error('Error creating new dinas password:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Gagal membuat password baru',
+      error: error.message
+    });
+  }
+});
+
+// Create user account for dinas
+router.post('/:id/create-account', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, password } = req.body;
+
+    // Check if dinas exists
+    const dinas = await prisma.master_dinas.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!dinas) {
+      return res.status(404).json({
+        success: false,
+        message: 'Dinas tidak ditemukan'
+      });
+    }
+
+    // Check if user account already exists
+    const existingAccount = await prisma.users.findFirst({
+      where: { 
+        dinas_id: parseInt(id),
+        role: 'dinas_terkait'
+      }
+    });
+
+    if (existingAccount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Akun untuk dinas ini sudah ada'
+      });
+    }
+
+    // Check if email already used
+    const emailExists = await prisma.users.findFirst({
+      where: { email: email }
+    });
+
+    if (emailExists) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email sudah digunakan'
+      });
+    }
+
+    // Generate password if not provided
+    const accountPassword = password || generatePassword(10);
+    const hashedPassword = await bcrypt.hash(accountPassword, 10);
+
+    // Create user account
+    const newUser = await prisma.users.create({
+      data: {
+        name: dinas.nama_dinas,
+        email: email,
+        password: hashedPassword,
+        role: 'dinas_terkait',
+        dinas_id: parseInt(id),
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date()
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Akun dinas berhasil dibuat',
+      data: {
+        user_id: Number(newUser.id),
+        email: newUser.email,
+        password: accountPassword
+      }
+    });
+  } catch (error) {
+    console.error('Error creating dinas account:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Gagal membuat akun dinas',
       error: error.message
     });
   }

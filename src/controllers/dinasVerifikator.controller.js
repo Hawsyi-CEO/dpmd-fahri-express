@@ -255,11 +255,16 @@ exports.toggleVerifikatorStatus = async (req, res) => {
 exports.resetVerifikatorPassword = async (req, res) => {
   try {
     const { dinasId, verifikatorId } = req.params;
-    const { new_password } = req.body;
+    let { new_password } = req.body || {};
     const dinasIdInt = parseInt(dinasId);
     const verifikatorIdInt = parseInt(verifikatorId);
 
-    if (!new_password || new_password.length < 6) {
+    // Auto-generate password if not provided
+    if (!new_password) {
+      new_password = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4).toUpperCase();
+    }
+
+    if (new_password.length < 6) {
       return res.status(400).json({
         success: false,
         message: 'Password baru minimal 6 karakter'
@@ -291,11 +296,12 @@ exports.resetVerifikatorPassword = async (req, res) => {
       data: { password: hashedPassword }
     });
 
-    logger.info(`Verifikator password reset: ID ${verifikatorId}`);
+    logger.info(`Verifikator password created: ID ${verifikatorId}`);
 
     res.json({
       success: true,
-      message: 'Password verifikator berhasil direset'
+      message: 'Password baru berhasil dibuat',
+      data: { newPassword: new_password }
     });
   } catch (error) {
     logger.error('Error resetting verifikator password:', error);

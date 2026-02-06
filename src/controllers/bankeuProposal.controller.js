@@ -5,6 +5,30 @@ const logger = require('../utils/logger');
 const path = require('path');
 const fs = require('fs'); 
 
+/**
+ * Helper: Check if bankeu submission is open for desa
+ * @returns {Promise<{isOpen: boolean, setting: object|null}>}
+ */
+async function checkSubmissionOpen() {
+  try {
+    const setting = await prisma.app_settings.findUnique({
+      where: { setting_key: 'bankeu_submission_desa' }
+    });
+    
+    if (!setting) {
+      // Default: open
+      return { isOpen: true, setting: null };
+    }
+    
+    const isOpen = setting.setting_value === 'true';
+    return { isOpen, setting };
+  } catch (error) {
+    logger.error('Error checking submission setting:', error);
+    // Default: open on error
+    return { isOpen: true, setting: null };
+  }
+}
+
 class BankeuProposalController {
   /**
    * Get master kegiatan list
@@ -917,6 +941,17 @@ class BankeuProposalController {
 
       logger.info(`📤 SUBMIT TO DINAS TERKAIT (FIRST SUBMISSION) - User: ${userId}`);
 
+      // Check if submission is open
+      const { isOpen } = await checkSubmissionOpen();
+      if (!isOpen) {
+        await transaction.rollback();
+        logger.warn(`⛔ Submission blocked - submission is closed by DPMD`);
+        return res.status(403).json({
+          success: false,
+          message: 'Pengajuan saat ini ditutup oleh DPMD. Silakan hubungi DPMD untuk informasi lebih lanjut.'
+        });
+      }
+
       // Get desa_id from user
       const [users] = await sequelize.query(`
         SELECT desa_id FROM users WHERE id = ?
@@ -1009,6 +1044,17 @@ class BankeuProposalController {
       const { destination } = req.body; // 'kecamatan' atau 'dinas'
 
       logger.info(`📤 RESUBMIT PROPOSAL (REVISI) - User: ${userId}, Destination: ${destination || 'auto-detect'}`);
+
+      // Check if submission is open
+      const { isOpen } = await checkSubmissionOpen();
+      if (!isOpen) {
+        await transaction.rollback();
+        logger.warn(`⛔ Resubmit blocked - submission is closed by DPMD`);
+        return res.status(403).json({
+          success: false,
+          message: 'Pengajuan saat ini ditutup oleh DPMD. Silakan hubungi DPMD untuk informasi lebih lanjut.'
+        });
+      }
 
       // Get desa_id from user
       const [users] = await sequelize.query(`

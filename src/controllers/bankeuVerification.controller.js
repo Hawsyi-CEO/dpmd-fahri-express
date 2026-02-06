@@ -5,6 +5,8 @@ const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const beritaAcaraService = require('../services/beritaAcaraService');
 const sharp = require('sharp');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 class BankeuVerificationController {
   /**
@@ -216,7 +218,8 @@ class BankeuVerificationController {
         });
       }
 
-      // NEW FLOW: If approved → SUBMIT to DPMD (status tetap pending sampai DPMD approve)
+      // NEW FLOW: If approved → Set status approved (JANGAN auto-submit ke DPMD)
+      // User harus klik tombol "Kirim DPMD" secara manual untuk batch submit
       await sequelize.query(`
         UPDATE bankeu_proposals
         SET 
@@ -224,24 +227,21 @@ class BankeuVerificationController {
           kecamatan_catatan = ?,
           kecamatan_verified_by = ?,
           kecamatan_verified_at = NOW(),
-          submitted_to_dpmd = TRUE,
-          submitted_to_dpmd_at = NOW(),
-          dpmd_status = 'pending',
           status = 'pending'
         WHERE id = ?
       `, {
         replacements: [catatan || null, userId, id]
       });
 
-      logger.info(`✅ Kecamatan approved proposal ${id} - SUBMITTED TO DPMD`);
+      logger.info(`✅ Kecamatan approved proposal ${id} - Siap dikirim ke DPMD`);
 
       res.json({
         success: true,
-        message: `Proposal disetujui dan dikirim ke DPMD`,
+        message: `Proposal disetujui. Gunakan tombol "Kirim DPMD" untuk mengirim ke DPMD.`,
         data: {
           id,
           kecamatan_status: 'approved',
-          submitted_to_dpmd: true
+          submitted_to_dpmd: false
         }
       });
     } catch (error) {
@@ -596,6 +596,19 @@ class BankeuVerificationController {
 
       // For submit to DPMD: Check berita acara and surat pengantar
       if (action === 'submit') {
+        // Check if kecamatan submission is open
+        const submissionSetting = await prisma.app_settings.findUnique({
+          where: { setting_key: 'bankeu_submission_kecamatan' }
+        });
+        
+        if (submissionSetting && submissionSetting.setting_value === 'false') {
+          logger.warn(`⛔ Kecamatan submit to DPMD blocked - submission is closed by DPMD`);
+          return res.status(403).json({
+            success: false,
+            message: 'Pengiriman ke DPMD saat ini ditutup. Silakan hubungi DPMD untuk informasi lebih lanjut.'
+          });
+        }
+
         // Check if all proposals have berita acara
         const [missingBeritaAcara] = await sequelize.query(`
           SELECT COUNT(*) as total
@@ -665,12 +678,15 @@ class BankeuVerificationController {
         
         logger.info(`🔙 ${totalCount[0].total} proposals returned to desa ${desaId} by user ${userId}`);
       } else {
-        // Kirim ke DPMD: set submitted_to_dpmd = TRUE (tetap submitted_to_kecamatan = TRUE)
+        // Kirim ke DPMD: set submitted_to_dpmd = TRUE dan dpmd_status = pending
         await sequelize.query(`
           UPDATE bankeu_proposals bp
           INNER JOIN desas d ON bp.desa_id = d.id
-          SET bp.submitted_to_dpmd = TRUE, bp.submitted_to_dpmd_at = NOW()
-          WHERE bp.desa_id = ? AND d.kecamatan_id = ?
+          SET 
+            bp.submitted_to_dpmd = TRUE, 
+            bp.submitted_to_dpmd_at = NOW(),
+            bp.dpmd_status = 'pending'
+          WHERE bp.desa_id = ? AND d.kecamatan_id = ? AND bp.kecamatan_status = 'approved'
         `, { replacements: [desaId, kecamatanId] });
         
         logger.info(`✅ ${totalCount[0].total} proposals submitted to DPMD from desa ${desaId} by user ${userId}`);

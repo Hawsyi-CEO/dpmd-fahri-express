@@ -80,6 +80,10 @@ const getDinasProposals = async (req, res) => {
     // 2. Related to this dinas based on kegiatan.dinas_terkait (via many-to-many)
     // 3. For verifikator_dinas: Only desa they have access to
     // 4. For dinas_terkait: Only desa that NO verifikator has access to (or all if no verifikator exists)
+    
+    // Convert kode_dinas underscore to space for matching (e.g., UPT_PU -> UPT PU)
+    const kodeDinasForMatch = dinas.kode_dinas.replace(/_/g, ' ');
+    
     let proposals;
     
     if (role === 'verifikator_dinas' && accessibleDesaIds) {
@@ -104,7 +108,7 @@ const getDinasProposals = async (req, res) => {
         LEFT JOIN users u ON bp.created_by = u.id
         LEFT JOIN users u_verifier ON bp.dinas_verified_by = u_verifier.id
         LEFT JOIN dinas_verifikator dv ON u_verifier.id = dv.user_id AND u_verifier.dinas_id = dv.dinas_id
-        WHERE FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0
+        WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
           AND bp.submitted_to_dinas_at IS NOT NULL
           AND bp.desa_id IN (${accessibleDesaIds.join(',')})
         ORDER BY bp.created_at DESC
@@ -163,7 +167,7 @@ const getDinasProposals = async (req, res) => {
           LEFT JOIN users u ON bp.created_by = u.id
           LEFT JOIN users u_verifier ON bp.dinas_verified_by = u_verifier.id
           LEFT JOIN dinas_verifikator dv ON u_verifier.id = dv.user_id AND u_verifier.dinas_id = dv.dinas_id
-          WHERE FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0
+          WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
             AND bp.submitted_to_dinas_at IS NOT NULL
             AND bp.desa_id NOT IN (${excludedDesaIds.join(',')})
           ORDER BY bp.created_at DESC
@@ -190,7 +194,7 @@ const getDinasProposals = async (req, res) => {
           LEFT JOIN users u ON bp.created_by = u.id
           LEFT JOIN users u_verifier ON bp.dinas_verified_by = u_verifier.id
           LEFT JOIN dinas_verifikator dv ON u_verifier.id = dv.user_id AND u_verifier.dinas_id = dv.dinas_id
-          WHERE FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0
+          WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
             AND bp.submitted_to_dinas_at IS NOT NULL
           ORDER BY bp.created_at DESC
         `;
@@ -301,9 +305,12 @@ const getDinasProposalDetail = async (req, res) => {
       dinas_terkait: pk.bankeu_master_kegiatan.dinas_terkait
     }));
 
+    // Convert kode_dinas underscore to space for matching (e.g., UPT_PU -> UPT PU)
+    const kodeDinasForMatch = dinas.kode_dinas.replace(/_/g, ' ');
+
     // Verify this dinas has access to at least one kegiatan from this proposal
     const hasAccess = proposal.kegiatan_list.some(k => 
-      k.dinas_terkait && k.dinas_terkait.includes(dinas.kode_dinas)
+      k.dinas_terkait && (k.dinas_terkait.includes(kodeDinasForMatch) || k.dinas_terkait.includes(dinas.kode_dinas))
     );
     
     if (!hasAccess) {
@@ -816,6 +823,9 @@ const getDinasStatistics = async (req, res) => {
       where: { id: dinas_id }
     });
 
+    // Convert kode_dinas underscore to space for matching
+    const kodeDinasForMatch = dinas.kode_dinas.replace(/_/g, ' ');
+
     // Count proposals by status (many-to-many)
     const stats = await prisma.$queryRaw`
       SELECT 
@@ -828,7 +838,7 @@ const getDinasStatistics = async (req, res) => {
       FROM bankeu_proposals bp
       INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
       INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
-      WHERE FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0
+      WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
         AND bp.submitted_to_dinas_at IS NOT NULL
     `;
 

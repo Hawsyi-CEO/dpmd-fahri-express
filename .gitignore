@@ -86,14 +86,38 @@ database-express/seeders/*-data.json
 *_IMPLEMENTATION.md
 *_DESIGN.md
 *_FINAL.md
+*_INVESTIGATION_REPORT.md
+*_SUMMARY.md
 WORKFLOW_STRUCTURE.md
 ROLE_SYSTEM.md
 PEGAWAI_MANAGEMENT_FIX.md
 KEPALA_BIDANG_ACCESS.md
+QUICKSTART_*.md
+SETUP_*.sql
+SETUP_*.md
 
-# Development scripts
+# Development/debug scripts
 assign-*.js
 check-*.js
 revert-*.js
 revert-*.sql
 update-*.sql
+test-*.js
+fix-*.js
+reset-*.js
+create-*.js
+restart-dev.sh
+.restart
+
+# Deployment scripts
+deploy-*.ps1
+deploy-*.sh
+
+# Storage uploaded files
+storage/avatars/*
+!storage/avatars/.gitkeep
+storage/surat_masuk/*
+!storage/surat_masuk/.gitkeep
+
+# Prisma migrations lock
+prisma/migrations/*_migration_lock.toml

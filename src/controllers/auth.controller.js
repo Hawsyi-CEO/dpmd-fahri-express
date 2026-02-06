@@ -66,9 +66,6 @@ const login = async (req, res) => {
       });
     }
 
-    // Generate Express JWT token
-    const token = generateToken(user);
-
     logger.info(`✅ Login successful: ${user.email} (${user.role})`);
 
     // Helper to convert BigInt to string
@@ -96,6 +93,14 @@ const login = async (req, res) => {
         logger.info(`🔧 Synced bidang_id for user ${user.email}: ${user.bidang_id} → ${finalBidangId}`);
       }
     }
+
+    // Generate JWT token AFTER finalBidangId is determined
+    // Create user object with correct bidang_id for token generation
+    const userForToken = {
+      ...user,
+      bidang_id: finalBidangId
+    };
+    const token = generateToken(userForToken);
     
     const responseData = {
       id: convertBigInt(user.id),
@@ -154,6 +159,31 @@ const login = async (req, res) => {
       } catch (error) {
         logger.warn(`Failed to fetch desa/kecamatan for user ${user.email}:`, error);
         // Continue without desa data if fetch fails
+      }
+    }
+
+    // If user has kecamatan_id (and no desa_id), fetch kecamatan name directly
+    if (user.kecamatan_id && !responseData.desa) {
+      try {
+        const kecamatan = await prisma.kecamatans.findUnique({
+          where: { id: user.kecamatan_id },
+          select: {
+            id: true,
+            nama: true,
+            kode: true
+          }
+        });
+
+        if (kecamatan) {
+          responseData.kecamatan_name = kecamatan.nama;
+          responseData.kecamatan = {
+            id: convertBigInt(kecamatan.id),
+            nama: kecamatan.nama,
+            kode: kecamatan.kode
+          };
+        }
+      } catch (error) {
+        logger.warn(`Failed to fetch kecamatan for user ${user.email}:`, error);
       }
     }
 
@@ -264,6 +294,31 @@ const verifyToken = async (req, res) => {
       }
     }
 
+    // If user has kecamatan_id (and no desa), fetch kecamatan name directly
+    if (user.kecamatan_id && !responseData.desa) {
+      try {
+        const kecamatan = await prisma.kecamatans.findUnique({
+          where: { id: user.kecamatan_id },
+          select: {
+            id: true,
+            nama: true,
+            kode: true
+          }
+        });
+
+        if (kecamatan) {
+          responseData.kecamatan_name = kecamatan.nama;
+          responseData.kecamatan = {
+            id: convertBigInt(kecamatan.id),
+            nama: kecamatan.nama,
+            kode: kecamatan.kode
+          };
+        }
+      } catch (error) {
+        logger.warn(`Failed to fetch kecamatan for user ${user.email}:`, error);
+      }
+    }
+
     return res.status(200).json({
       success: true,
       data: {
@@ -369,6 +424,31 @@ const getProfile = async (req, res) => {
         }
       } catch (error) {
         logger.warn(`Failed to fetch desa/kecamatan for user ID ${userId}:`, error);
+      }
+    }
+
+    // If user has kecamatan_id (and no desa), fetch kecamatan name directly
+    if (user.kecamatan_id && !responseData.desa) {
+      try {
+        const kecamatan = await prisma.kecamatans.findUnique({
+          where: { id: user.kecamatan_id },
+          select: {
+            id: true,
+            nama: true,
+            kode: true
+          }
+        });
+
+        if (kecamatan) {
+          responseData.kecamatan_name = kecamatan.nama;
+          responseData.kecamatan = {
+            id: convertBigInt(kecamatan.id),
+            nama: kecamatan.nama,
+            kode: kecamatan.kode
+          };
+        }
+      } catch (error) {
+        logger.warn(`Failed to fetch kecamatan for user ID ${userId}:`, error);
       }
     }
 
