@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { vapidKeys } = require('../config/push-notification');
 const PushSubscription = require('../models/pushSubscription');
-const PushNotificationService = require('../services/pushNotificationService');
+const PushNotificationService = require('../services/pushNotification.service');
 const { auth } = require('../middlewares/auth');
 
 /**
@@ -210,23 +210,71 @@ router.get('/history', auth, async (req, res) => {
 
 /**
  * POST /api/push-notification/send
- * Send test push notification (admin only)
+ * Send push notification
+ * Accessible by: superadmin and pegawai with Sekretariat bidang
  */
 router.post('/send', auth, async (req, res) => {
   try {
-    // Check if user is admin/superadmin
-    if (!['superadmin', 'admin'].includes(req.user.role)) {
+    console.log('\n📨 [Push] Send notification request');
+    console.log('   User:', req.user.name, '- Role:', req.user.role, '- Bidang:', req.user.bidang_id);
+    console.log('   Request body:', JSON.stringify(req.body, null, 2));
+    
+    // Check if user has permission
+    // Only superadmin and pegawai with Sekretariat bidang (bidang_id = 2) can send notifications
+    const SEKRETARIAT_BIDANG_ID = 2;
+    const isSuperadmin = req.user.role === 'superadmin';
+    const isSekretariatPegawai = req.user.bidang_id === SEKRETARIAT_BIDANG_ID;
+    
+    if (!isSuperadmin && !isSekretariatPegawai) {
+      console.log('   ❌ Permission denied');
       return res.status(403).json({
         success: false,
-        message: 'Unauthorized: Admin access required'
+        message: 'Unauthorized: Hanya Superadmin dan Pegawai Sekretariat yang dapat mengirim notifikasi'
       });
     }
+    
+    console.log('   ✅ Permission granted');
 
-    const { userId, userIds, broadcast, payload } = req.body;
+    const { userId, userIds, broadcast, roles, title, body, data, payload } = req.body;
 
     let result;
     
-    if (broadcast) {
+    if (roles && Array.isArray(roles) && roles.length > 0) {
+      // Send to specific roles using title, body, data
+      const notification = {
+        title: title || payload?.title,
+        body: body || payload?.body,
+        icon: payload?.icon || '/logo-192.png',
+        badge: payload?.badge || '/logo-96.png',
+        data: data || payload?.data || {},
+        actions: payload?.actions || []
+      };
+      
+      console.log('   📝 Notification object:', JSON.stringify(notification, null, 2));
+      
+      // Extract path from URL if present (e.g., '/pegawai/jadwal-kegiatan' -> 'jadwal-kegiatan')
+      // This makes the URL role-aware
+      if (notification.data && notification.data.url && !notification.path) {
+        console.log('   🔗 Processing URL:', notification.data.url);
+        const urlPath = notification.data.url.replace(/^\/[^/]+\//, ''); // Remove role prefix
+        if (urlPath !== notification.data.url) {
+          // URL had a role prefix, use the path for role-aware routing
+          notification.path = urlPath;
+          delete notification.data.url; // Remove fixed URL, will be generated per-role
+          console.log('   ✅ Converted to path:', notification.path);
+        }
+        // If URL doesn't have role prefix (like '/jadwal-kegiatan'), treat it as a path
+        else if (notification.data.url.startsWith('/') && !notification.data.url.includes('//')) {
+          notification.path = notification.data.url.replace(/^\//, ''); // Remove leading slash
+          delete notification.data.url;
+          console.log('   ✅ Converted simple URL to path:', notification.path);
+        }
+      }
+      
+      console.log('   📤 Sending to roles:', roles.join(', '));
+      result = await PushNotificationService.sendToRoles(roles, notification);
+      console.log('   ✅ Send result:', result);
+    } else if (broadcast) {
       // Broadcast ke semua users
       result = await PushNotificationService.sendToAll(payload);
     } else if (userIds && Array.isArray(userIds)) {
@@ -238,13 +286,16 @@ router.post('/send', auth, async (req, res) => {
     } else {
       return res.status(400).json({
         success: false,
-        message: 'userId, userIds, or broadcast flag is required'
+        message: 'roles, userId, userIds, or broadcast flag is required'
       });
     }
+
+    console.log('   ✅ Notification sent successfully to', result.sentTo || 0, 'users');
 
     res.json({
       success: true,
       message: 'Push notification sent',
+      sentTo: result.sentTo || 0,
       data: result
     });
   } catch (error) {

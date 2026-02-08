@@ -22,9 +22,30 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 
 class PushNotificationService {
 	/**
+	 * Get role-specific URL path
+	 * @param {string} role - User role
+	 * @param {string} path - Relative path (e.g., 'jadwal-kegiatan')
+	 */
+	getRoleBasedUrl(role, path) {
+		const roleRouteMap = {
+			'superadmin': '/admin',
+			'kepala_dinas': '/kepala-dinas',
+			'sekretaris_dinas': '/sekretaris-dinas',
+			'kepala_bidang': '/kepala-bidang',
+			'ketua_tim': '/ketua-tim',
+			'pegawai': '/pegawai',
+			'kecamatan': '/kecamatan',
+			'bankeu': '/bankeu'
+		};
+		
+		const rolePrefix = roleRouteMap[role] || '/pegawai';
+		return `${rolePrefix}/${path}`;
+	}
+
+	/**
 	 * Send notification to specific users by roles
 	 * @param {Array} roles - Array of role names
-	 * @param {Object} notification - Notification payload
+	 * @param {Object} notification - Notification payload (can include {path} for dynamic URL)
 	 */
 	async sendToRoles(roles, notification) {
 		try {
@@ -51,12 +72,18 @@ class PushNotificationService {
 					try {
 						const pushSubscription = JSON.parse(subscription.subscription);
 						
+						// Generate role-specific URL if path is provided
+						const notificationData = { ...notification.data };
+						if (notification.path) {
+							notificationData.url = this.getRoleBasedUrl(user.role, notification.path);
+						}
+						
 						const payload = JSON.stringify({
 							title: notification.title,
 							body: notification.body,
 							icon: notification.icon || '/logo-192.png',
 							badge: notification.badge || '/logo-96.png',
-							data: notification.data || {},
+							data: notificationData,
 							actions: notification.actions || []
 						});
 
@@ -231,13 +258,28 @@ class PushNotificationService {
 				year: 'numeric'
 			});
 
+			// Get bidang info if exists
+			let bidangInfo = '';
+			if (jadwal.bidang_id) {
+				try {
+					const bidang = await prisma.bidang.findUnique({
+						where: { id: jadwal.bidang_id }
+					});
+					if (bidang) {
+						bidangInfo = ` (${bidang.nama})`;
+					}
+				} catch (e) {
+					console.log('Could not fetch bidang info');
+				}
+			}
+
 			const notification = {
 				title: '📅 Jadwal Kegiatan Baru',
-				body: `${jadwal.judul} - ${formattedDate}`,
+				body: `${jadwal.judul}${bidangInfo} - ${formattedDate}`,
 				icon: '/logo-192.png',
 				badge: '/logo-96.png',
+				path: 'jadwal-kegiatan', // Dynamic path that will be prefixed with role
 				data: {
-					url: '/jadwal-kegiatan',
 					type: 'new_jadwal',
 					jadwal_id: jadwal.id,
 					prioritas: jadwal.prioritas
@@ -272,8 +314,8 @@ class PushNotificationService {
 				body: `${jadwal.judul} - Perubahan: ${changesList}`,
 				icon: '/logo-192.png',
 				badge: '/logo-96.png',
+				path: 'jadwal-kegiatan', // Dynamic path that will be prefixed with role
 				data: {
-					url: '/jadwal-kegiatan',
 					type: 'update_jadwal',
 					jadwal_id: jadwal.id,
 					changes: changesList

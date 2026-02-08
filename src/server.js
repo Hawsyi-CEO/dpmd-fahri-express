@@ -44,7 +44,6 @@ const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const bumdesRoutes = require('./routes/bumdes.routes');
 const musdesusRoutes = require('./routes/musdesus.routes');
-const perjalananDinasRoutes = require('./routes/perjalananDinas.routes');
 const heroGalleryRoutes = require('./routes/heroGallery.routes');
 const publicRoutes = require('./routes/public.routes');
 const locationRoutes = require('./routes/location.routes');
@@ -67,8 +66,6 @@ const bhprdRoutes = require('./routes/bhprd.routes');
 const bhprdT1Routes = require('./routes/bhprd-t1.routes');
 const bhprdT2Routes = require('./routes/bhprd-t2.routes');
 const bhprdT3Routes = require('./routes/bhprd-t3.routes');
-const vpnDashboardRoutes = require('./routes/vpnDashboard.routes');
-const vpnCoreDashboardRoutes = require('./routes/vpnCoreDashboard.routes');
 const pegawaiRoutes = require('./routes/pegawai.routes');
 const bidangRoutes = require('./routes/bidang.routes');
 const bankeuProposalRoutes = require('./routes/bankeuProposal.routes');
@@ -82,6 +79,7 @@ const dpmdVerificationRoutes = require('./routes/dpmdVerification.routes');
 const dinasVerifikatorRoutes = require('./routes/dinasVerifikator.routes');
 const verifikatorAksesDesaRoutes = require('./routes/verifikatorAksesDesa.routes');
 const beritaAcaraRoutes = require('./routes/beritaAcara.routes');
+const perjadinRoutes = require('./routes/perjadin.routes');
 
 const app = express();
 
@@ -239,12 +237,10 @@ app.use('/api/kecamatan', require('./routes/kecamatanBankeuTimConfig.routes')); 
 app.use('/api/bankeu/questionnaire', require('./routes/bankeuQuestionnaire.routes')); // Verification questionnaire
 app.use('/api/berita-acara', beritaAcaraRoutes); // Berita Acara routes
 app.use('/api/contoh-proposal', require('./routes/contohProposal.routes')); // Example proposal files
-app.use('/api/perjalanan-dinas', perjalananDinasRoutes);
-app.use('/api/perjadin', perjalananDinasRoutes); // Alias for perjadin
-app.use('/api/kegiatan', perjalananDinasRoutes); // Alias for perjadin
 app.use('/api/hero-gallery', heroGalleryRoutes);
 app.use('/api/kepala-dinas', kepalaDinasRoutes); // Kepala Dinas dashboard
 app.use('/api/jadwal-kegiatan', require('./routes/jadwalKegiatan.routes')); // Jadwal Kegiatan routes
+app.use('/api/perjadin', perjadinRoutes); // Perjadin (Perjalanan Dinas) routes
 app.use('/api/berita', require('./routes/berita.routes')); // Berita routes
 app.use('/api/kelembagaan', kelembagaanRoutes); // Kelembagaan routes (admin/global)
 app.use('/api/kelembagaan/activity-logs', require('./routes/kelembagaanActivityLogs.routes')); // Activity logs
@@ -263,8 +259,6 @@ app.use('/api/bhprd', bhprdRoutes); // BHPRD (Bagi Hasil Pajak dan Retribusi Dae
 app.use('/api/bhprd-t1', bhprdT1Routes); // BHPRD Tahap 1
 app.use('/api/bhprd-t2', bhprdT2Routes); // BHPRD Tahap 2
 app.use('/api/bhprd-t3', bhprdT3Routes); // BHPRD Tahap 3
-app.use('/api/vpn-dashboard', vpnDashboardRoutes); // VPN Dashboard (IP restricted)
-app.use('/api/vpn-core', vpnCoreDashboardRoutes); // VPN Core Dashboard Access (IP restricted, no auth token)
 
 // 404 handler
 app.use((req, res) => {

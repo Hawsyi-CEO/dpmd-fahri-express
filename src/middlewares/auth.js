@@ -149,92 +149,6 @@ const generateToken = (user) => {
   );
 };
 
-// VPN IP-based authentication (no token required)
-// HYBRID: Accept both Tailscale IP and secret key
-const vpnAuth = async (req, res, next) => {
-  try {
-    // Get client IP address
-    const forwardedFor = req.headers['x-forwarded-for'];
-    const realIP = req.headers['x-real-ip'];
-    const remoteAddr = req.connection.remoteAddress || req.socket.remoteAddress;
-    
-    // Get VPN secret from query or header
-    const vpnSecret = req.query.secret || req.headers['x-vpn-secret'];
-    const expectedSecret = process.env.VPN_SECRET_KEY || 'DPMD-INTERNAL-2025';
-    
-    // Parse forwarded IPs
-    let clientIP = remoteAddr;
-    if (forwardedFor) {
-      const ips = forwardedFor.split(',').map(ip => ip.trim());
-      clientIP = ips[0];
-    } else if (realIP) {
-      clientIP = realIP;
-    }
-
-    logger.info(`🔐 VPN Auth - IP: ${clientIP}, HasSecret: ${!!vpnSecret}`);
-
-    // Function to check if IP is in Tailscale range (100.64.0.0/10)
-    const isIPInTailscaleRange = (ip) => {
-      // Allow localhost for development
-      if (ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1') {
-        logger.info('✅ VPN Auth: Localhost detected (development mode)');
-        return true;
-      }
-
-      // Remove IPv6 prefix if present
-      const cleanIP = ip.replace('::ffff:', '');
-      
-      // Check Tailscale range: 100.64.0.0 to 100.127.255.255
-      const parts = cleanIP.split('.');
-      if (parts.length !== 4) return false;
-      
-      const firstOctet = parseInt(parts[0]);
-      const secondOctet = parseInt(parts[1]);
-      
-      // Tailscale uses 100.64.0.0/10 (100.64.0.0 - 100.127.255.255)
-      return firstOctet === 100 && secondOctet >= 64 && secondOctet <= 127;
-    };
-
-    const isVpnIP = isIPInTailscaleRange(clientIP);
-    const hasValidSecret = vpnSecret && vpnSecret === expectedSecret;
-
-    // ✅ GRANT ACCESS: Tailscale IP OR valid secret key
-    if (isVpnIP || hasValidSecret) {
-      const accessMethod = isVpnIP ? 'tailscale-ip' : 'secret-key';
-      logger.info(`✅ VPN Auth success via ${accessMethod}: IP=${clientIP}`);
-      
-      // Set dummy VPN user
-      req.user = {
-        id: 'vpn-user',
-        name: 'VPN User',
-        email: 'vpn@internal',
-        role: 'vpn_access',
-        accessMethod
-      };
-      
-      return next();
-    }
-
-    // ❌ DENY ACCESS
-    logger.warn(`❌ VPN Auth failed: IP ${clientIP} not in VPN range and no valid secret`);
-    return res.status(403).json({
-      success: false,
-      message: 'Access denied - VPN connection or valid secret key required',
-      data: {
-        ip: clientIP,
-        hasSecret: !!vpnSecret,
-        reason: 'Not connected via Tailscale VPN and no valid secret provided'
-      }
-    });
-  } catch (error) {
-    logger.error('VPN Authentication failed:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'VPN authentication failed'
-    });
-  }
-};
-
 // Middleware to check if user has dinas_terkait or verifikator_dinas role and dinas_id
 const authorizeDinas = (req, res, next) => {
   if (!req.user) {
@@ -265,4 +179,4 @@ const authorizeDinas = (req, res, next) => {
   next();
 };
 
-module.exports = { auth, checkRole, generateToken, vpnAuth, authorizeDinas };
+module.exports = { auth, checkRole, generateToken, authorizeDinas };

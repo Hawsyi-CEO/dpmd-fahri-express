@@ -18,10 +18,18 @@ router.get('/', auth, async (req, res) => {
       }
     });
 
+    // Convert BigInt to Number for JSON serialization
+    const serializedBidangs = bidangs.map(b => ({
+      id: Number(b.id),
+      nama: b.nama,
+      created_at: b.created_at,
+      updated_at: b.updated_at
+    }));
+
     res.json({
       success: true,
       message: 'Bidangs retrieved successfully',
-      data: bidangs
+      data: serializedBidangs
     });
   } catch (error) {
     console.error('Error fetching bidangs:', error);

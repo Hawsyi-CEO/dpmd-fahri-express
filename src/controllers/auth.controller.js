@@ -685,7 +685,5 @@ const checkTailscaleVpn = async (req, res) => {
 module.exports = {
   login,
   verifyToken,
-  getProfile,
-  checkVpnAccess,
-  checkTailscaleVpn
+  getProfile
 };
