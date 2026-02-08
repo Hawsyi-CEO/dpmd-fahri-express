@@ -70,7 +70,10 @@ class PushNotificationService {
 			for (const user of users) {
 				for (const subscription of user.push_subscriptions) {
 					try {
-						const pushSubscription = JSON.parse(subscription.subscription);
+						// subscription.subscription could be string (JSON) or object (from Prisma)
+						const pushSubscription = typeof subscription.subscription === 'string' 
+							? JSON.parse(subscription.subscription)
+							: subscription.subscription;
 						
 						// Generate role-specific URL if path is provided
 						const notificationData = { ...notification.data };
@@ -401,7 +404,10 @@ class PushNotificationService {
 			};
 
 			for (const subscription of user.push_subscriptions) {
-				const pushSubscription = JSON.parse(subscription.subscription);
+				// subscription.subscription could be string (JSON) or object (from Prisma)
+				const pushSubscription = typeof subscription.subscription === 'string' 
+					? JSON.parse(subscription.subscription)
+					: subscription.subscription;
 				const payload = JSON.stringify(notification);
 				await webpush.sendNotification(pushSubscription, payload);
 			}
