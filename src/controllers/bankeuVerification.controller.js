@@ -88,10 +88,11 @@ class BankeuVerificationController {
           u_created.name as created_by_name,
           u_verified.name as verified_by_name,
           u_dinas.name as dinas_verifier_name,
-          dv.nama as dinas_verifikator_nama,
-          dv.jabatan as dinas_verifikator_jabatan,
+          COALESCE(dv.nama, dc.nama_pic) as dinas_verifikator_nama,
+          COALESCE(dv.nip, dc.nip_pic) as dinas_verifikator_nip,
+          COALESCE(dv.jabatan, dc.jabatan_pic) as dinas_verifikator_jabatan,
           dv.pangkat_golongan as dinas_verifikator_pangkat,
-          dv.ttd_path as dinas_verifikator_ttd,
+          COALESCE(dv.ttd_path, dc.ttd_path) as dinas_verifikator_ttd,
           d.nama as desa_nama,
           d.kecamatan_id,
           k.nama as kecamatan_nama
@@ -101,6 +102,7 @@ class BankeuVerificationController {
         LEFT JOIN users u_verified ON bp.verified_by = u_verified.id
         LEFT JOIN users u_dinas ON bp.dinas_verified_by = u_dinas.id
         LEFT JOIN dinas_verifikator dv ON u_dinas.id = dv.user_id AND u_dinas.dinas_id = dv.dinas_id
+        LEFT JOIN dinas_config dc ON u_dinas.dinas_id = dc.dinas_id
         LEFT JOIN kecamatans k ON d.kecamatan_id = k.id
         ${whereClause}
         ORDER BY bp.created_at DESC

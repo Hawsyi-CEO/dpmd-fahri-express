@@ -96,10 +96,11 @@ const getDinasProposals = async (req, res) => {
           k.nama as nama_kecamatan,
           u.name as created_by_name,
           u_verifier.name as dinas_verifier_name,
-          dv.nama as dinas_verifikator_nama,
-          dv.jabatan as dinas_verifikator_jabatan,
+          COALESCE(dv.nama, dc.nama_pic) as dinas_verifikator_nama,
+          COALESCE(dv.nip, dc.nip_pic) as dinas_verifikator_nip,
+          COALESCE(dv.jabatan, dc.jabatan_pic) as dinas_verifikator_jabatan,
           dv.pangkat_golongan as dinas_verifikator_pangkat,
-          dv.ttd_path as dinas_verifikator_ttd
+          COALESCE(dv.ttd_path, dc.ttd_path) as dinas_verifikator_ttd
         FROM bankeu_proposals bp
         INNER JOIN desas d ON bp.desa_id = d.id
         INNER JOIN kecamatans k ON d.kecamatan_id = k.id
@@ -108,6 +109,7 @@ const getDinasProposals = async (req, res) => {
         LEFT JOIN users u ON bp.created_by = u.id
         LEFT JOIN users u_verifier ON bp.dinas_verified_by = u_verifier.id
         LEFT JOIN dinas_verifikator dv ON u_verifier.id = dv.user_id AND u_verifier.dinas_id = dv.dinas_id
+        LEFT JOIN dinas_config dc ON u_verifier.dinas_id = dc.dinas_id
         WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
           AND bp.submitted_to_dinas_at IS NOT NULL
           AND bp.desa_id IN (${accessibleDesaIds.join(',')})
@@ -155,10 +157,11 @@ const getDinasProposals = async (req, res) => {
             k.nama as nama_kecamatan,
             u.name as created_by_name,
             u_verifier.name as dinas_verifier_name,
-            dv.nama as dinas_verifikator_nama,
-            dv.jabatan as dinas_verifikator_jabatan,
+            COALESCE(dv.nama, dc.nama_pic) as dinas_verifikator_nama,
+            COALESCE(dv.nip, dc.nip_pic) as dinas_verifikator_nip,
+            COALESCE(dv.jabatan, dc.jabatan_pic) as dinas_verifikator_jabatan,
             dv.pangkat_golongan as dinas_verifikator_pangkat,
-            dv.ttd_path as dinas_verifikator_ttd
+            COALESCE(dv.ttd_path, dc.ttd_path) as dinas_verifikator_ttd
           FROM bankeu_proposals bp
           INNER JOIN desas d ON bp.desa_id = d.id
           INNER JOIN kecamatans k ON d.kecamatan_id = k.id
@@ -167,6 +170,7 @@ const getDinasProposals = async (req, res) => {
           LEFT JOIN users u ON bp.created_by = u.id
           LEFT JOIN users u_verifier ON bp.dinas_verified_by = u_verifier.id
           LEFT JOIN dinas_verifikator dv ON u_verifier.id = dv.user_id AND u_verifier.dinas_id = dv.dinas_id
+          LEFT JOIN dinas_config dc ON u_verifier.dinas_id = dc.dinas_id
           WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
             AND bp.submitted_to_dinas_at IS NOT NULL
             AND bp.desa_id NOT IN (${excludedDesaIds.join(',')})
@@ -182,10 +186,11 @@ const getDinasProposals = async (req, res) => {
             k.nama as nama_kecamatan,
             u.name as created_by_name,
             u_verifier.name as dinas_verifier_name,
-            dv.nama as dinas_verifikator_nama,
-            dv.jabatan as dinas_verifikator_jabatan,
+            COALESCE(dv.nama, dc.nama_pic) as dinas_verifikator_nama,
+            COALESCE(dv.nip, dc.nip_pic) as dinas_verifikator_nip,
+            COALESCE(dv.jabatan, dc.jabatan_pic) as dinas_verifikator_jabatan,
             dv.pangkat_golongan as dinas_verifikator_pangkat,
-            dv.ttd_path as dinas_verifikator_ttd
+            COALESCE(dv.ttd_path, dc.ttd_path) as dinas_verifikator_ttd
           FROM bankeu_proposals bp
           INNER JOIN desas d ON bp.desa_id = d.id
           INNER JOIN kecamatans k ON d.kecamatan_id = k.id
@@ -194,6 +199,7 @@ const getDinasProposals = async (req, res) => {
           LEFT JOIN users u ON bp.created_by = u.id
           LEFT JOIN users u_verifier ON bp.dinas_verified_by = u_verifier.id
           LEFT JOIN dinas_verifikator dv ON u_verifier.id = dv.user_id AND u_verifier.dinas_id = dv.dinas_id
+          LEFT JOIN dinas_config dc ON u_verifier.dinas_id = dc.dinas_id
           WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
             AND bp.submitted_to_dinas_at IS NOT NULL
           ORDER BY bp.created_at DESC
