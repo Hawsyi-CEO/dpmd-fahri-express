@@ -226,14 +226,16 @@ class BeritaAcaraService {
         bp.volume,
         bp.status,
         bp.catatan_verifikasi,
-        dv.nama as dinas_verifikator_nama,
-        dv.nip as dinas_verifikator_nip,
-        dv.jabatan as dinas_verifikator_jabatan,
+        COALESCE(dv.nama, dc.nama_pic) as dinas_verifikator_nama,
+        COALESCE(dv.nip, dc.nip_pic) as dinas_verifikator_nip,
+        COALESCE(dv.jabatan, dc.jabatan_pic) as dinas_verifikator_jabatan,
         dv.pangkat_golongan as dinas_verifikator_pangkat,
-        dv.ttd_path as dinas_verifikator_ttd
+        COALESCE(dv.ttd_path, dc.ttd_path) as dinas_verifikator_ttd
       FROM bankeu_proposals bp
       INNER JOIN bankeu_master_kegiatan mk ON bp.kegiatan_id = mk.id
       LEFT JOIN dinas_verifikator dv ON bp.dinas_verified_by = dv.user_id
+      LEFT JOIN users u ON bp.dinas_verified_by = u.id
+      LEFT JOIN dinas_config dc ON u.dinas_id = dc.dinas_id
       WHERE bp.desa_id = :desaId
         AND bp.submitted_to_kecamatan = TRUE
       ORDER BY mk.jenis_kegiatan, mk.urutan
@@ -261,14 +263,16 @@ class BeritaAcaraService {
         bp.volume,
         bp.status,
         bp.catatan_verifikasi,
-        dv.nama as dinas_verifikator_nama,
-        dv.nip as dinas_verifikator_nip,
-        dv.jabatan as dinas_verifikator_jabatan,
+        COALESCE(dv.nama, dc.nama_pic) as dinas_verifikator_nama,
+        COALESCE(dv.nip, dc.nip_pic) as dinas_verifikator_nip,
+        COALESCE(dv.jabatan, dc.jabatan_pic) as dinas_verifikator_jabatan,
         dv.pangkat_golongan as dinas_verifikator_pangkat,
-        dv.ttd_path as dinas_verifikator_ttd
+        COALESCE(dv.ttd_path, dc.ttd_path) as dinas_verifikator_ttd
       FROM bankeu_proposals bp
       INNER JOIN bankeu_master_kegiatan mk ON bp.kegiatan_id = mk.id
       LEFT JOIN dinas_verifikator dv ON bp.dinas_verified_by = dv.user_id
+      LEFT JOIN users u ON bp.dinas_verified_by = u.id
+      LEFT JOIN dinas_config dc ON u.dinas_id = dc.dinas_id
       WHERE bp.desa_id = :desaId
         AND bp.kegiatan_id = :kegiatanId
         AND bp.submitted_to_kecamatan = TRUE
@@ -297,14 +301,16 @@ class BeritaAcaraService {
         bp.volume,
         bp.status,
         bp.catatan_verifikasi,
-        dv.nama as dinas_verifikator_nama,
-        dv.nip as dinas_verifikator_nip,
-        dv.jabatan as dinas_verifikator_jabatan,
+        COALESCE(dv.nama, dc.nama_pic) as dinas_verifikator_nama,
+        COALESCE(dv.nip, dc.nip_pic) as dinas_verifikator_nip,
+        COALESCE(dv.jabatan, dc.jabatan_pic) as dinas_verifikator_jabatan,
         dv.pangkat_golongan as dinas_verifikator_pangkat,
-        dv.ttd_path as dinas_verifikator_ttd
+        COALESCE(dv.ttd_path, dc.ttd_path) as dinas_verifikator_ttd
       FROM bankeu_proposals bp
       INNER JOIN bankeu_master_kegiatan mk ON bp.kegiatan_id = mk.id
       LEFT JOIN dinas_verifikator dv ON bp.dinas_verified_by = dv.user_id
+      LEFT JOIN users u ON bp.dinas_verified_by = u.id
+      LEFT JOIN dinas_config dc ON u.dinas_id = dc.dinas_id
       WHERE bp.id = :proposalId
         AND bp.submitted_to_kecamatan = TRUE
       LIMIT 1
