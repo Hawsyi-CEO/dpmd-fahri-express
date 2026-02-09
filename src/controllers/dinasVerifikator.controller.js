@@ -169,11 +169,15 @@ exports.updateVerifikator = async (req, res) => {
       WHERE id = ${verifikatorIdInt}
     `;
 
-    // Update user email if changed
-    if (email) {
+    // Update user email and name if changed
+    if (email || nama) {
+      const updateData = {};
+      if (email) updateData.email = email;
+      if (nama) updateData.name = nama;
+      
       await prisma.users.update({
         where: { id: userId },
-        data: { email }
+        data: updateData
       });
     }
 

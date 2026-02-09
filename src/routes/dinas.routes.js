@@ -352,6 +352,75 @@ router.post('/:id/reset-password', async (req, res) => {
   }
 });
 
+// Update email for dinas account
+router.put('/:id/update-account', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email } = req.body;
+
+    if (!email || !email.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email harus diisi'
+      });
+    }
+
+    // Find user account for this dinas
+    const userAccount = await prisma.users.findFirst({
+      where: { 
+        dinas_id: parseInt(id),
+        role: 'dinas_terkait'
+      }
+    });
+
+    if (!userAccount) {
+      return res.status(404).json({
+        success: false,
+        message: 'Akun dinas tidak ditemukan'
+      });
+    }
+
+    // Check if email already used by other user
+    const emailExists = await prisma.users.findFirst({
+      where: { 
+        email: email.trim(),
+        id: { not: userAccount.id }
+      }
+    });
+
+    if (emailExists) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email sudah digunakan oleh akun lain'
+      });
+    }
+
+    // Update email
+    await prisma.users.update({
+      where: { id: userAccount.id },
+      data: { 
+        email: email.trim(),
+        updated_at: new Date()
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Email akun berhasil diubah',
+      data: {
+        email: email.trim()
+      }
+    });
+  } catch (error) {
+    console.error('Error updating dinas account email:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Gagal mengubah email akun',
+      error: error.message
+    });
+  }
+});
+
 // Create user account for dinas
 router.post('/:id/create-account', async (req, res) => {
   try {
