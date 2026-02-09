@@ -802,9 +802,9 @@ class BeritaAcaraService {
             
             if (fs.existsSync(stempelPath)) {
               const stempelSize = 60;
-              // Put stempel to the left of TTD
-              const stempelX = ttdX - 50;
-              const stempelY = ttdY - 5;
+              // Stempel overlaps signature from left side (sesuai aturan resmi)
+              const stempelX = ttdX - 20; // Overlap into signature area
+              const stempelY = ttdY + 5; // Slightly lower to overlap bottom of signature
               
               try {
                 doc.image(stempelPath, stempelX, stempelY, { 
@@ -1134,9 +1134,9 @@ class BeritaAcaraService {
               const stempelSize = 70; // Size for clear visibility
               
               // Position: Overlay on LEFT part of signature (menimpa tanda tangan)
-              // Stempel must overlap/cover part of the signature, positioned higher
-              const stempelX = ttdX + 5; // Start slightly inside the signature (overlap)
-              const stempelY = ttdY - 10; // Positioned higher to overlap more on signature
+              // Stempel must overlap/cover part of the signature as per regulation
+              const stempelX = ttdX + 10; // Overlap into signature from left
+              const stempelY = ttdY + 5; // Slightly lower to overlap signature properly
               
               console.log('🏛️  [BeritaAcara] Rendering stempel at position:', { stempelX, stempelY, stempelSize });
               
@@ -1490,14 +1490,14 @@ Desa ${proposalData.nama_desa || '.....'}`;
           
           doc.image(ttdPath, ttdX, ttdY, { width: signatureWidth, height: signatureHeight });
           
-          // Stempel - overlay on the left of TTD
+          // Stempel - overlay on the left of TTD, positioned higher
           if (kecamatanConfig.stempel_path) {
             try {
               const stempelPath = path.join(__dirname, '../../storage/uploads', kecamatanConfig.stempel_path);
               if (fs.existsSync(stempelPath)) {
                 const stempelSize = 70;
-                const stempelX = ttdX - 45;
-                const stempelY = ttdY - 5;
+                const stempelX = ttdX - 30; // Overlap into signature
+                const stempelY = ttdY - 15; // Move UP to be higher than signature
                 doc.image(stempelPath, stempelX, stempelY, { width: stempelSize, height: stempelSize });
               }
             } catch (stempelErr) {

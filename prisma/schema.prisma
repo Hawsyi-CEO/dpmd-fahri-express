@@ -8,7 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model activity_logs {
   id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
   user_id     BigInt    @db.UnsignedBigInt
@@ -88,7 +87,6 @@ model app_settings {
   @@index([setting_key], map: "idx_setting_key")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model bankeu_master_kegiatan {
   id                       Int                                   @id @default(autoincrement()) @db.UnsignedTinyInt
   jenis_kegiatan           bankeu_master_kegiatan_jenis_kegiatan
@@ -103,65 +101,78 @@ model bankeu_master_kegiatan {
   @@index([jenis_kegiatan], map: "idx_jenis")
 }
 
+model bankeu_proposal_kegiatan {
+  id                     BigInt                 @id @default(autoincrement()) @db.UnsignedBigInt
+  proposal_id            BigInt                 @db.UnsignedBigInt
+  kegiatan_id            Int                    @db.UnsignedTinyInt
+  created_at             DateTime?              @default(now()) @db.Timestamp(0)
+  bankeu_master_kegiatan bankeu_master_kegiatan @relation(fields: [kegiatan_id], references: [id], onDelete: Cascade, map: "fk_proposal_kegiatan_kegiatan")
+  bankeu_proposals       bankeu_proposals       @relation(fields: [proposal_id], references: [id], onDelete: Cascade, map: "fk_proposal_kegiatan_proposal")
+
+  @@unique([proposal_id, kegiatan_id], map: "unique_proposal_kegiatan")
+  @@index([kegiatan_id], map: "idx_kegiatan_id")
+  @@index([proposal_id], map: "idx_proposal_id")
+}
+
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model bankeu_proposals {
-  id                                        BigInt                               @id @default(autoincrement()) @db.UnsignedBigInt
-  desa_id                                   BigInt                               @db.UnsignedBigInt
-  kegiatan_id                               Int?                                 @db.UnsignedTinyInt
-  judul_proposal                            String                               @db.VarChar(255)
-  nama_kegiatan_spesifik                    String?                              @db.VarChar(255)
-  volume                                    String?                              @db.VarChar(255)
-  lokasi                                    String?                              @db.VarChar(255)
-  deskripsi                                 String?                              @db.Text
-  file_proposal                             String                               @db.VarChar(255)
-  surat_pengantar                           String?                              @db.VarChar(255)
-  surat_permohonan                          String?                              @db.VarChar(255)
-  dinas_reviewed_file                       String?                              @db.VarChar(255)
-  dinas_reviewed_at                         DateTime?                            @db.Timestamp(0)
-  file_size                                 Int?                                 @db.UnsignedInt
-  anggaran_usulan                           Decimal?                             @db.Decimal(15, 2)
-  status                                    bankeu_proposals_status?             @default(pending)
-  dinas_status                              bankeu_proposals_dinas_status?
-  submitted_to_dinas_at                     DateTime?                            @db.Timestamp(0)
-  dinas_verified_at                         DateTime?                            @db.Timestamp(0)
-  dinas_verified_by                         Int?
-  dinas_catatan                             String?                              @db.Text
-  kecamatan_status                          bankeu_proposals_dinas_status?
-  kecamatan_catatan                         String?                              @db.Text
-  kecamatan_verified_at                     DateTime?                            @db.Timestamp(0)
-  kecamatan_verified_by                     BigInt?                              @db.UnsignedBigInt
-  dpmd_status                               bankeu_proposals_dinas_status?
-  dpmd_catatan                              String?                              @db.Text
-  dpmd_verified_at                          DateTime?                            @db.Timestamp(0)
-  dpmd_verified_by                          BigInt?                              @db.UnsignedBigInt
-  submitted_to_kecamatan                    Boolean?                             @default(false)
-  submitted_at                              DateTime?                            @db.Timestamp(0)
-  submitted_to_dpmd                         Boolean?                             @default(false)
-  submitted_to_dpmd_at                      DateTime?                            @db.Timestamp(0)
-  catatan_verifikasi                        String?                              @db.Text
-  verified_by                               BigInt?                              @db.UnsignedBigInt
-  verified_at                               DateTime?                            @db.Timestamp(0)
-  berita_acara_path                         String?                              @db.VarChar(255)
-  berita_acara_generated_at                 DateTime?                            @db.Timestamp(0)
-  created_by                                BigInt                               @db.UnsignedBigInt
-  created_at                                DateTime?                            @default(now()) @db.Timestamp(0)
-  updated_at                                DateTime?                            @default(now()) @db.Timestamp(0)
-  users_bankeu_proposals_created_byTousers  users                                @relation("bankeu_proposals_created_byTousers", fields: [created_by], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_bankeu_proposals_created_by")
-  desas                                     desas                                @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_bankeu_proposals_desa")
-  users_bankeu_proposals_verified_byTousers users?                               @relation("bankeu_proposals_verified_byTousers", fields: [verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_proposals_verified_by")
-  users_bankeu_dpmd_verified_by             users?                               @relation("bankeu_proposals_dpmd_verified_by", fields: [dpmd_verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_dpmd_verified_by")
-  users_bankeu_kecamatan_verified_by        users?                               @relation("bankeu_proposals_kecamatan_verified_by", fields: [kecamatan_verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_kecamatan_verified_by")
-  bankeu_verification_questionnaires        bankeu_verification_questionnaires[]
-  bankeu_proposal_kegiatan                  bankeu_proposal_kegiatan[]
+  id                                                  BigInt                               @id @default(autoincrement()) @db.UnsignedBigInt
+  desa_id                                             BigInt                               @db.UnsignedBigInt
+  kegiatan_id                                         Int?                                 @db.UnsignedTinyInt
+  judul_proposal                                      String                               @db.VarChar(255)
+  nama_kegiatan_spesifik                              String?                              @db.VarChar(255)
+  volume                                              String?                              @db.VarChar(255)
+  lokasi                                              String?                              @db.VarChar(255)
+  deskripsi                                           String?                              @db.Text
+  file_proposal                                       String                               @db.VarChar(255)
+  surat_pengantar                                     String?                              @db.VarChar(255)
+  surat_permohonan                                    String?                              @db.VarChar(255)
+  dinas_reviewed_file                                 String?                              @db.VarChar(255)
+  dinas_reviewed_at                                   DateTime?                            @db.Timestamp(0)
+  file_size                                           Int?                                 @db.UnsignedInt
+  anggaran_usulan                                     Decimal?                             @db.Decimal(15, 2)
+  status                                              bankeu_proposals_status?             @default(pending)
+  dinas_status                                        bankeu_proposals_dinas_status?
+  submitted_to_dinas_at                               DateTime?                            @db.Timestamp(0)
+  dinas_verified_at                                   DateTime?                            @db.Timestamp(0)
+  dinas_verified_by                                   Int?
+  dinas_catatan                                       String?                              @db.Text
+  kecamatan_status                                    bankeu_proposals_kecamatan_status?
+  kecamatan_verified_at                               DateTime?                            @db.Timestamp(0)
+  kecamatan_verified_by                               BigInt?                              @db.UnsignedBigInt
+  kecamatan_catatan                                   String?                              @db.Text
+  dpmd_status                                         bankeu_proposals_dpmd_status?
+  dpmd_verified_at                                    DateTime?                            @db.Timestamp(0)
+  dpmd_verified_by                                    BigInt?                              @db.UnsignedBigInt
+  dpmd_catatan                                        String?                              @db.Text
+  submitted_to_kecamatan                              Boolean?                             @default(false)
+  submitted_at                                        DateTime?                            @db.Timestamp(0)
+  submitted_to_dpmd                                   Boolean?                             @default(false)
+  submitted_to_dpmd_at                                DateTime?                            @db.Timestamp(0)
+  catatan_verifikasi                                  String?                              @db.Text
+  verified_by                                         BigInt?                              @db.UnsignedBigInt
+  verified_at                                         DateTime?                            @db.Timestamp(0)
+  berita_acara_path                                   String?                              @db.VarChar(255)
+  berita_acara_generated_at                           DateTime?                            @db.Timestamp(0)
+  created_by                                          BigInt                               @db.UnsignedBigInt
+  created_at                                          DateTime?                            @default(now()) @db.Timestamp(0)
+  updated_at                                          DateTime?                            @default(now()) @db.Timestamp(0)
+  bankeu_proposal_kegiatan                            bankeu_proposal_kegiatan[]
+  users_bankeu_proposals_dpmd_verified_byTousers      users?                               @relation("bankeu_proposals_dpmd_verified_byTousers", fields: [dpmd_verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_dpmd_verified_by")
+  users_bankeu_proposals_kecamatan_verified_byTousers users?                               @relation("bankeu_proposals_kecamatan_verified_byTousers", fields: [kecamatan_verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_kecamatan_verified_by")
+  users_bankeu_proposals_created_byTousers            users                                @relation("bankeu_proposals_created_byTousers", fields: [created_by], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_bankeu_proposals_created_by")
+  desas                                               desas                                @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_bankeu_proposals_desa")
+  users_bankeu_proposals_verified_byTousers           users?                               @relation("bankeu_proposals_verified_byTousers", fields: [verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_proposals_verified_by")
+  bankeu_verification_questionnaires                  bankeu_verification_questionnaires[]
 
   @@index([created_by], map: "idx_created_by")
   @@index([desa_id], map: "idx_desa")
   @@index([dinas_status], map: "idx_dinas_status")
   @@index([dinas_verified_by], map: "idx_dinas_verified_by")
-  @@index([kecamatan_status], map: "idx_kecamatan_status")
-  @@index([kecamatan_verified_by], map: "idx_kecamatan_verified_by")
   @@index([dpmd_status], map: "idx_dpmd_status")
   @@index([dpmd_verified_by], map: "idx_dpmd_verified_by")
+  @@index([kecamatan_status], map: "idx_kecamatan_status")
+  @@index([kecamatan_verified_by], map: "idx_kecamatan_verified_by")
   @@index([status], map: "idx_status")
   @@index([submitted_to_dpmd], map: "idx_submitted_to_dpmd")
   @@index([submitted_to_kecamatan], map: "idx_submitted_to_kecamatan")
@@ -336,6 +347,32 @@ model bumdes {
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model desa_bankeu_surat {
+  id                     BigInt                              @id @default(autoincrement()) @db.UnsignedBigInt
+  desa_id                BigInt                              @db.UnsignedBigInt
+  tahun                  Int                                 @default(2025) @db.Year
+  surat_pengantar        String?                             @db.VarChar(255)
+  surat_permohonan       String?                             @db.VarChar(255)
+  submitted_to_kecamatan Boolean                             @default(false)
+  submitted_at           DateTime?                           @db.Timestamp(0)
+  kecamatan_status       desa_bankeu_surat_kecamatan_status? @default(pending)
+  kecamatan_reviewed_by  BigInt?                             @db.UnsignedBigInt
+  kecamatan_reviewed_at  DateTime?                           @db.Timestamp(0)
+  kecamatan_catatan      String?                             @db.Text
+  created_at             DateTime?                           @default(now()) @db.Timestamp(0)
+  updated_at             DateTime?                           @default(now()) @db.Timestamp(0)
+  desas                  desas                               @relation(fields: [desa_id], references: [id], onDelete: Cascade, map: "fk_desa_bankeu_surat_desa")
+  users                  users?                              @relation(fields: [kecamatan_reviewed_by], references: [id], map: "fk_desa_bankeu_surat_reviewer")
+
+  @@unique([desa_id, tahun], map: "unique_desa_tahun")
+  @@index([kecamatan_reviewed_by], map: "fk_desa_bankeu_surat_reviewer")
+  @@index([desa_id], map: "idx_desa_id")
+  @@index([kecamatan_status], map: "idx_kecamatan_status")
+  @@index([submitted_to_kecamatan], map: "idx_submitted")
+  @@index([submitted_to_kecamatan], map: "idx_submitted_to_kecamatan")
+  @@index([tahun], map: "idx_tahun")
+}
+
 model desas {
   id                        BigInt                      @id @default(autoincrement()) @db.UnsignedBigInt
   kecamatan_id              BigInt                      @db.UnsignedBigInt
@@ -353,6 +390,7 @@ model desas {
   kelembagaan_activity_logs kelembagaan_activity_logs[]
   lpms                      lpms[]
   pengurus                  pengurus[]
+  perjadin_grup             perjadin_grup[]
   petugas_monitoring        petugas_monitoring[]
   pkks                      pkks[]
   posyandus                 posyandus[]
@@ -362,41 +400,8 @@ model desas {
   rws                       rws[]
   satlinmas                 satlinmas[]
   verifikator_akses_desa    verifikator_akses_desa[]
-  perjadin_pegawai          perjadin_pegawai[]
-  perjadin_grup             perjadin_grup[]
 
   @@index([kecamatan_id], map: "desas_kecamatan_id_foreign")
-}
-
-/// Model untuk surat pengantar dan surat permohonan per desa
-model desa_bankeu_surat {
-  id                     BigInt                              @id @default(autoincrement()) @db.UnsignedBigInt
-  desa_id                BigInt                              @db.UnsignedBigInt
-  tahun                  Int                                 @default(2025) @db.Year
-  surat_pengantar        String?                             @db.VarChar(255)
-  surat_permohonan       String?                             @db.VarChar(255)
-  submitted_to_kecamatan Boolean                             @default(false)
-  submitted_at           DateTime?                           @db.Timestamp(0)
-  kecamatan_status       desa_bankeu_surat_kecamatan_status? @default(pending)
-  kecamatan_reviewed_by  BigInt?                             @db.UnsignedBigInt
-  kecamatan_reviewed_at  DateTime?                           @db.Timestamp(0)
-  kecamatan_catatan      String?                             @db.Text
-  created_at             DateTime?                           @default(now()) @db.Timestamp(0)
-  updated_at             DateTime?                           @default(now()) @db.Timestamp(0)
-  desas                  desas                               @relation(fields: [desa_id], references: [id], onDelete: Cascade, map: "fk_desa_bankeu_surat_desa")
-  reviewer               users?                              @relation(fields: [kecamatan_reviewed_by], references: [id], onDelete: SetNull, map: "fk_desa_bankeu_surat_reviewer")
-
-  @@unique([desa_id, tahun], map: "unique_desa_tahun")
-  @@index([desa_id], map: "idx_desa_id")
-  @@index([tahun], map: "idx_tahun")
-  @@index([submitted_to_kecamatan], map: "idx_submitted")
-  @@index([kecamatan_status], map: "idx_kecamatan_status")
-}
-
-enum desa_bankeu_surat_kecamatan_status {
-  pending
-  approved
-  rejected
 }
 
 model dinas {
@@ -404,6 +409,29 @@ model dinas {
   nama       String    @db.VarChar(255)
   created_at DateTime? @db.Timestamp(0)
   updated_at DateTime? @db.Timestamp(0)
+}
+
+model dinas_verifikator {
+  id                     BigInt                   @id @default(autoincrement()) @db.UnsignedBigInt
+  dinas_id               Int
+  user_id                BigInt                   @db.UnsignedBigInt
+  nama                   String                   @db.VarChar(255)
+  nip                    String?                  @db.VarChar(50)
+  jabatan                String                   @db.VarChar(255)
+  pangkat_golongan       String?                  @db.VarChar(100)
+  email                  String                   @db.VarChar(255)
+  ttd_path               String?                  @db.VarChar(255)
+  is_active              Boolean?                 @default(true)
+  created_by             BigInt                   @db.UnsignedBigInt
+  created_at             DateTime?                @default(now()) @db.Timestamp(0)
+  updated_at             DateTime?                @db.Timestamp(0)
+  master_dinas           master_dinas             @relation(fields: [dinas_id], references: [id], onDelete: Cascade)
+  verifikator_akses_desa verifikator_akses_desa[]
+
+  @@unique([dinas_id, user_id], map: "unique_user_per_dinas")
+  @@index([dinas_id], map: "idx_dinas_id")
+  @@index([is_active], map: "idx_is_active_dv")
+  @@index([user_id], map: "idx_user_id")
 }
 
 model disposisi {
@@ -443,7 +471,6 @@ model hero_galleries {
   updated_at DateTime? @db.Timestamp(0)
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model jadwal_kegiatan {
   id                                       BigInt                    @id @default(autoincrement()) @db.UnsignedBigInt
   judul                                    String                    @db.VarChar(255)
@@ -496,7 +523,6 @@ model karang_tarunas {
   @@index([produk_hukum_id], map: "karang_tarunas_produk_hukum_id_foreign")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model kecamatan_bankeu_config {
   id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
   kecamatan_id   BigInt    @unique(map: "kecamatan_id") @db.UnsignedBigInt
@@ -564,13 +590,13 @@ model kegiatan_pegawai {
   status             String          @default("aktif") @db.VarChar(50)
   created_at         DateTime?       @default(now()) @db.Timestamp(0)
   updated_at         DateTime?       @default(now()) @db.Timestamp(0)
-  kegiatan           kegiatan        @relation(fields: [id_kegiatan], references: [id_kegiatan], onDelete: Cascade, onUpdate: NoAction, map: "kegiatan_pegawai_id_kegiatan_foreign")
   kegiatan_bidang    kegiatan_bidang @relation(fields: [id_kegiatan_bidang], references: [id_kegiatan_bidang], onDelete: Cascade, onUpdate: NoAction, map: "kegiatan_pegawai_id_kegiatan_bidang_foreign")
-  pegawai            pegawai         @relation("kegiatan_pegawai_relation", fields: [id_pegawai], references: [id_pegawai], onDelete: Cascade, onUpdate: NoAction, map: "kegiatan_pegawai_id_pegawai_foreign")
+  kegiatan           kegiatan        @relation(fields: [id_kegiatan], references: [id_kegiatan], onDelete: Cascade, onUpdate: NoAction, map: "kegiatan_pegawai_id_kegiatan_foreign")
+  pegawai            pegawai         @relation(fields: [id_pegawai], references: [id_pegawai], onDelete: Cascade, onUpdate: NoAction, map: "kegiatan_pegawai_id_pegawai_foreign")
 
   @@unique([id_kegiatan_bidang, id_pegawai], map: "unique_kegiatan_bidang_pegawai")
-  @@index([id_kegiatan], map: "kegiatan_pegawai_id_kegiatan_foreign")
   @@index([id_kegiatan_bidang], map: "kegiatan_pegawai_id_kegiatan_bidang_foreign")
+  @@index([id_kegiatan], map: "kegiatan_pegawai_id_kegiatan_foreign")
   @@index([id_pegawai], map: "kegiatan_pegawai_id_pegawai_foreign")
 }
 
@@ -661,57 +687,15 @@ model master_dinas {
   @@index([kode_dinas], map: "idx_kode_dinas")
 }
 
-/// Tabel untuk tracking verifikator yang ditunjuk oleh dinas
-model dinas_verifikator {
-  id                     BigInt                   @id @default(autoincrement()) @db.UnsignedBigInt
-  dinas_id               Int
-  user_id                BigInt                   @db.UnsignedBigInt
-  nama                   String                   @db.VarChar(255)
-  nip                    String?                  @db.VarChar(50)
-  jabatan                String                   @db.VarChar(255)
-  pangkat_golongan       String?                  @db.VarChar(100)
-  email                  String                   @db.VarChar(255)
-  ttd_path               String?                  @db.VarChar(255)
-  is_active              Boolean?                 @default(true)
-  created_by             BigInt                   @db.UnsignedBigInt
-  created_at             DateTime?                @default(now()) @db.Timestamp(0)
-  updated_at             DateTime?                @db.Timestamp(0)
-  master_dinas           master_dinas             @relation(fields: [dinas_id], references: [id], onDelete: Cascade)
-  verifikator_akses_desa verifikator_akses_desa[]
-
-  @@unique([dinas_id, user_id], map: "unique_user_per_dinas")
-  @@index([dinas_id], map: "idx_dinas_id")
-  @@index([user_id], map: "idx_user_id")
-  @@index([is_active], map: "idx_is_active_dv")
-}
-
-model verifikator_akses_desa {
-  id                BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
-  verifikator_id    BigInt            @db.UnsignedBigInt
-  desa_id           BigInt            @db.UnsignedBigInt
-  kecamatan_id      BigInt            @db.UnsignedBigInt
-  created_at        DateTime?         @default(now()) @db.Timestamp(0)
-  updated_at        DateTime?         @default(now()) @db.Timestamp(0)
-  dinas_verifikator dinas_verifikator @relation(fields: [verifikator_id], references: [id], onDelete: Cascade, map: "fk_verifikator_akses_verifikator")
-  desas             desas             @relation(fields: [desa_id], references: [id], onDelete: Cascade, map: "fk_verifikator_akses_desa")
-  kecamatans        kecamatans        @relation(fields: [kecamatan_id], references: [id], onDelete: Cascade, map: "fk_verifikator_akses_kecamatan")
-
-  @@unique([verifikator_id, desa_id], map: "unique_verifikator_desa")
-  @@index([verifikator_id], map: "idx_verifikator_id")
-  @@index([desa_id], map: "idx_desa_id")
-  @@index([kecamatan_id], map: "idx_kecamatan_id")
-}
-
 model pegawai {
   id_pegawai       BigInt             @id @default(autoincrement()) @db.UnsignedBigInt
   id_bidang        BigInt             @db.UnsignedBigInt
   nama_pegawai     String             @db.VarChar(255)
   created_at       DateTime?          @db.Timestamp(0)
   updated_at       DateTime?          @db.Timestamp(0)
+  kegiatan_pegawai kegiatan_pegawai[]
   bidangs          bidangs            @relation(fields: [id_bidang], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pegawai_id_bidang_foreign")
   users            users[]
-  perjadin_pegawai perjadin_pegawai[]
-  kegiatan_pegawai kegiatan_pegawai[] @relation("kegiatan_pegawai_relation")
 
   @@index([id_bidang], map: "pegawai_id_bidang_foreign")
 }
@@ -732,7 +716,6 @@ model pejabat_ttd {
   @@index([pejabat_id], map: "idx_pejabat")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model pengurus {
   id                    String                      @id @db.Char(36)
   desa_id               BigInt                      @db.UnsignedBigInt
@@ -761,6 +744,28 @@ model pengurus {
   @@index([pengurusable_type, pengurusable_id], map: "idx_pengurusable")
   @@index([status_jabatan], map: "idx_status_jabatan")
   @@index([desa_id], map: "pengurus_desa_id_foreign")
+}
+
+model perjadin_grup {
+  id                BigInt                     @id @default(autoincrement()) @db.UnsignedBigInt
+  nama_grup         String?                    @db.VarChar(255)
+  jenis_tujuan      perjadin_grup_jenis_tujuan @default(desa)
+  desa_tujuan_id    BigInt?                    @db.UnsignedBigInt
+  lokasi_tujuan     String                     @db.VarChar(255)
+  alamat_tujuan     String?                    @db.Text
+  tanggal_berangkat DateTime                   @db.Date
+  tanggal_kembali   DateTime                   @db.Date
+  created_by        BigInt?                    @db.UnsignedBigInt
+  created_at        DateTime?                  @default(now()) @db.Timestamp(0)
+  updated_at        DateTime?                  @default(now()) @db.Timestamp(0)
+  keterangan        String?                    @db.Text
+  nomor_sp_grup     String?                    @db.VarChar(100)
+  users             users?                     @relation(fields: [created_by], references: [id], map: "fk_perjadin_grup_creator")
+  desas             desas?                     @relation(fields: [desa_tujuan_id], references: [id], map: "fk_perjadin_grup_desa")
+
+  @@index([created_by], map: "fk_perjadin_grup_creator")
+  @@index([desa_tujuan_id], map: "idx_perjadin_grup_desa")
+  @@index([tanggal_berangkat, tanggal_kembali], map: "idx_perjadin_grup_tanggal")
 }
 
 model petugas_monitoring {
@@ -974,10 +979,10 @@ model surat_masuk {
   @@index([tanggal_surat], map: "idx_tanggal_surat")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model tim_verifikasi_kecamatan {
   id                                 BigInt                               @id @default(autoincrement()) @db.UnsignedBigInt
   kecamatan_id                       BigInt                               @db.UnsignedBigInt
+  proposal_id                        BigInt?                              @db.UnsignedBigInt
   jabatan                            String                               @db.VarChar(50)
   jabatan_label                      String?                              @db.VarChar(255)
   nama                               String                               @db.VarChar(255)
@@ -990,44 +995,63 @@ model tim_verifikasi_kecamatan {
 
   @@index([jabatan], map: "idx_jabatan")
   @@index([kecamatan_id], map: "idx_kecamatan")
+  @@index([proposal_id], map: "idx_proposal_id")
 }
 
 model users {
-  id                                                   BigInt                      @id @default(autoincrement()) @db.UnsignedBigInt
-  name                                                 String                      @db.VarChar(255)
-  email                                                String                      @unique(map: "users_email_unique") @db.VarChar(255)
-  email_verified_at                                    DateTime?                   @db.Timestamp(0)
-  password                                             String                      @db.VarChar(255)
-  role                                                 users_role                  @default(desa)
-  kecamatan_id                                         Int?                        @db.UnsignedInt
-  desa_id                                              BigInt?                     @db.UnsignedBigInt
-  bidang_id                                            Int?                        @db.UnsignedInt
-  dinas_id                                             Int?                        @db.UnsignedInt
-  avatar                                               String?                     @db.VarChar(255)
-  remember_token                                       String?                     @db.VarChar(100)
-  created_at                                           DateTime?                   @db.Timestamp(0)
-  updated_at                                           DateTime?                   @db.Timestamp(0)
-  is_active                                            Boolean                     @default(true)
-  pegawai_id                                           BigInt?                     @db.UnsignedBigInt
-  activity_logs                                        activity_logs[]
-  app_settings                                         app_settings[]
-  bankeu_proposals_bankeu_proposals_created_byTousers  bankeu_proposals[]          @relation("bankeu_proposals_created_byTousers")
-  bankeu_proposals_bankeu_proposals_verified_byTousers bankeu_proposals[]          @relation("bankeu_proposals_verified_byTousers")
-  bankeu_proposals_dpmd_verified_by                    bankeu_proposals[]          @relation("bankeu_proposals_dpmd_verified_by")
-  bankeu_proposals_kecamatan_verified_by               bankeu_proposals[]          @relation("bankeu_proposals_kecamatan_verified_by")
-  disposisi_disposisi_dari_user_idTousers              disposisi[]                 @relation("disposisi_dari_user_idTousers")
-  disposisi_disposisi_ke_user_idTousers                disposisi[]                 @relation("disposisi_ke_user_idTousers")
-  jadwal_kegiatan_jadwal_kegiatan_approved_byTousers   jadwal_kegiatan[]           @relation("jadwal_kegiatan_approved_byTousers")
-  jadwal_kegiatan_jadwal_kegiatan_created_byTousers    jadwal_kegiatan[]           @relation("jadwal_kegiatan_created_byTousers")
-  kelembagaan_activity_logs                            kelembagaan_activity_logs[]
-  lampiran_surat                                       lampiran_surat[]
-  push_subscriptions                                   push_subscriptions[]
-  surat_masuk                                          surat_masuk[]
-  reviewed_desa_surat                                  desa_bankeu_surat[]
-  perjadin_grup_created                                perjadin_grup[]
-  pegawai                                              pegawai?                    @relation(fields: [pegawai_id], references: [id_pegawai], onDelete: Cascade, onUpdate: NoAction, map: "users_pegawai_id_foreign")
+  id                                                             BigInt                      @id @default(autoincrement()) @db.UnsignedBigInt
+  name                                                           String                      @db.VarChar(255)
+  email                                                          String                      @unique(map: "users_email_unique") @db.VarChar(255)
+  email_verified_at                                              DateTime?                   @db.Timestamp(0)
+  password                                                       String                      @db.VarChar(255)
+  role                                                           users_role                  @default(desa)
+  kecamatan_id                                                   Int?                        @db.UnsignedInt
+  desa_id                                                        BigInt?                     @db.UnsignedBigInt
+  bidang_id                                                      Int?                        @db.UnsignedInt
+  dinas_id                                                       Int?                        @db.UnsignedInt
+  avatar                                                         String?                     @db.VarChar(255)
+  remember_token                                                 String?                     @db.VarChar(100)
+  created_at                                                     DateTime?                   @db.Timestamp(0)
+  updated_at                                                     DateTime?                   @db.Timestamp(0)
+  is_active                                                      Boolean                     @default(true)
+  pegawai_id                                                     BigInt?                     @db.UnsignedBigInt
+  activity_logs                                                  activity_logs[]
+  app_settings                                                   app_settings[]
+  bankeu_proposals_bankeu_proposals_dpmd_verified_byTousers      bankeu_proposals[]          @relation("bankeu_proposals_dpmd_verified_byTousers")
+  bankeu_proposals_bankeu_proposals_kecamatan_verified_byTousers bankeu_proposals[]          @relation("bankeu_proposals_kecamatan_verified_byTousers")
+  bankeu_proposals_bankeu_proposals_created_byTousers            bankeu_proposals[]          @relation("bankeu_proposals_created_byTousers")
+  bankeu_proposals_bankeu_proposals_verified_byTousers           bankeu_proposals[]          @relation("bankeu_proposals_verified_byTousers")
+  desa_bankeu_surat                                              desa_bankeu_surat[]
+  disposisi_disposisi_dari_user_idTousers                        disposisi[]                 @relation("disposisi_dari_user_idTousers")
+  disposisi_disposisi_ke_user_idTousers                          disposisi[]                 @relation("disposisi_ke_user_idTousers")
+  jadwal_kegiatan_jadwal_kegiatan_approved_byTousers             jadwal_kegiatan[]           @relation("jadwal_kegiatan_approved_byTousers")
+  jadwal_kegiatan_jadwal_kegiatan_created_byTousers              jadwal_kegiatan[]           @relation("jadwal_kegiatan_created_byTousers")
+  kelembagaan_activity_logs                                      kelembagaan_activity_logs[]
+  lampiran_surat                                                 lampiran_surat[]
+  perjadin_grup                                                  perjadin_grup[]
+  push_subscriptions                                             push_subscriptions[]
+  surat_masuk                                                    surat_masuk[]
+  pegawai                                                        pegawai?                    @relation(fields: [pegawai_id], references: [id_pegawai], onDelete: Cascade, onUpdate: NoAction, map: "users_pegawai_id_foreign")
 
   @@index([pegawai_id], map: "users_pegawai_id_index")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model verifikator_akses_desa {
+  id                BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
+  verifikator_id    BigInt            @db.UnsignedBigInt
+  desa_id           BigInt            @db.UnsignedBigInt
+  kecamatan_id      BigInt            @db.UnsignedBigInt
+  created_at        DateTime?         @default(now()) @db.Timestamp(0)
+  updated_at        DateTime?         @default(now()) @db.Timestamp(0)
+  desas             desas             @relation(fields: [desa_id], references: [id], onDelete: Cascade, map: "fk_verifikator_akses_desa")
+  kecamatans        kecamatans        @relation(fields: [kecamatan_id], references: [id], onDelete: Cascade, map: "fk_verifikator_akses_kecamatan")
+  dinas_verifikator dinas_verifikator @relation(fields: [verifikator_id], references: [id], onDelete: Cascade, map: "fk_verifikator_akses_verifikator")
+
+  @@unique([verifikator_id, desa_id], map: "unique_verifikator_desa")
+  @@index([desa_id], map: "idx_desa_id")
+  @@index([kecamatan_id], map: "idx_kecamatan_id")
+  @@index([verifikator_id], map: "idx_verifikator_id")
 }
 
 enum bankeu_master_kegiatan_jenis_kegiatan {
@@ -1038,6 +1062,13 @@ enum bankeu_master_kegiatan_jenis_kegiatan {
 enum pejabat_ttd_jenis_pejabat {
   camat
   tim_verifikasi
+}
+
+enum perjadin_grup_jenis_tujuan {
+  desa
+  instansi
+  luar_daerah
+  lainnya
 }
 
 enum bankeu_verification_questionnaires_verifikasi_type {
@@ -1178,6 +1209,12 @@ enum berita_status {
   archived
 }
 
+enum desa_bankeu_surat_kecamatan_status {
+  pending
+  approved
+  rejected
+}
+
 enum pengurus_status_jabatan {
   aktif
   selesai
@@ -1194,13 +1231,6 @@ enum aparatur_desa_jenis_kelamin {
   Perempuan
 }
 
-enum bankeu_proposals_status {
-  pending
-  verified
-  rejected
-  revision
-}
-
 enum pengurus_status_verifikasi {
   verified
   unverified
@@ -1210,14 +1240,6 @@ enum produk_hukums_singkatan_jenis {
   PERDES
   PERKADES
   SK_KADES @map("SK KADES")
-}
-
-enum bankeu_proposals_dinas_status {
-  pending
-  in_review
-  approved
-  rejected
-  revision
 }
 
 enum surat_masuk_status {
@@ -1261,9 +1283,40 @@ enum pengurus_jenis_kelamin {
   Perempuan
 }
 
+enum bankeu_proposals_status {
+  pending
+  verified
+  rejected
+  revision
+}
+
+enum bankeu_proposals_dinas_status {
+  pending
+  in_review
+  approved
+  rejected
+  revision
+}
+
 enum aparatur_desa_status {
   Aktif
   Tidak_Aktif @map("Tidak Aktif")
+}
+
+enum bankeu_proposals_kecamatan_status {
+  pending
+  in_review
+  approved
+  rejected
+  revision
+}
+
+enum bankeu_proposals_dpmd_status {
+  pending
+  in_review
+  approved
+  rejected
+  revision
 }
 
 enum bankeu_verification_questionnaires_overall_recommendation {
@@ -1277,78 +1330,4 @@ enum bankeu_verification_questionnaires_overall_recommendation {
 enum bankeu_verification_questionnaires_status {
   draft
   submitted
-}
-
-model bankeu_proposal_kegiatan {
-  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  proposal_id BigInt    @db.UnsignedBigInt
-  kegiatan_id Int       @db.UnsignedTinyInt
-  created_at  DateTime? @default(now()) @db.Timestamp(0)
-
-  bankeu_proposals       bankeu_proposals       @relation(fields: [proposal_id], references: [id], onDelete: Cascade, map: "fk_proposal_kegiatan_proposal")
-  bankeu_master_kegiatan bankeu_master_kegiatan @relation(fields: [kegiatan_id], references: [id], onDelete: Cascade, map: "fk_proposal_kegiatan_kegiatan")
-
-  @@unique([proposal_id, kegiatan_id], map: "unique_proposal_kegiatan")
-  @@index([proposal_id], map: "idx_proposal_id")
-  @@index([kegiatan_id], map: "idx_kegiatan_id")
-}
-
-/// Model untuk perjadin (perjalanan dinas) per pegawai
-/// Setiap pegawai dapat membuat perjadin sendiri dengan integrasi Google Maps
-model perjadin_pegawai {
-  id                BigInt                @id @default(autoincrement()) @db.UnsignedBigInt
-  pegawai_id        BigInt                @db.UnsignedBigInt
-  grup_id           BigInt?               @db.UnsignedBigInt
-  jenis_tujuan      perjadin_jenis_tujuan @default(desa)
-  desa_tujuan_id    BigInt?               @db.UnsignedBigInt
-  lokasi_tujuan     String                @db.VarChar(255)
-  alamat_tujuan     String?               @db.Text
-  tujuan_perjalanan String                @db.Text
-  tanggal_berangkat DateTime              @db.Date
-  tanggal_kembali   DateTime              @db.Date
-  nomor_sp          String?               @db.VarChar(100)
-  keterangan        String?               @db.Text
-  created_at        DateTime?             @default(now()) @db.Timestamp(0)
-  updated_at        DateTime?             @default(now()) @db.Timestamp(0)
-
-  pegawai     pegawai        @relation(fields: [pegawai_id], references: [id_pegawai], onDelete: Cascade, map: "fk_perjadin_pegawai")
-  grup        perjadin_grup? @relation(fields: [grup_id], references: [id], onDelete: SetNull, map: "fk_perjadin_grup")
-  desa_tujuan desas?         @relation(fields: [desa_tujuan_id], references: [id], onDelete: SetNull, map: "fk_perjadin_desa_tujuan")
-
-  @@index([pegawai_id], map: "idx_perjadin_pegawai_id")
-  @@index([grup_id], map: "idx_perjadin_grup_id")
-  @@index([desa_tujuan_id], map: "idx_perjadin_desa_tujuan")
-  @@index([tanggal_berangkat, tanggal_kembali], map: "idx_perjadin_tanggal")
-}
-
-/// Model untuk mengelompokkan perjadin yang sama (tujuan & tanggal sama)
-/// Dikelola oleh sekretariat untuk efisiensi perjalanan
-model perjadin_grup {
-  id                BigInt                @id @default(autoincrement()) @db.UnsignedBigInt
-  nama_grup         String?               @db.VarChar(255)
-  jenis_tujuan      perjadin_jenis_tujuan @default(desa)
-  desa_tujuan_id    BigInt?               @db.UnsignedBigInt
-  lokasi_tujuan     String                @db.VarChar(255)
-  alamat_tujuan     String?               @db.Text
-  tanggal_berangkat DateTime              @db.Date
-  tanggal_kembali   DateTime              @db.Date
-  nomor_sp_grup     String?               @db.VarChar(100)
-  keterangan        String?               @db.Text
-  created_by        BigInt?               @db.UnsignedBigInt
-  created_at        DateTime?             @default(now()) @db.Timestamp(0)
-  updated_at        DateTime?             @default(now()) @db.Timestamp(0)
-
-  anggota     perjadin_pegawai[]
-  desa_tujuan desas?             @relation(fields: [desa_tujuan_id], references: [id], onDelete: SetNull, map: "fk_perjadin_grup_desa")
-  creator     users?             @relation(fields: [created_by], references: [id], onDelete: SetNull, map: "fk_perjadin_grup_creator")
-
-  @@index([desa_tujuan_id], map: "idx_perjadin_grup_desa")
-  @@index([tanggal_berangkat, tanggal_kembali], map: "idx_perjadin_grup_tanggal")
-}
-
-enum perjadin_jenis_tujuan {
-  desa
-  instansi
-  luar_daerah
-  lainnya
 }
