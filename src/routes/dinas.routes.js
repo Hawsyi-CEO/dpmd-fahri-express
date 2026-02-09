@@ -306,6 +306,14 @@ router.delete('/:id', async (req, res) => {
 router.post('/:id/reset-password', async (req, res) => {
   try {
     const { id } = req.params;
+    const { password } = req.body;
+
+    if (!password || password.trim().length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password harus minimal 6 karakter'
+      });
+    }
 
     // Find user account for this dinas
     const userAccount = await prisma.users.findFirst({
@@ -322,9 +330,8 @@ router.post('/:id/reset-password', async (req, res) => {
       });
     }
 
-    // Generate new password
-    const newPassword = generatePassword(10);
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    // Hash the provided password
+    const hashedPassword = await bcrypt.hash(password.trim(), 10);
 
     // Update password
     await prisma.users.update({
@@ -337,16 +344,13 @@ router.post('/:id/reset-password', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Password baru berhasil dibuat',
-      data: {
-        newPassword: newPassword
-      }
+      message: 'Password berhasil diubah'
     });
   } catch (error) {
-    console.error('Error creating new dinas password:', error);
+    console.error('Error resetting dinas password:', error);
     res.status(500).json({
       success: false,
-      message: 'Gagal membuat password baru',
+      message: 'Gagal mengubah password',
       error: error.message
     });
   }
