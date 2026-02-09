@@ -378,8 +378,8 @@ router.get('/notifications', auth, async (req, res) => {
           LEFT JOIN bidang b ON al.bidang_id = b.id
           WHERE al.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
           ORDER BY al.created_at DESC
-          LIMIT ?
-        `, [parseInt(limit)]);
+          LIMIT :limit
+        `, { replacements: { limit: parseInt(limit) } });
         
         notifications = activityLogs.map(log => ({
           id: log.id,
@@ -394,8 +394,8 @@ router.get('/notifications', auth, async (req, res) => {
       // For bidang users: get activity logs from their bidang
       else if (['kepala_bidang', 'ketua_tim', 'pegawai'].includes(userRole)) {
         const [userBidang] = await db.query(
-          'SELECT bidang_id FROM users WHERE id = ?',
-          [userId]
+          'SELECT bidang_id FROM users WHERE id = :userId',
+          { replacements: { userId } }
         );
         
         if (userBidang.length > 0 && userBidang[0].bidang_id) {
@@ -408,11 +408,11 @@ router.get('/notifications', auth, async (req, res) => {
               u.name as user_name
             FROM activity_logs al
             LEFT JOIN users u ON al.user_id = u.id
-            WHERE al.bidang_id = ?
+            WHERE al.bidang_id = :bidangId
               AND al.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
             ORDER BY al.created_at DESC
-            LIMIT ?
-          `, [userBidang[0].bidang_id, parseInt(limit)]);
+            LIMIT :limit
+          `, { replacements: { bidangId: userBidang[0].bidang_id, limit: parseInt(limit) } });
           
           notifications = activityLogs.map(log => ({
             id: log.id,
@@ -438,8 +438,8 @@ router.get('/notifications', auth, async (req, res) => {
           FROM surat_masuk
           WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
           ORDER BY created_at DESC
-          LIMIT ?
-        `, [parseInt(limit) / 2]);
+          LIMIT :limit
+        `, { replacements: { limit: Math.floor(parseInt(limit) / 2) } });
         
         notifications = disposisi.map(d => ({
           id: `disposisi-${d.id}`,
