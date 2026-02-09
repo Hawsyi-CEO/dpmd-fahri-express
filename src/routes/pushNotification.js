@@ -4,6 +4,8 @@ const { vapidKeys } = require('../config/push-notification');
 const PushSubscription = require('../models/pushSubscription');
 const PushNotificationService = require('../services/pushNotification.service');
 const { auth } = require('../middlewares/auth');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 /**
  * GET /api/push-notification/vapid-public-key
@@ -357,98 +359,85 @@ router.get('/notifications', auth, async (req, res) => {
     const userId = req.user.id;
     const userRole = req.user.role;
     const { limit = 10 } = req.query;
-
-    const db = require('../config/database');
     
     let notifications = [];
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     
     try {
       // For superadmin: get recent activity logs from all bidang
       if (userRole === 'superadmin') {
-        const [activityLogs] = await db.query(`
-          SELECT 
-            al.id,
-            al.action_type as type,
-            al.description as message,
-            al.created_at as time,
-            u.name as user_name,
-            b.nama_bidang as bidang_name
-          FROM activity_logs al
-          LEFT JOIN users u ON al.user_id = u.id
-          LEFT JOIN bidang b ON al.bidang_id = b.id
-          WHERE al.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-          ORDER BY al.created_at DESC
-          LIMIT :limit
-        `, { replacements: { limit: parseInt(limit) } });
+        const activityLogs = await prisma.activity_logs.findMany({
+          where: {
+            created_at: { gte: sevenDaysAgo }
+          },
+          include: {
+            users: { select: { name: true } },
+            bidangs: { select: { nama: true } }
+          },
+          orderBy: { created_at: 'desc' },
+          take: parseInt(limit)
+        });
         
         notifications = activityLogs.map(log => ({
           id: log.id,
-          title: `${log.type || 'Activity'} - ${log.bidang_name || 'System'}`,
-          message: log.message || `${log.user_name} melakukan aktivitas`,
-          time: formatTimeAgo(log.time),
+          title: `${log.action_type || 'Activity'} - ${log.bidangs?.nama || 'System'}`,
+          message: log.description || `${log.users?.name} melakukan aktivitas`,
+          time: formatTimeAgo(log.created_at),
           read: false,
-          type: log.type || 'activity',
-          timestamp: log.time
+          type: log.action_type || 'activity',
+          timestamp: log.created_at
         }));
       } 
       // For bidang users: get activity logs from their bidang
       else if (['kepala_bidang', 'ketua_tim', 'pegawai'].includes(userRole)) {
-        const [userBidang] = await db.query(
-          'SELECT bidang_id FROM users WHERE id = :userId',
-          { replacements: { userId } }
-        );
+        const user = await prisma.users.findUnique({
+          where: { id: parseInt(userId) },
+          select: { bidang_id: true }
+        });
         
-        if (userBidang.length > 0 && userBidang[0].bidang_id) {
-          const [activityLogs] = await db.query(`
-            SELECT 
-              al.id,
-              al.action_type as type,
-              al.description as message,
-              al.created_at as time,
-              u.name as user_name
-            FROM activity_logs al
-            LEFT JOIN users u ON al.user_id = u.id
-            WHERE al.bidang_id = :bidangId
-              AND al.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-            ORDER BY al.created_at DESC
-            LIMIT :limit
-          `, { replacements: { bidangId: userBidang[0].bidang_id, limit: parseInt(limit) } });
+        if (user?.bidang_id) {
+          const activityLogs = await prisma.activity_logs.findMany({
+            where: {
+              bidang_id: user.bidang_id,
+              created_at: { gte: sevenDaysAgo }
+            },
+            include: {
+              users: { select: { name: true } }
+            },
+            orderBy: { created_at: 'desc' },
+            take: parseInt(limit)
+          });
           
           notifications = activityLogs.map(log => ({
             id: log.id,
-            title: log.type || 'Activity',
-            message: log.message || `${log.user_name} melakukan aktivitas`,
-            time: formatTimeAgo(log.time),
+            title: log.action_type || 'Activity',
+            message: log.description || `${log.users?.name} melakukan aktivitas`,
+            time: formatTimeAgo(log.created_at),
             read: false,
-            type: log.type || 'activity',
-            timestamp: log.time
+            type: log.action_type || 'activity',
+            timestamp: log.created_at
           }));
         }
       }
-      // For kepala_dinas and sekretaris_dinas: get from disposisi & kegiatan
+      // For kepala_dinas and sekretaris_dinas: get from disposisi
       else if (['kepala_dinas', 'sekretaris_dinas'].includes(userRole)) {
-        // Get recent disposisi
-        const [disposisi] = await db.query(`
-          SELECT 
-            id,
-            nomor_surat,
-            perihal,
-            created_at as time,
-            'disposisi' as type
-          FROM surat_masuk
-          WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-          ORDER BY created_at DESC
-          LIMIT :limit
-        `, { replacements: { limit: Math.floor(parseInt(limit) / 2) } });
+        const disposisi = await prisma.surat_masuk.findMany({
+          where: {
+            created_at: { gte: sevenDaysAgo }
+          },
+          orderBy: { created_at: 'desc' },
+          take: Math.floor(parseInt(limit) / 2)
+        });
         
         notifications = disposisi.map(d => ({
           id: `disposisi-${d.id}`,
           title: 'Disposisi Baru',
-          message: `${d.nomor_surat} - ${d.perihal}`,
-          time: formatTimeAgo(d.time),
+          message: `${d.nomor_surat || ''} - ${d.perihal || ''}`,
+          time: formatTimeAgo(d.created_at),
           read: false,
           type: 'disposisi',
-          timestamp: d.time
+          timestamp: d.created_at
         }));
       }
     } catch (dbError) {
