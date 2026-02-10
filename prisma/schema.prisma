@@ -118,6 +118,7 @@ model bankeu_proposal_kegiatan {
 model bankeu_proposals {
   id                                                  BigInt                               @id @default(autoincrement()) @db.UnsignedBigInt
   desa_id                                             BigInt                               @db.UnsignedBigInt
+  tahun_anggaran                                      Int                                  @default(2026) @db.Year
   kegiatan_id                                         Int?                                 @db.UnsignedTinyInt
   judul_proposal                                      String                               @db.VarChar(255)
   nama_kegiatan_spesifik                              String?                              @db.VarChar(255)

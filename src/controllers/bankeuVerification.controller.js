@@ -16,7 +16,7 @@ class BankeuVerificationController {
   async getProposalsByKecamatan(req, res) {
     try {
       const userId = req.user.id;
-      const { status, jenis_kegiatan, desa_id } = req.query;
+      const { status, jenis_kegiatan, desa_id, tahun } = req.query;
 
       // Get kecamatan_id from user
       const [users] = await sequelize.query(`
@@ -38,6 +38,12 @@ class BankeuVerificationController {
       let whereClause = `WHERE d.kecamatan_id = ? 
         AND bp.submitted_to_kecamatan = TRUE`;
       const replacements = [kecamatanId];
+
+      // Filter by tahun_anggaran if provided
+      if (tahun) {
+        whereClause += ' AND bp.tahun_anggaran = ?';
+        replacements.push(parseInt(tahun));
+      }
 
       if (status) {
         whereClause += ' AND bp.status = ?';
@@ -370,6 +376,8 @@ class BankeuVerificationController {
   async getStatistics(req, res) {
     try {
       const userId = req.user.id;
+      const { tahun } = req.query;
+      const tahunFilter = tahun ? parseInt(tahun) : null;
 
       const [users] = await sequelize.query(`
         SELECT kecamatan_id FROM users WHERE id = ?
@@ -397,7 +405,8 @@ class BankeuVerificationController {
         INNER JOIN desas d ON bp.desa_id = d.id
         INNER JOIN bankeu_master_kegiatan bmk ON bp.kegiatan_id = bmk.id
         WHERE d.kecamatan_id = ?
-      `, { replacements: [kecamatanId] });
+        ${tahunFilter ? 'AND bp.tahun_anggaran = ?' : ''}
+      `, { replacements: tahunFilter ? [kecamatanId, tahunFilter] : [kecamatanId] });
 
       res.json({
         success: true,

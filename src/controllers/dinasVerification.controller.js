@@ -9,6 +9,7 @@ const { copyFileToReference } = require('../utils/fileHelper');
 const getDinasProposals = async (req, res) => {
   try {
     const { dinas_id, id: userId, role } = req.user; // dari JWT token
+    const { tahun } = req.query; // Get tahun from query params
 
     if (!dinas_id) {
       return res.status(403).json({
@@ -84,6 +85,9 @@ const getDinasProposals = async (req, res) => {
     // Convert kode_dinas underscore to space for matching (e.g., UPT_PU -> UPT PU)
     const kodeDinasForMatch = dinas.kode_dinas.replace(/_/g, ' ');
     
+    // Parse tahun filter
+    const tahunFilter = tahun ? parseInt(tahun) : null;
+    
     let proposals;
     
     if (role === 'verifikator_dinas' && accessibleDesaIds) {
@@ -113,6 +117,7 @@ const getDinasProposals = async (req, res) => {
         WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
           AND bp.submitted_to_dinas_at IS NOT NULL
           AND bp.desa_id IN (${accessibleDesaIds.join(',')})
+          AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
         ORDER BY bp.created_at DESC
       `;
     } else {
@@ -174,6 +179,7 @@ const getDinasProposals = async (req, res) => {
           WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
             AND bp.submitted_to_dinas_at IS NOT NULL
             AND bp.desa_id NOT IN (${excludedDesaIds.join(',')})
+            AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
           ORDER BY bp.created_at DESC
         `;
       } else {
@@ -202,6 +208,7 @@ const getDinasProposals = async (req, res) => {
           LEFT JOIN dinas_config dc ON u_verifier.dinas_id = dc.dinas_id
           WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
             AND bp.submitted_to_dinas_at IS NOT NULL
+            AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
           ORDER BY bp.created_at DESC
         `;
       }
@@ -817,6 +824,8 @@ const getQuestionnaire = async (req, res) => {
 const getDinasStatistics = async (req, res) => {
   try {
     const { dinas_id } = req.user;
+    const { tahun } = req.query;
+    const tahunFilter = tahun ? parseInt(tahun) : null;
 
     if (!dinas_id) {
       return res.status(403).json({
@@ -846,6 +855,7 @@ const getDinasStatistics = async (req, res) => {
       INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
       WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
         AND bp.submitted_to_dinas_at IS NOT NULL
+        AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
     `;
 
     return res.json({

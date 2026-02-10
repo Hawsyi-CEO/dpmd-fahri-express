@@ -11,7 +11,7 @@ const path = require('path');
 exports.getAllDesaSurat = async (req, res) => {
   try {
     const { kecamatan_id } = req.user;
-    const { tahun = 2026, status } = req.query;
+    const { tahun = 2027, status } = req.query;
 
     if (!kecamatan_id) {
       return res.status(403).json({
@@ -306,7 +306,7 @@ exports.reviewSurat = async (req, res) => {
 exports.getSuratStatistics = async (req, res) => {
   try {
     const { kecamatan_id } = req.user;
-    const { tahun = 2025 } = req.query;
+    const { tahun = 2027 } = req.query;
 
     const query = `
       SELECT 

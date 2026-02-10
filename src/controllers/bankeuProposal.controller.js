@@ -84,6 +84,7 @@ class BankeuProposalController {
   async getProposalsByDesa(req, res) {
     try {
       const userId = req.user.id;
+      const { tahun } = req.query; // Get tahun from query params
 
       // Get desa_id from user
       const [users] = await sequelize.query(`
@@ -99,10 +100,20 @@ class BankeuProposalController {
 
       const desaId = users[0].desa_id;
 
+      // Build WHERE clause
+      let whereClause = 'WHERE bp.desa_id = ?';
+      let replacements = [desaId];
+      
+      if (tahun) {
+        whereClause += ' AND bp.tahun_anggaran = ?';
+        replacements.push(parseInt(tahun));
+      }
+
       const [proposals] = await sequelize.query(`
         SELECT 
           bp.id,
           bp.kegiatan_id,
+          bp.tahun_anggaran,
           bp.judul_proposal,
           bp.nama_kegiatan_spesifik,
           bp.volume,
@@ -146,9 +157,9 @@ class BankeuProposalController {
         LEFT JOIN users u_dpmd ON bp.dpmd_verified_by = u_dpmd.id
         LEFT JOIN desas d ON bp.desa_id = d.id
         LEFT JOIN kecamatans k ON d.kecamatan_id = k.id
-        WHERE bp.desa_id = ?
+        ${whereClause}
         ORDER BY bp.created_at DESC
-      `, { replacements: [desaId] });
+      `, { replacements });
 
       // Get kegiatan for each proposal
       for (const proposal of proposals) {
@@ -194,7 +205,8 @@ class BankeuProposalController {
         volume,
         lokasi,
         deskripsi,
-        anggaran_usulan
+        anggaran_usulan,
+        tahun_anggaran // Tahun anggaran untuk proposal
       } = req.body;
 
       console.log('=== DEBUG UPLOAD PROPOSAL ===');
@@ -263,11 +275,15 @@ class BankeuProposalController {
 
       const filePath = req.file.filename; // Hanya filename tanpa folder prefix
       const fileSize = req.file.size;
+      
+      // Parse tahun_anggaran, default to current year
+      const tahunAnggaranValue = tahun_anggaran ? parseInt(tahun_anggaran) : new Date().getFullYear();
 
       // Use Prisma transaction to insert proposal and kegiatan relationships
       const proposal = await prisma.bankeu_proposals.create({
         data: {
           desa_id: desaId,
+          tahun_anggaran: tahunAnggaranValue,
           kegiatan_id: kegiatanIdsArray[0], // Primary kegiatan reference
           judul_proposal: judul_proposal,
           nama_kegiatan_spesifik: nama_kegiatan_spesifik || null,

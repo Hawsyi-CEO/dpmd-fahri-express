@@ -53,13 +53,13 @@ class DPMDVerificationController {
               email: true
             }
           },
-          users_bankeu_kecamatan_verified_by: {
+          users_bankeu_proposals_kecamatan_verified_byTousers: {
             select: {
               id: true,
               name: true
             }
           },
-          users_bankeu_dpmd_verified_by: {
+          users_bankeu_proposals_dpmd_verified_byTousers: {
             select: {
               id: true,
               name: true
@@ -133,13 +133,13 @@ class DPMDVerificationController {
               email: true
             }
           },
-          users_bankeu_kecamatan_verified_by: {
+          users_bankeu_proposals_kecamatan_verified_byTousers: {
             select: {
               id: true,
               name: true
             }
           },
-          users_bankeu_dpmd_verified_by: {
+          users_bankeu_proposals_dpmd_verified_byTousers: {
             select: {
               id: true,
               name: true
