@@ -609,7 +609,8 @@ class BeritaAcaraService {
         subItems: [
           '- surat pernyataan dari Kepala Desa yang menyatakan bahwa lokasi kegiatan tidak dalam keadaan bermasalah apabila merupakan Aset Desa',
           '- surat izin/persetujuan pemanfaatan dari perorangan selaku pemilik lahan, yang menyatakan tidak keberatan lahannya akan dipergunakan untuk pembangunan infrastruktur desa dan tanpa persyaratan apa pun, yang disetujui oleh keluarga; persetujuan pemanfaatan barang milik Daerah/Negara dalam hal lahan yang akan dipergunakan untuk pembangunan infrastruktur merupakan milik/dikuasai Pemerintah Daerah/Negara.',
-          '- persetujuan pemanfaatan/penggunaan dari Badan Usaha/Badan Hukum selaku pemilik lahan, yang menyatakan tidak keberatan lahannya akan dipergunakan untuk pembangunan infrastruktur desa dan tanpa persyaratan apa pun.'
+          '- persetujuan pemanfaatan/penggunaan dari Badan Usaha/Badan Hukum selaku pemilik lahan, yang menyatakan tidak keberatan lahannya akan dipergunakan untuk pembangunan infrastruktur desa dan tanpa persyaratan apa pun.',
+          '- surat pernyataan tidak menuntut ganti rugi atas lahan yang dipergunakan untuk pembangunan infrastruktur desa.'
         ],
         ket: 'Infrastruktur'
       },
@@ -638,9 +639,9 @@ class BeritaAcaraService {
       // Calculate row height dynamically based on actual text height
       let estimatedHeight = 22;
       if (hasSubItems) {
-        // Item 9 has 3 long wrapped text in sub-items
+        // Item 9 has 4 long wrapped text in sub-items
         if (item.no === 9) {
-          estimatedHeight = 170; // Increased agar semua text masuk dalam table
+          estimatedHeight = 200; // Increased untuk 4 sub-items agar semua text masuk dalam table
         } else if (item.no === 3) {
           // Item 3 has 4 short sub-items
           estimatedHeight = 100; // Increased untuk ruang lebih di rencana pelaksanaan
