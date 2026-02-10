@@ -548,19 +548,7 @@ class DPMDVerificationController {
               email: true
             }
           },
-          users_bankeu_proposals_dinas_verified_byTousers: {
-            select: {
-              id: true,
-              name: true
-            }
-          },
-          users_bankeu_proposals_kecamatan_verified_byTousers: {
-            select: {
-              id: true,
-              name: true
-            }
-          },
-          users_bankeu_proposals_dpmd_verified_byTousers: {
+          users_bankeu_proposals_verified_byTousers: {
             select: {
               id: true,
               name: true
