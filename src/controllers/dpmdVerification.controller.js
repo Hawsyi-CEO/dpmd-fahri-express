@@ -568,7 +568,7 @@ class DPMDVerificationController {
           });
           
           // Get desa surat info
-          const desaSurat = await prisma.bankeu_desa_surat.findFirst({
+          const desaSurat = await prisma.desa_bankeu_surat.findFirst({
             where: { desa_id: proposal.desa_id }
           });
 
