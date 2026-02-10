@@ -20,6 +20,10 @@ router.use(auth);
 // Query params: status, kecamatan_id, desa_id
 router.get('/proposals', dpmdVerificationController.getProposals);
 
+// Get all proposals for tracking (ALL stages, not just DPMD)
+// Query params: tahun_anggaran
+router.get('/tracking', dpmdVerificationController.getTrackingProposals);
+
 // Get single proposal detail
 router.get('/proposals/:id', dpmdVerificationController.getProposalDetail);
 

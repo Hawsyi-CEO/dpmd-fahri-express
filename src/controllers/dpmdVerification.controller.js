@@ -517,6 +517,121 @@ class DPMDVerificationController {
       });
     }
   }
+
+  /**
+   * Get all proposals for tracking view (ALL stages)
+   * Shows proposals regardless of dpmd_status or submitted_to_dpmd
+   * GET /api/dpmd/bankeu/tracking
+   */
+  async getTrackingProposals(req, res) {
+    try {
+      const { tahun_anggaran } = req.query;
+      const tahun = tahun_anggaran ? parseInt(tahun_anggaran) : 2027;
+
+      logger.info(`📊 Fetching ALL proposals for tracking (tahun: ${tahun})`);
+
+      // Get ALL proposals for tracking - no status filter
+      const proposals = await prisma.bankeu_proposals.findMany({
+        where: {
+          tahun_anggaran: tahun
+        },
+        include: {
+          desas: {
+            include: {
+              kecamatans: true
+            }
+          },
+          users_bankeu_proposals_created_byTousers: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          },
+          users_bankeu_proposals_dinas_verified_byTousers: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          users_bankeu_proposals_kecamatan_verified_byTousers: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          users_bankeu_proposals_dpmd_verified_byTousers: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        },
+        orderBy: {
+          created_at: 'desc'
+        }
+      });
+
+      // Get kegiatan info for each proposal
+      const proposalsWithKegiatan = await Promise.all(
+        proposals.map(async (proposal) => {
+          const kegiatan = await prisma.bankeu_master_kegiatan.findUnique({
+            where: { id: proposal.kegiatan_id }
+          });
+          
+          // Get desa surat info
+          const desaSurat = await prisma.bankeu_desa_surat.findFirst({
+            where: { desa_id: proposal.desa_id }
+          });
+
+          return {
+            ...proposal,
+            id: Number(proposal.id),
+            desa_id: Number(proposal.desa_id),
+            kegiatan_id: Number(proposal.kegiatan_id),
+            anggaran_usulan: Number(proposal.anggaran_usulan),
+            bankeu_master_kegiatan: kegiatan ? {
+              ...kegiatan,
+              id: Number(kegiatan.id)
+            } : null,
+            surat_pengantar_desa: desaSurat?.surat_pengantar || null,
+            surat_permohonan_desa: desaSurat?.surat_permohonan || null
+          };
+        })
+      );
+
+      // Calculate tracking summary
+      const trackingSummary = {
+        total: proposals.length,
+        di_desa: proposals.filter(p => !p.submitted_to_dinas_at).length,
+        di_dinas: proposals.filter(p => p.submitted_to_dinas_at && (!p.dinas_status || p.dinas_status === 'pending')).length,
+        dinas_approved: proposals.filter(p => p.dinas_status === 'approved' && (!p.kecamatan_status || p.kecamatan_status === 'pending')).length,
+        di_kecamatan: proposals.filter(p => p.dinas_status === 'approved' && p.submitted_to_kecamatan).length,
+        kecamatan_approved: proposals.filter(p => p.kecamatan_status === 'approved').length,
+        di_dpmd: proposals.filter(p => p.submitted_to_dpmd).length,
+        dpmd_approved: proposals.filter(p => p.dpmd_status === 'approved').length,
+        dpmd_rejected: proposals.filter(p => p.dpmd_status === 'rejected').length,
+        revision: proposals.filter(p => p.dinas_status === 'revision' || p.kecamatan_status === 'revision' || p.dpmd_status === 'revision').length
+      };
+
+      logger.info(`📊 Tracking: ${proposals.length} proposals found for tahun ${tahun}`);
+
+      return res.json({
+        success: true,
+        data: proposalsWithKegiatan,
+        summary: trackingSummary,
+        tahun_anggaran: tahun
+      });
+
+    } catch (error) {
+      logger.error('Error fetching tracking proposals:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Gagal mengambil data tracking proposal',
+        error: error.message
+      });
+    }
+  }
 }
 
 module.exports = new DPMDVerificationController();
