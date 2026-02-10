@@ -121,26 +121,38 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate limiting - More permissive for development
+// Rate limiting - Standard API requests
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // increased from 100 to 1000 requests per windowMs
+  max: 1000, // 1000 requests per windowMs
   message: 'Terlalu banyak request dari IP ini, silakan coba lagi nanti.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limiting - More permissive for Bankeu uploads (1 juta proposals scenario)
+const bankeuUploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5000, // 5000 uploads per 15 minutes per IP
+  message: 'Terlalu banyak upload, silakan tunggu beberapa menit.',
   standardHeaders: true,
   legacyHeaders: false,
 });
 
 // Only apply rate limiting in production
 if (process.env.NODE_ENV === 'production') {
+  // Apply permissive rate limit to bankeu upload routes
+  app.use('/api/desa/bankeu', bankeuUploadLimiter);
+  // Apply standard rate limit to other API routes
   app.use('/api/', limiter);
-  logger.info('🛡️  Rate limiting enabled (1000 requests per 15 minutes)');
+  logger.info('🛡️  Rate limiting enabled (1000 req/15min API, 5000 req/15min Bankeu uploads)');
 } else {
   logger.info('⚠️  Rate limiting disabled for development');
 }
 
-// Body parsers
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Body parsers with increased limits for file metadata
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Compression
 app.use(compression());

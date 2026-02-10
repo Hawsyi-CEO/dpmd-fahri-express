@@ -1,6 +1,5 @@
 // Controller untuk Surat Pengantar dan Surat Permohonan (per Desa)
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 const sequelize = require('../config/database');
 const path = require('path');
 const fs = require('fs');

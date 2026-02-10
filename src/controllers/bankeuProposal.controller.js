@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 const sequelize = require('../config/database');
 const logger = require('../utils/logger');
 const path = require('path');

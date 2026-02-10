@@ -1,6 +1,9 @@
 const mysql = require('mysql2/promise');
 const logger = require('../utils/logger');
 
+// Connection pool size based on environment
+const connectionLimit = process.env.NODE_ENV === 'production' ? 30 : 10;
+
 // Create MySQL2 pool for raw queries
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -9,7 +12,7 @@ const pool = mysql.createPool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: connectionLimit,
   queueLimit: 0,
   enableKeepAlive: true,
   keepAliveInitialDelay: 0

@@ -1,12 +1,11 @@
 const sequelize = require('../config/database');
+const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
 const path = require('path');
 const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const beritaAcaraService = require('../services/beritaAcaraService');
 const sharp = require('sharp');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
 
 class BankeuVerificationController {
   /**
