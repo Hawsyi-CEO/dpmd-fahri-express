@@ -92,7 +92,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      frameAncestors: ["'self'", "http://localhost:5173", "https://dpmd.bogorkab.go.id"],
+      frameAncestors: ["'self'", "http://localhost:5173", "https://dpmd.bogorkab.go.id", "https://dpmdbogorkab.id"],
       objectSrc: ["'self'", "data:", "blob:"],
       frameSrc: ["'self'", "data:", "blob:"],
       scriptSrc: ["'self'", "'unsafe-inline'"],

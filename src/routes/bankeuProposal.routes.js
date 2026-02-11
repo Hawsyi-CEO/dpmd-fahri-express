@@ -22,6 +22,9 @@ router.patch('/proposals/:id', upload.bankeuProposal, bankeuProposalController.u
 // Replace file in existing proposal (before submission)
 router.patch('/proposals/:id/replace-file', upload.bankeuProposal, bankeuProposalController.replaceFile);
 
+// Edit proposal before submission (belum dikirim ke kecamatan/dinas)
+router.put('/proposals/:id/edit', upload.bankeuProposal, bankeuProposalController.editProposal);
+
 // Upload surat pengantar or surat permohonan
 router.post('/proposals/:id/upload-surat', upload.bankeuProposal, bankeuProposalController.uploadSurat);
 

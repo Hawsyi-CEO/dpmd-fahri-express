@@ -1232,6 +1232,191 @@ class BankeuProposalController {
   async submitToDinas(req, res) {
     return this.resubmitProposal(req, res);
   }
+
+  /**
+   * Edit proposal before submission (belum dikirim ke kecamatan/dinas)
+   * PUT /api/desa/bankeu/proposals/:id/edit
+   */
+  async editProposal(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const { judul_proposal, nama_kegiatan_spesifik, volume, lokasi, anggaran_usulan } = req.body;
+
+      logger.info(`✏️ EDIT PROPOSAL REQUEST - ID: ${id}, User: ${userId}`);
+
+      // Get desa_id from user
+      const [users] = await sequelize.query(`
+        SELECT desa_id FROM users WHERE id = ?
+      `, { replacements: [userId] });
+
+      if (!users || users.length === 0 || !users[0].desa_id) {
+        // Delete uploaded file if exists
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        logger.warn(`❌ User ${userId} tidak terkait dengan desa`);
+        return res.status(403).json({
+          success: false,
+          message: 'User tidak terkait dengan desa'
+        });
+      }
+
+      const desaId = users[0].desa_id;
+
+      // Get existing proposal
+      const [proposals] = await sequelize.query(`
+        SELECT bp.*, d.nama as nama_desa
+        FROM bankeu_proposals bp
+        LEFT JOIN desas d ON bp.desa_id = d.id
+        WHERE bp.id = ?
+      `, { replacements: [id] });
+
+      if (!proposals || proposals.length === 0) {
+        // Delete uploaded file if exists
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        logger.warn(`❌ Proposal ${id} tidak ditemukan`);
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal tidak ditemukan'
+        });
+      }
+
+      const proposal = proposals[0];
+      logger.info(`📋 Proposal info - Status: ${proposal.status}, Submitted to Kec: ${proposal.submitted_to_kecamatan}, Submitted to Dinas: ${proposal.submitted_to_dinas_at}`);
+
+      // Check ownership
+      if (proposal.desa_id !== desaId) {
+        // Delete uploaded file if exists
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        logger.warn(`❌ User ${userId} tidak memiliki akses untuk proposal ${id}`);
+        return res.status(403).json({
+          success: false,
+          message: 'Anda tidak memiliki akses untuk mengedit proposal ini'
+        });
+      }
+
+      // Only allow edit if NOT yet submitted to kecamatan and NOT yet submitted to dinas
+      const isSubmittedToKecamatan = proposal.submitted_to_kecamatan;
+      const isSubmittedToDinas = proposal.submitted_to_dinas_at !== null;
+      
+      logger.info(`🔍 Submission check - Kec: ${isSubmittedToKecamatan}, Dinas: ${isSubmittedToDinas}`);
+      
+      if (isSubmittedToKecamatan || isSubmittedToDinas) {
+        // Delete uploaded file if exists
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        logger.warn(`❌ Proposal ${id} sudah dikirim, tidak bisa diedit`);
+        return res.status(400).json({
+          success: false,
+          message: 'Proposal yang sudah dikirim ke Kecamatan atau Dinas tidak dapat diedit. Hapus dan buat ulang jika diperlukan.'
+        });
+      }
+
+      // Build update query
+      const updates = [];
+      const replacements = [];
+
+      // Update judul_proposal if provided
+      if (judul_proposal) {
+        updates.push('judul_proposal = ?');
+        replacements.push(judul_proposal);
+      }
+
+      // Update nama_kegiatan_spesifik if provided
+      if (nama_kegiatan_spesifik) {
+        updates.push('nama_kegiatan_spesifik = ?');
+        replacements.push(nama_kegiatan_spesifik);
+      }
+
+      // Update volume if provided
+      if (volume) {
+        updates.push('volume = ?');
+        replacements.push(volume);
+      }
+
+      // Update lokasi if provided
+      if (lokasi) {
+        updates.push('lokasi = ?');
+        replacements.push(lokasi);
+      }
+
+      // Update anggaran if provided
+      if (anggaran_usulan) {
+        updates.push('anggaran_usulan = ?');
+        replacements.push(anggaran_usulan);
+      }
+
+      // Update file if uploaded
+      if (req.file) {
+        const filePath = req.file.filename;
+        const fileSize = req.file.size;
+
+        updates.push('file_proposal = ?', 'file_size = ?');
+        replacements.push(filePath, fileSize);
+
+        // Delete old file if exists
+        const oldFilePath = proposal.file_proposal;
+        if (oldFilePath) {
+          const fullOldPath = path.join(__dirname, '../../storage/uploads/bankeu', oldFilePath);
+          if (fs.existsSync(fullOldPath)) {
+            fs.unlinkSync(fullOldPath);
+            logger.info(`🗑️ Deleted old file: ${oldFilePath}`);
+          }
+        }
+      }
+
+      // Always update updated_at
+      updates.push('updated_at = NOW()');
+
+      // Check if there are updates to make
+      if (updates.length === 1) { // Only updated_at
+        return res.status(400).json({
+          success: false,
+          message: 'Tidak ada data yang diubah'
+        });
+      }
+
+      // Add id at the end for WHERE clause
+      replacements.push(id);
+
+      // Execute update
+      await sequelize.query(`
+        UPDATE bankeu_proposals
+        SET ${updates.join(', ')}
+        WHERE id = ?
+      `, { replacements });
+
+      logger.info(`✏️ Bankeu proposal edited: ${id} by user ${userId}`);
+
+      res.json({
+        success: true,
+        message: 'Proposal berhasil diupdate',
+        data: { id: parseInt(id) }
+      });
+    } catch (error) {
+      // Delete uploaded file on error
+      if (req.file && req.file.path) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (unlinkError) {
+          logger.error('Error deleting file:', unlinkError);
+        }
+      }
+
+      logger.error('Error editing proposal:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Gagal mengedit proposal',
+        error: error.message
+      });
+    }
+  }
 }
 
 module.exports = new BankeuProposalController();

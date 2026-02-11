@@ -1,4 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient, Prisma } = require('@prisma/client');
 const logger = require('../utils/logger');
 
 const prisma = new PrismaClient();
@@ -108,6 +108,32 @@ exports.addVerifikatorAksesDesa = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Desa tidak ditemukan'
+      });
+    }
+
+    // Check if any of the desas are already assigned to other verifikators from this dinas
+    const conflictingDesas = await prisma.$queryRaw`
+      SELECT 
+        d.id,
+        d.nama as nama_desa,
+        dv.nama as nama_verifikator
+      FROM verifikator_akses_desa vad
+      INNER JOIN desas d ON vad.desa_id = d.id
+      INNER JOIN dinas_verifikator dv ON vad.verifikator_id = dv.id
+      WHERE vad.desa_id IN (${Prisma.join(desa_ids.map(id => BigInt(id)))})
+        AND dv.dinas_id = ${dinas_id}
+        AND dv.id != ${BigInt(verifikatorId)}
+    `;
+
+    if (conflictingDesas.length > 0) {
+      const conflictList = conflictingDesas.map(c => 
+        `${c.nama_desa} (sudah diassign ke ${c.nama_verifikator})`
+      ).join(', ');
+      
+      return res.status(400).json({
+        success: false,
+        message: `Desa berikut sudah memiliki verifikator lain: ${conflictList}`,
+        conflicts: conflictingDesas
       });
     }
 
@@ -281,7 +307,8 @@ exports.getAvailableDesas = async (req, res) => {
       });
     }
 
-    // Get desas that are NOT assigned to this verifikator
+    // Get desas that are NOT assigned to ANY verifikator from this dinas
+    // This prevents conflicts where multiple verifikators have the same desa access
     const availableDesas = await prisma.$queryRaw`
       SELECT 
         d.id,
@@ -292,9 +319,9 @@ exports.getAvailableDesas = async (req, res) => {
         k.kode as kode_kecamatan
       FROM desas d
       INNER JOIN kecamatans k ON d.kecamatan_id = k.id
-      LEFT JOIN verifikator_akses_desa vad 
-        ON d.id = vad.desa_id AND vad.verifikator_id = ${BigInt(verifikatorId)}
-      WHERE vad.id IS NULL
+      LEFT JOIN verifikator_akses_desa vad ON d.id = vad.desa_id
+      LEFT JOIN dinas_verifikator dv ON vad.verifikator_id = dv.id AND dv.dinas_id = ${dinas_id}
+      WHERE vad.id IS NULL OR dv.id IS NULL
       ORDER BY k.nama, d.nama
     `;
 
