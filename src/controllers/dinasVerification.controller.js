@@ -1,4 +1,5 @@
 const prisma = require('../config/prisma');
+const { Prisma } = require('@prisma/client');
 const { copyFileToReference } = require('../utils/fileHelper');
 
 /**
@@ -115,7 +116,7 @@ const getDinasProposals = async (req, res) => {
         LEFT JOIN dinas_config dc ON u_verifier.dinas_id = dc.dinas_id
         WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
           AND bp.submitted_to_dinas_at IS NOT NULL
-          AND bp.desa_id IN (${accessibleDesaIds.join(',')})
+          AND bp.desa_id IN (${Prisma.join(accessibleDesaIds)})
           AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
         ORDER BY bp.created_at DESC
       `;
@@ -177,7 +178,7 @@ const getDinasProposals = async (req, res) => {
           LEFT JOIN dinas_config dc ON u_verifier.dinas_id = dc.dinas_id
           WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
             AND bp.submitted_to_dinas_at IS NOT NULL
-            AND bp.desa_id NOT IN (${excludedDesaIds.join(',')})
+            AND bp.desa_id NOT IN (${Prisma.join(excludedDesaIds)})
             AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
           ORDER BY bp.created_at DESC
         `;
