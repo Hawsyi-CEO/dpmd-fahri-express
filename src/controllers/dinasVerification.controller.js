@@ -823,7 +823,7 @@ const getQuestionnaire = async (req, res) => {
  */
 const getDinasStatistics = async (req, res) => {
   try {
-    const { dinas_id } = req.user;
+    const { dinas_id, id: userId, role } = req.user;
     const { tahun } = req.query;
     const tahunFilter = tahun ? parseInt(tahun) : null;
 
@@ -838,25 +838,125 @@ const getDinasStatistics = async (req, res) => {
       where: { id: dinas_id }
     });
 
+    if (!dinas) {
+      return res.status(404).json({
+        success: false,
+        message: 'Dinas tidak ditemukan'
+      });
+    }
+
     // Convert kode_dinas underscore to space for matching
     const kodeDinasForMatch = dinas.kode_dinas.replace(/_/g, ' ');
 
-    // Count proposals by status (many-to-many)
-    const stats = await prisma.$queryRaw`
-      SELECT 
-        COUNT(DISTINCT bp.id) as total,
-        SUM(CASE WHEN bp.dinas_status IS NULL OR bp.dinas_status = 'pending' THEN 1 ELSE 0 END) as pending,
-        SUM(CASE WHEN bp.dinas_status = 'in_review' THEN 1 ELSE 0 END) as in_review,
-        SUM(CASE WHEN bp.dinas_status = 'approved' THEN 1 ELSE 0 END) as approved,
-        SUM(CASE WHEN bp.dinas_status = 'rejected' THEN 1 ELSE 0 END) as rejected,
-        SUM(CASE WHEN bp.dinas_status = 'revision' THEN 1 ELSE 0 END) as revision
-      FROM bankeu_proposals bp
-      INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
-      INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
-      WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
-        AND bp.submitted_to_dinas_at IS NOT NULL
-        AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
-    `;
+    // Check if user is verifikator_dinas and get their akses desa
+    let accessibleDesaIds = null;
+    if (role === 'verifikator_dinas') {
+      const verifikator = await prisma.dinas_verifikator.findFirst({
+        where: {
+          user_id: BigInt(userId),
+          dinas_id: dinas_id
+        }
+      });
+
+      if (!verifikator) {
+        return res.json({
+          success: true,
+          data: { total: 0, pending: 0, in_review: 0, approved: 0, rejected: 0, revision: 0 }
+        });
+      }
+
+      const aksesDesaList = await prisma.verifikator_akses_desa.findMany({
+        where: { verifikator_id: verifikator.id },
+        select: { desa_id: true }
+      });
+
+      accessibleDesaIds = aksesDesaList.map(akses => akses.desa_id);
+
+      if (accessibleDesaIds.length === 0) {
+        return res.json({
+          success: true,
+          data: { total: 0, pending: 0, in_review: 0, approved: 0, rejected: 0, revision: 0 }
+        });
+      }
+    }
+
+    let stats;
+
+    if (role === 'verifikator_dinas' && accessibleDesaIds && accessibleDesaIds.length > 0) {
+      // VERIFIKATOR: Count only proposals from accessible desa
+      stats = await prisma.$queryRaw`
+        SELECT 
+          COUNT(DISTINCT bp.id) as total,
+          SUM(CASE WHEN bp.dinas_status IS NULL OR bp.dinas_status = 'pending' THEN 1 ELSE 0 END) as pending,
+          SUM(CASE WHEN bp.dinas_status = 'in_review' THEN 1 ELSE 0 END) as in_review,
+          SUM(CASE WHEN bp.dinas_status = 'approved' THEN 1 ELSE 0 END) as approved,
+          SUM(CASE WHEN bp.dinas_status = 'rejected' THEN 1 ELSE 0 END) as rejected,
+          SUM(CASE WHEN bp.dinas_status = 'revision' THEN 1 ELSE 0 END) as revision
+        FROM bankeu_proposals bp
+        INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
+        INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
+        WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
+          AND bp.submitted_to_dinas_at IS NOT NULL
+          AND bp.desa_id IN (${Prisma.join(accessibleDesaIds)})
+          AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
+      `;
+    } else {
+      // DINAS STAFF: Count proposals from desa that NO verifikator has access to
+      const verifikatorsForDinas = await prisma.dinas_verifikator.findMany({
+        where: {
+          dinas_id: dinas_id,
+          is_active: true
+        },
+        select: { id: true }
+      });
+
+      const verifikatorIds = verifikatorsForDinas.map(v => v.id);
+      let excludedDesaIds = [];
+
+      if (verifikatorIds.length > 0) {
+        const assignedDesas = await prisma.verifikator_akses_desa.findMany({
+          where: { verifikator_id: { in: verifikatorIds } },
+          select: { desa_id: true }
+        });
+        excludedDesaIds = [...new Set(assignedDesas.map(ad => ad.desa_id))];
+      }
+
+      if (excludedDesaIds.length > 0) {
+        stats = await prisma.$queryRaw`
+          SELECT 
+            COUNT(DISTINCT bp.id) as total,
+            SUM(CASE WHEN bp.dinas_status IS NULL OR bp.dinas_status = 'pending' THEN 1 ELSE 0 END) as pending,
+            SUM(CASE WHEN bp.dinas_status = 'in_review' THEN 1 ELSE 0 END) as in_review,
+            SUM(CASE WHEN bp.dinas_status = 'approved' THEN 1 ELSE 0 END) as approved,
+            SUM(CASE WHEN bp.dinas_status = 'rejected' THEN 1 ELSE 0 END) as rejected,
+            SUM(CASE WHEN bp.dinas_status = 'revision' THEN 1 ELSE 0 END) as revision
+          FROM bankeu_proposals bp
+          INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
+          INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
+          WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
+            AND bp.submitted_to_dinas_at IS NOT NULL
+            AND bp.desa_id NOT IN (${Prisma.join(excludedDesaIds)})
+            AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
+        `;
+      } else {
+        // No verifikator, show all proposals statistics
+        stats = await prisma.$queryRaw`
+          SELECT 
+            COUNT(DISTINCT bp.id) as total,
+            SUM(CASE WHEN bp.dinas_status IS NULL OR bp.dinas_status = 'pending' THEN 1 ELSE 0 END) as pending,
+            SUM(CASE WHEN bp.dinas_status = 'in_review' THEN 1 ELSE 0 END) as in_review,
+            SUM(CASE WHEN bp.dinas_status = 'approved' THEN 1 ELSE 0 END) as approved,
+            SUM(CASE WHEN bp.dinas_status = 'rejected' THEN 1 ELSE 0 END) as rejected,
+            SUM(CASE WHEN bp.dinas_status = 'revision' THEN 1 ELSE 0 END) as revision
+          FROM bankeu_proposals bp
+          INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
+          INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
+          WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
+            AND bp.submitted_to_dinas_at IS NOT NULL
+            AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
+        `;
+      }
+    }
 
     return res.json({
       success: true,
