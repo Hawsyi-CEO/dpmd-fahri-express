@@ -770,13 +770,18 @@ class BankeuProposalController {
         });
       }
 
-      // Don't allow deletion if already verified
-      if (proposal.status === 'verified') {
+      // Don't allow deletion if already verified or approved
+      if (proposal.status === 'verified' || proposal.status === 'approved') {
         return res.status(400).json({
           success: false,
           message: 'Proposal yang sudah diverifikasi tidak dapat dihapus'
         });
       }
+
+      // Delete related kegiatan records first
+      await sequelize.query(`
+        DELETE FROM bankeu_proposal_kegiatan WHERE proposal_id = ?
+      `, { replacements: [id] });
 
       // Delete files
       const filesToDelete = [proposal.file_proposal];
