@@ -38,6 +38,10 @@ router.get('/statistics', dpmdVerificationController.getStatistics);
 router.delete('/proposals/:id', dpmdVerificationController.deleteProposal);
 
 // Delete all proposals from a desa (DPMD bulk delete)
+// Query: ?all=true to delete proposals at ALL stages
 router.delete('/desa/:desaId/proposals', dpmdVerificationController.deleteDesaProposals);
+
+// Delete surat (pengantar & permohonan) from a desa
+router.delete('/desa/:desaId/surat', dpmdVerificationController.deleteDesaSurat);
 
 module.exports = router;

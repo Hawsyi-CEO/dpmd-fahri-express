@@ -437,20 +437,27 @@ class DPMDVerificationController {
   /**
    * Delete all proposals from a specific desa (bulk delete for troubleshooting)
    * DELETE /api/dpmd/bankeu/desa/:desaId/proposals
+   * Query params: ?all=true to delete proposals at ALL stages (not just submitted_to_dpmd)
    */
   async deleteDesaProposals(req, res) {
     try {
       const { desaId } = req.params;
+      const { all } = req.query;
       const userId = req.user.id;
+      const deleteAll = all === 'true';
 
-      logger.info(`🗑️ DPMD BULK DELETE - Desa ID: ${desaId}, User: ${userId}`);
+      logger.info(`🗑️ DPMD BULK DELETE - Desa ID: ${desaId}, User: ${userId}, All stages: ${deleteAll}`);
 
-      // Get all proposals for this desa that are submitted to DPMD
+      // Build where clause
+      const whereClause = {
+        desa_id: BigInt(desaId)
+      };
+      if (!deleteAll) {
+        whereClause.submitted_to_dpmd = true;
+      }
+
       const proposals = await prisma.bankeu_proposals.findMany({
-        where: {
-          desa_id: BigInt(desaId),
-          submitted_to_dpmd: true
-        },
+        where: whereClause,
         include: { desas: true }
       });
 
@@ -494,13 +501,10 @@ class DPMDVerificationController {
 
       // Delete all proposals
       await prisma.bankeu_proposals.deleteMany({
-        where: {
-          desa_id: BigInt(desaId),
-          submitted_to_dpmd: true
-        }
+        where: whereClause
       });
 
-      logger.info(`✅ DPMD bulk deleted ${proposals.length} proposals from desa ${desaName} (ID: ${desaId})`);
+      logger.info(`✅ DPMD bulk deleted ${proposals.length} proposals from desa ${desaName} (ID: ${desaId}), all stages: ${deleteAll}`);
 
       return res.json({
         success: true,
@@ -512,6 +516,75 @@ class DPMDVerificationController {
       return res.status(500).json({
         success: false,
         message: 'Gagal menghapus proposal desa',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Delete surat (pengantar & permohonan) for a specific desa
+   * DELETE /api/dpmd/bankeu/desa/:desaId/surat
+   */
+  async deleteDesaSurat(req, res) {
+    try {
+      const { desaId } = req.params;
+      const userId = req.user.id;
+
+      logger.info(`🗑️ DPMD DELETE SURAT - Desa ID: ${desaId}, User: ${userId}`);
+
+      // Find surat for this desa
+      const suratList = await prisma.desa_bankeu_surat.findMany({
+        where: { desa_id: BigInt(desaId) },
+        include: { desas: true }
+      });
+
+      if (suratList.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Tidak ada surat dari desa ini'
+        });
+      }
+
+      const desaName = suratList[0].desas?.nama || 'Unknown';
+
+      // Delete physical files
+      suratList.forEach(surat => {
+        const filesToDelete = [];
+        if (surat.surat_pengantar_path) {
+          filesToDelete.push(path.join(__dirname, '../../storage', surat.surat_pengantar_path));
+        }
+        if (surat.surat_permohonan_path) {
+          filesToDelete.push(path.join(__dirname, '../../storage', surat.surat_permohonan_path));
+        }
+        filesToDelete.forEach(filePath => {
+          try {
+            if (fs.existsSync(filePath)) {
+              fs.unlinkSync(filePath);
+              logger.info(`🗑️ Deleted surat file: ${filePath}`);
+            }
+          } catch (err) {
+            logger.warn(`⚠️ Failed to delete surat file: ${filePath}`, err.message);
+          }
+        });
+      });
+
+      // Delete surat records
+      const deleted = await prisma.desa_bankeu_surat.deleteMany({
+        where: { desa_id: BigInt(desaId) }
+      });
+
+      logger.info(`✅ DPMD deleted ${deleted.count} surat from desa ${desaName} (ID: ${desaId})`);
+
+      return res.json({
+        success: true,
+        message: `${deleted.count} surat dari Desa ${desaName} berhasil dihapus`
+      });
+
+    } catch (error) {
+      logger.error('Error DPMD deleting surat:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Gagal menghapus surat desa',
         error: error.message
       });
     }
