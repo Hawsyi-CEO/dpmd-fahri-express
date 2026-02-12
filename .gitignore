@@ -97,3 +97,29 @@ check-*.js
 revert-*.js
 revert-*.sql
 update-*.sql
+<<<<<<< Updated upstream
+=======
+test-*.js
+fix-*.js
+reset-*.js
+create-*.js
+restart-dev.sh
+.restart
+
+# Deployment scripts
+deploy-*.ps1
+deploy-*.sh
+
+# Storage uploaded files
+storage/avatars/*
+!storage/avatars/.gitkeep
+storage/surat_masuk/*
+!storage/surat_masuk/.gitkeep
+
+# Prisma migrations lock
+prisma/migrations/*_migration_lock.toml
+
+# DBML files and folder
+*.dbml
+dbml/
+>>>>>>> Stashed changes
