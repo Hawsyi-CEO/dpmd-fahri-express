@@ -1,7 +1,32 @@
+const prisma = require('../config/prisma');
 const sequelize = require('../config/database');
 const logger = require('../utils/logger');
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs'); 
+
+/**
+ * Helper: Check if bankeu submission is open for desa
+ * @returns {Promise<{isOpen: boolean, setting: object|null}>}
+ */
+async function checkSubmissionOpen() {
+  try {
+    const setting = await prisma.app_settings.findUnique({
+      where: { setting_key: 'bankeu_submission_desa' }
+    });
+    
+    if (!setting) {
+      // Default: open
+      return { isOpen: true, setting: null };
+    }
+    
+    const isOpen = setting.setting_value === 'true';
+    return { isOpen, setting };
+  } catch (error) {
+    logger.error('Error checking submission setting:', error);
+    // Default: open on error
+    return { isOpen: true, setting: null };
+  }
+}
 
 class BankeuProposalController {
   /**
@@ -58,6 +83,7 @@ class BankeuProposalController {
   async getProposalsByDesa(req, res) {
     try {
       const userId = req.user.id;
+      const { tahun } = req.query; // Get tahun from query params
 
       // Get desa_id from user
       const [users] = await sequelize.query(`
@@ -73,20 +99,43 @@ class BankeuProposalController {
 
       const desaId = users[0].desa_id;
 
+      // Build WHERE clause
+      let whereClause = 'WHERE bp.desa_id = ?';
+      let replacements = [desaId];
+      
+      if (tahun) {
+        whereClause += ' AND bp.tahun_anggaran = ?';
+        replacements.push(parseInt(tahun));
+      }
+
       const [proposals] = await sequelize.query(`
         SELECT 
           bp.id,
-          bp.jenis_kegiatan,
           bp.kegiatan_id,
-          bp.kegiatan_nama,
+          bp.tahun_anggaran,
           bp.judul_proposal,
+          bp.nama_kegiatan_spesifik,
+          bp.volume,
+          bp.lokasi,
           bp.deskripsi,
           bp.file_proposal,
+          bp.surat_pengantar,
+          bp.surat_permohonan,
           bp.file_size,
           bp.anggaran_usulan,
           bp.status,
           bp.submitted_to_kecamatan,
           bp.submitted_at,
+          bp.submitted_to_dinas_at,
+          bp.dinas_status,
+          bp.dinas_catatan,
+          bp.dinas_verified_at,
+          bp.kecamatan_status,
+          bp.kecamatan_catatan,
+          bp.kecamatan_verified_at,
+          bp.dpmd_status,
+          bp.dpmd_catatan,
+          bp.dpmd_verified_at,
           bp.catatan_verifikasi,
           bp.verified_at,
           bp.berita_acara_path,
@@ -94,15 +143,38 @@ class BankeuProposalController {
           bp.created_at,
           bp.updated_at,
           u_verified.name as verified_by_name,
+          u_dinas.name as dinas_verified_by_name,
+          u_kecamatan.name as kecamatan_verified_by_name,
+          u_dpmd.name as dpmd_verified_by_name,
           d.nama as desa_nama,
+          d.kecamatan_id,
           k.nama as kecamatan_nama
         FROM bankeu_proposals bp
         LEFT JOIN users u_verified ON bp.verified_by = u_verified.id
+        LEFT JOIN users u_dinas ON bp.dinas_verified_by = u_dinas.id
+        LEFT JOIN users u_kecamatan ON bp.kecamatan_verified_by = u_kecamatan.id
+        LEFT JOIN users u_dpmd ON bp.dpmd_verified_by = u_dpmd.id
         LEFT JOIN desas d ON bp.desa_id = d.id
-        LEFT JOIN kecamatans k ON bp.kecamatan_id = k.id
-        WHERE bp.desa_id = ?
+        LEFT JOIN kecamatans k ON d.kecamatan_id = k.id
+        ${whereClause}
         ORDER BY bp.created_at DESC
-      `, { replacements: [desaId] });
+      `, { replacements });
+
+      // Get kegiatan for each proposal
+      for (const proposal of proposals) {
+        const [kegiatan] = await sequelize.query(`
+          SELECT 
+            bmk.id,
+            bmk.jenis_kegiatan,
+            bmk.nama_kegiatan
+          FROM bankeu_proposal_kegiatan bpk
+          JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
+          WHERE bpk.proposal_id = ?
+          ORDER BY bmk.jenis_kegiatan, bmk.urutan
+        `, { replacements: [proposal.id] });
+
+        proposal.kegiatan_list = kegiatan;
+      }
 
       res.json({
         success: true,
@@ -126,19 +198,47 @@ class BankeuProposalController {
     try {
       const userId = req.user.id;
       const {
-        jenis_kegiatan,
-        kegiatan_id,
-        kegiatan_nama,
+        kegiatan_ids, // Changed to array of kegiatan IDs
         judul_proposal,
+        nama_kegiatan_spesifik,
+        volume,
+        lokasi,
         deskripsi,
-        anggaran_usulan
+        anggaran_usulan,
+        tahun_anggaran // Tahun anggaran untuk proposal
       } = req.body;
 
+      console.log('=== DEBUG UPLOAD PROPOSAL ===');
+      console.log('req.body:', req.body);
+      console.log('kegiatan_ids type:', typeof kegiatan_ids);
+      console.log('kegiatan_ids value:', kegiatan_ids);
+
+      // Parse kegiatan_ids if it's a string
+      let kegiatanIdsArray = [];
+      if (typeof kegiatan_ids === 'string') {
+        try {
+          kegiatanIdsArray = JSON.parse(kegiatan_ids);
+          console.log('Parsed kegiatan_ids:', kegiatanIdsArray);
+        } catch (e) {
+          console.error('Error parsing kegiatan_ids:', e);
+          return res.status(400).json({
+            success: false,
+            message: 'Format kegiatan_ids tidak valid: ' + e.message
+          });
+        }
+      } else if (Array.isArray(kegiatan_ids)) {
+        kegiatanIdsArray = kegiatan_ids;
+      }
+
+      // Convert all IDs to integers
+      kegiatanIdsArray = kegiatanIdsArray.map(id => parseInt(id));
+      console.log('Converted kegiatan_ids to integers:', kegiatanIdsArray);
+
       // Validate required fields
-      if (!jenis_kegiatan || !kegiatan_id || !judul_proposal) {
+      if (!kegiatanIdsArray || kegiatanIdsArray.length === 0 || !judul_proposal) {
         return res.status(400).json({
           success: false,
-          message: 'Jenis kegiatan, kegiatan ID, dan judul proposal wajib diisi'
+          message: 'Minimal 1 kegiatan dan judul proposal wajib diisi'
         });
       }
 
@@ -172,101 +272,42 @@ class BankeuProposalController {
       const desaId = users[0].desa_id;
       const kecamatanId = users[0].kecamatan_id;
 
-      const filePath = `bankeu/${req.file.filename}`;
+      const filePath = req.file.filename; // Hanya filename tanpa folder prefix
       const fileSize = req.file.size;
+      
+      // Parse tahun_anggaran, default to current year
+      const tahunAnggaranValue = tahun_anggaran ? parseInt(tahun_anggaran) : new Date().getFullYear();
 
-      // Check if proposal already exists for this kegiatan_id and desa_id
-      const [existingProposal] = await sequelize.query(`
-        SELECT id, file_proposal FROM bankeu_proposals
-        WHERE desa_id = ? AND kegiatan_id = ?
-      `, { replacements: [desaId, kegiatan_id] });
-
-      let proposalId;
-
-      if (existingProposal.length > 0) {
-        // Update existing proposal (replace file)
-        proposalId = existingProposal[0].id;
-        const oldFilePath = existingProposal[0].file_proposal;
-
-        // Delete old file if exists
-        if (oldFilePath) {
-          const fullPath = path.join(__dirname, '../../storage/uploads', oldFilePath);
-          if (fs.existsSync(fullPath)) {
-            fs.unlinkSync(fullPath);
-            logger.info(`🗑️ Deleted old file: ${oldFilePath}`);
+      // Use Prisma transaction to insert proposal and kegiatan relationships
+      const proposal = await prisma.bankeu_proposals.create({
+        data: {
+          desa_id: desaId,
+          tahun_anggaran: tahunAnggaranValue,
+          kegiatan_id: kegiatanIdsArray[0], // Primary kegiatan reference
+          judul_proposal: judul_proposal,
+          nama_kegiatan_spesifik: nama_kegiatan_spesifik || null,
+          volume: volume || null,
+          lokasi: lokasi || null,
+          deskripsi: deskripsi || null,
+          file_proposal: filePath,
+          file_size: fileSize,
+          anggaran_usulan: anggaran_usulan ? parseInt(anggaran_usulan.replace(/\D/g, '')) : null,
+          created_by: userId,
+          status: 'pending',
+          bankeu_proposal_kegiatan: {
+            create: kegiatanIdsArray.map(kegiatanId => ({
+              kegiatan_id: kegiatanId
+            }))
           }
         }
+      });
 
-        await sequelize.query(`
-          UPDATE bankeu_proposals
-          SET 
-            jenis_kegiatan = ?,
-            kegiatan_nama = ?,
-            judul_proposal = ?,
-            deskripsi = ?,
-            file_proposal = ?,
-            file_size = ?,
-            anggaran_usulan = ?,
-            status = 'pending',
-            submitted_to_kecamatan = FALSE,
-            submitted_at = NULL,
-            verified_by = NULL,
-            verified_at = NULL,
-            catatan_verifikasi = NULL,
-            berita_acara_path = NULL,
-            berita_acara_generated_at = NULL,
-            updated_at = NOW()
-          WHERE id = ?
-        `, {
-          replacements: [
-            jenis_kegiatan,
-            kegiatan_nama,
-            judul_proposal,
-            deskripsi || null,
-            filePath,
-            fileSize,
-            anggaran_usulan || null,
-            proposalId
-          ]
-        });
+      const proposalId = Number(proposal.id);
+      
+      console.log('✅ Proposal created:', proposalId);
+      console.log('✅ Kegiatan relationships created:', kegiatanIdsArray.length);
 
-        logger.info(`♻️ Bankeu proposal updated (replaced): ${proposalId} by user ${userId}`);
-      } else {
-        // Insert new proposal
-        const [result] = await sequelize.query(`
-          INSERT INTO bankeu_proposals (
-            desa_id,
-            kecamatan_id,
-            jenis_kegiatan,
-            kegiatan_id,
-            kegiatan_nama,
-            judul_proposal,
-            deskripsi,
-            file_proposal,
-            file_size,
-            anggaran_usulan,
-            created_by,
-            status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-        `, {
-          replacements: [
-            desaId,
-            kecamatanId,
-            jenis_kegiatan,
-            kegiatan_id,
-            kegiatan_nama,
-            judul_proposal,
-            deskripsi || null,
-            filePath,
-            fileSize,
-            anggaran_usulan || null,
-            userId
-          ]
-        });
-
-        proposalId = result.insertId;
-        logger.info(`✅ Bankeu proposal uploaded (new): ${proposalId} by user ${userId}`);
-      }
+      logger.info(`✅ Bankeu proposal uploaded: ${proposalId} with ${kegiatanIdsArray.length} kegiatan by user ${userId}`);
 
       res.status(201).json({
         success: true,
@@ -286,9 +327,397 @@ class BankeuProposalController {
       }
 
       logger.error('Error uploading proposal:', error);
+      console.error('FULL ERROR:', error);
+      console.error('ERROR STACK:', error.stack);
       res.status(500).json({
         success: false,
         message: 'Gagal mengupload proposal',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Update existing proposal (for revision)
+   * PATCH /api/desa/bankeu/proposals/:id
+   */
+  async updateProposal(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const { anggaran_usulan, nama_kegiatan_spesifik, volume, lokasi } = req.body;
+
+      logger.info(`♻️ UPDATE REVISION REQUEST - ID: ${id}, User: ${userId}, Anggaran: ${anggaran_usulan}`);
+
+      // Get desa_id from user
+      const [users] = await sequelize.query(`
+        SELECT desa_id FROM users WHERE id = ?
+      `, { replacements: [userId] });
+
+      if (!users || users.length === 0 || !users[0].desa_id) {
+        // Delete uploaded file if exists
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        logger.warn(`❌ User ${userId} tidak terkait dengan desa`);
+        return res.status(403).json({
+          success: false,
+          message: 'User tidak terkait dengan desa'
+        });
+      }
+
+      const desaId = users[0].desa_id;
+
+      // Get existing proposal
+      const [proposals] = await sequelize.query(`
+        SELECT file_proposal, status, desa_id, submitted_to_kecamatan, dinas_status
+        FROM bankeu_proposals
+        WHERE id = ?
+      `, { replacements: [id] });
+
+      if (!proposals || proposals.length === 0) {
+        // Delete uploaded file if exists
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        logger.warn(`❌ Proposal ${id} tidak ditemukan`);
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal tidak ditemukan'
+        });
+      }
+
+      const proposal = proposals[0];
+      logger.info(`📋 Proposal info - Status: ${proposal.status}, Dinas Status: ${proposal.dinas_status}, Submitted: ${proposal.submitted_to_kecamatan}`);
+
+      // Check ownership
+      if (proposal.desa_id !== desaId) {
+        // Delete uploaded file if exists
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        logger.warn(`❌ User ${userId} tidak memiliki akses untuk proposal ${id}`);
+        return res.status(403).json({
+          success: false,
+          message: 'Anda tidak memiliki akses untuk mengupdate proposal ini'
+        });
+      }
+
+      // Allow update if:
+      // 1. Kecamatan status is revision/rejected, OR
+      // 2. Dinas status is revision/rejected
+      // AND submitted_to_kecamatan must be FALSE (returned to desa)
+      const isKecamatanRejected = proposal.status === 'revision' || proposal.status === 'rejected';
+      const isDinasRejected = proposal.dinas_status === 'revision' || proposal.dinas_status === 'rejected';
+      const isReturnedToDesa = !proposal.submitted_to_kecamatan;
+      
+      logger.info(`🔍 Validation check - Kec rejected: ${isKecamatanRejected}, Dinas rejected: ${isDinasRejected}, Returned: ${isReturnedToDesa}`);
+      
+      if (!isReturnedToDesa || (!isKecamatanRejected && !isDinasRejected)) {
+        // Delete uploaded file if exists
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        logger.warn(`❌ Proposal ${id} tidak memenuhi syarat untuk diupdate`);
+        return res.status(400).json({
+          success: false,
+          message: 'Hanya proposal dengan status revisi atau ditolak yang dapat diupdate',
+          error: `Status: ${proposal.status}, Dinas Status: ${proposal.dinas_status}, Submitted: ${proposal.submitted_to_kecamatan}`
+        });
+      }
+
+      // Detect: If returned from Kecamatan, need to send back to Kecamatan
+      // If returned from Dinas, need to send to Dinas
+      const returnedFromKecamatan = isKecamatanRejected;
+      logger.info(`📍 Return detection - From Kecamatan: ${returnedFromKecamatan}, From Dinas: ${isDinasRejected && !returnedFromKecamatan}`);
+
+      // Build update query
+      const updates = [];
+      const replacements = [];
+
+      // Update anggaran if provided
+      if (anggaran_usulan) {
+        updates.push('anggaran_usulan = ?');
+        replacements.push(anggaran_usulan);
+      }
+
+      // Update nama kegiatan spesifik if provided
+      if (nama_kegiatan_spesifik) {
+        updates.push('nama_kegiatan_spesifik = ?');
+        replacements.push(nama_kegiatan_spesifik);
+      }
+
+      // Update volume if provided
+      if (volume) {
+        updates.push('volume = ?');
+        replacements.push(volume);
+      }
+
+      // Update lokasi if provided
+      if (lokasi) {
+        updates.push('lokasi = ?');
+        replacements.push(lokasi);
+      }
+
+      // Update file if uploaded
+      if (req.file) {
+        const filePath = req.file.filename; // Hanya filename tanpa folder prefix
+        const fileSize = req.file.size;
+
+        updates.push('file_proposal = ?', 'file_size = ?');
+        replacements.push(filePath, fileSize);
+
+        // Move old file to reference folder (for comparison) instead of deleting
+        const oldFilePath = proposal.file_proposal;
+        if (oldFilePath) {
+          const fullOldPath = path.join(__dirname, '../../storage/uploads/bankeu', oldFilePath);
+          const referenceDir = path.join(__dirname, '../../storage/uploads/bankeu_reference');
+          const fullNewPath = path.join(referenceDir, oldFilePath);
+          
+          // Ensure reference directory exists
+          if (!fs.existsSync(referenceDir)) {
+            fs.mkdirSync(referenceDir, { recursive: true });
+          }
+          
+          if (fs.existsSync(fullOldPath)) {
+            // Move file to reference folder
+            fs.renameSync(fullOldPath, fullNewPath);
+            logger.info(`📦 Moved old file to reference: ${oldFilePath}`);
+            
+            // Save old file to dinas_reviewed_file for comparison purpose
+            // Note: Field ini dual-purpose:
+            // 1. Untuk file yang sudah direview Dinas (original purpose)
+            // 2. Untuk file referensi lama ketika Kecamatan reject dan Desa upload ulang
+            updates.push('dinas_reviewed_file = ?', 'dinas_reviewed_at = NOW()');
+            replacements.push(oldFilePath);
+          }
+        }
+      }
+
+      // Reset status to pending, clear verification data
+      // IMPORTANT: Set verified_at to NOW() for Kecamatan case so frontend can detect reupload
+      if (returnedFromKecamatan) {
+        // Returned from Kecamatan - SET verified_at untuk detection
+        logger.info(`🔄 Revisi dari Kecamatan - siap kirim kembali ke Kecamatan`);
+        updates.push(
+          'status = ?',
+          'submitted_to_kecamatan = ?',  // Set to FALSE, will submit manually
+          'submitted_at = NULL',
+          'catatan_verifikasi = NULL',
+          'verified_at = NOW()',  // CRITICAL: Set this so frontend can detect reupload
+          'updated_at = NOW()'
+        );
+        // Keep verified_by for tracking who approved before Kecamatan rejection
+        replacements.push('pending', false);
+      } else {
+        // Returned from Dinas - Keep dinas_status untuk tracking origin
+        logger.info(`🔄 Revisi dari Dinas - siap kirim kembali ke Dinas`);
+        updates.push(
+          'status = ?',
+          'submitted_to_kecamatan = ?',
+          'submitted_at = NULL',
+          'submitted_to_dinas_at = NULL',
+          // KEEP verified_by and verified_at (track kecamatan approval)
+          // KEEP dinas_status ('rejected'/'revision') untuk tracking bahwa ini dari dinas
+          // KEEP dinas_catatan untuk info
+          // Reset verified_by dan verified_at untuk dinas saja
+          'dinas_verified_by = NULL',
+          'dinas_verified_at = NULL',
+          'updated_at = NOW()'
+        );
+        replacements.push('pending', false);
+      }
+
+      // Add id at the end for WHERE clause
+      replacements.push(id);
+
+      // Execute update
+      await sequelize.query(`
+        UPDATE bankeu_proposals
+        SET ${updates.join(', ')}
+        WHERE id = ?
+      `, { replacements });
+
+      logger.info(`♻️ Bankeu proposal updated (revision): ${id} by user ${userId}`);
+      
+      // Log untuk debugging
+      const destination = returnedFromKecamatan ? 'Kecamatan' : 'Dinas Terkait';
+      logger.info(`📋 Revision upload - proposal ${id} siap dikirim ke ${destination}`);
+
+      res.json({
+        success: true,
+        message: returnedFromKecamatan 
+          ? 'Revisi proposal berhasil diupload. Gunakan tombol "Kirim ke Kecamatan" untuk mengirim.'
+          : 'Revisi proposal berhasil diupload. Gunakan tombol "Kirim ke Dinas Terkait" untuk mengirim.',
+        data: { 
+          id: parseInt(id),
+          send_to: returnedFromKecamatan ? 'kecamatan' : 'dinas',
+          returned_from: returnedFromKecamatan ? 'kecamatan' : 'dinas'
+        }
+      });
+    } catch (error) {
+      // Delete uploaded file on error
+      if (req.file && req.file.path) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (unlinkError) {
+          logger.error('Error deleting file:', unlinkError);
+        }
+      }
+
+      logger.error('Error updating proposal:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Gagal mengupdate proposal',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Replace file in existing proposal (before submission to kecamatan)
+   * PATCH /api/desa/bankeu/proposals/:id/replace-file
+   */
+  async replaceFile(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const { anggaran_usulan, keep_status } = req.body;
+
+      // Validate file upload
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'File proposal wajib diupload'
+        });
+      }
+
+      // Get desa_id from user
+      const [users] = await sequelize.query(`
+        SELECT desa_id FROM users WHERE id = ?
+      `, { replacements: [userId] });
+
+      if (!users || users.length === 0 || !users[0].desa_id) {
+        // Delete uploaded file
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(403).json({
+          success: false,
+          message: 'User tidak terkait dengan desa'
+        });
+      }
+
+      const desaId = users[0].desa_id;
+
+      // Get existing proposal
+      const [existingProposal] = await sequelize.query(`
+        SELECT file_proposal, status, desa_id, submitted_to_kecamatan
+        FROM bankeu_proposals
+        WHERE id = ?
+      `, { replacements: [id] });
+
+      if (!existingProposal || existingProposal.length === 0) {
+        // Delete uploaded file
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal tidak ditemukan'
+        });
+      }
+
+      const proposal = existingProposal[0];
+
+      // Check ownership
+      if (proposal.desa_id !== desaId) {
+        // Delete uploaded file
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(403).json({
+          success: false,
+          message: 'Anda tidak memiliki akses untuk mengupdate proposal ini'
+        });
+      }
+
+      // Only allow replace for pending status and not yet submitted to kecamatan
+      if (proposal.submitted_to_kecamatan) {
+        // Delete uploaded file
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(400).json({
+          success: false,
+          message: 'Proposal yang sudah dikirim ke kecamatan tidak dapat diganti filenya'
+        });
+      }
+
+      if (proposal.status !== 'pending') {
+        // Delete uploaded file
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(400).json({
+          success: false,
+          message: 'Hanya proposal dengan status pending yang dapat diganti filenya'
+        });
+      }
+
+      const filePath = req.file.filename; // Hanya filename tanpa folder prefix
+      const fileSize = req.file.size;
+      const oldFilePath = proposal.file_proposal;
+
+      // Delete old file if exists
+      if (oldFilePath) {
+        const fullPath = path.join(__dirname, '../../storage/uploads', oldFilePath);
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+          logger.info(`🗑️ Deleted old file: ${oldFilePath}`);
+        }
+      }
+
+      // Update proposal - only file and optionally anggaran
+      const updateFields = ['file_proposal = ?', 'file_size = ?', 'updated_at = NOW()'];
+      const updateValues = [filePath, fileSize];
+
+      if (anggaran_usulan) {
+        updateFields.push('anggaran_usulan = ?');
+        updateValues.push(anggaran_usulan);
+      }
+
+      updateValues.push(id);
+
+      await sequelize.query(`
+        UPDATE bankeu_proposals
+        SET ${updateFields.join(', ')}
+        WHERE id = ?
+      `, { replacements: updateValues });
+
+      logger.info(`🔄 Bankeu proposal file replaced: ${id} by user ${userId}`);
+
+      res.json({
+        success: true,
+        message: 'File proposal berhasil diganti',
+        data: {
+          id: parseInt(id)
+        }
+      });
+    } catch (error) {
+      // Delete uploaded file on error
+      if (req.file && req.file.path) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (unlinkError) {
+          logger.error('Error deleting file:', unlinkError);
+        }
+      }
+
+      logger.error('Error replacing file:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Gagal mengganti file proposal',
         error: error.message
       });
     }
@@ -341,13 +770,18 @@ class BankeuProposalController {
         });
       }
 
-      // Don't allow deletion if already verified
-      if (proposal.status === 'verified') {
+      // Don't allow deletion if already verified or approved
+      if (proposal.status === 'verified' || proposal.status === 'approved') {
         return res.status(400).json({
           success: false,
           message: 'Proposal yang sudah diverifikasi tidak dapat dihapus'
         });
       }
+
+      // Delete related kegiatan records first
+      await sequelize.query(`
+        DELETE FROM bankeu_proposal_kegiatan WHERE proposal_id = ?
+      `, { replacements: [id] });
 
       // Delete files
       const filesToDelete = [proposal.file_proposal];
@@ -384,14 +818,159 @@ class BankeuProposalController {
   }
 
   /**
-   * Submit all proposals to kecamatan (bundle submission)
-   * POST /api/desa/bankeu/submit-to-kecamatan
+   * Upload surat pengantar or surat permohonan
+   * POST /api/desa/bankeu/proposals/:id/upload-surat
+   * Body: { jenis: 'pengantar' | 'permohonan' }
    */
-  async submitToKecamatan(req, res) {
+  async uploadSurat(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const { jenis } = req.body; // 'pengantar' or 'permohonan'
+
+      // Validate file upload
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'File surat wajib diupload'
+        });
+      }
+
+      // Validate jenis
+      if (!jenis || !['pengantar', 'permohonan'].includes(jenis)) {
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(400).json({
+          success: false,
+          message: 'Jenis surat harus "pengantar" atau "permohonan"'
+        });
+      }
+
+      // Get desa_id from user
+      const [users] = await sequelize.query(`
+        SELECT desa_id FROM users WHERE id = ?
+      `, { replacements: [userId] });
+
+      if (!users || users.length === 0 || !users[0].desa_id) {
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(403).json({
+          success: false,
+          message: 'User tidak terkait dengan desa'
+        });
+      }
+
+      const desaId = users[0].desa_id;
+
+      // Get existing proposal
+      const [existingProposal] = await sequelize.query(`
+        SELECT surat_pengantar, surat_permohonan, desa_id 
+        FROM bankeu_proposals
+        WHERE id = ?
+      `, { replacements: [id] });
+
+      if (!existingProposal || existingProposal.length === 0) {
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal tidak ditemukan'
+        });
+      }
+
+      const proposal = existingProposal[0];
+
+      // Check ownership
+      if (proposal.desa_id !== desaId) {
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(403).json({
+          success: false,
+          message: 'Anda tidak memiliki akses untuk proposal ini'
+        });
+      }
+
+      const filePath = req.file.filename; // Hanya filename tanpa folder prefix
+      const fieldName = jenis === 'pengantar' ? 'surat_pengantar' : 'surat_permohonan';
+      const oldFilePath = proposal[fieldName];
+
+      // Delete old file if exists
+      if (oldFilePath) {
+        const fullPath = path.join(__dirname, '../../storage/uploads/bankeu', oldFilePath);
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+          logger.info(`🗑️ Deleted old ${jenis}: ${oldFilePath}`);
+        }
+      }
+
+      // Update proposal
+      await sequelize.query(`
+        UPDATE bankeu_proposals
+        SET ${fieldName} = ?, updated_at = NOW()
+        WHERE id = ?
+      `, { replacements: [filePath, id] });
+
+      logger.info(`✅ Surat ${jenis} uploaded for proposal ${id} by user ${userId}`);
+
+      res.json({
+        success: true,
+        message: `Surat ${jenis} berhasil diupload`,
+        data: {
+          id: parseInt(id),
+          [fieldName]: filePath
+        }
+      });
+    } catch (error) {
+      // Delete uploaded file on error
+      if (req.file && req.file.path) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (unlinkError) {
+          logger.error('Error deleting file:', unlinkError);
+        }
+      }
+
+      logger.error('Error uploading surat:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Gagal mengupload surat',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Submit all proposals to kecamatan (FIRST SUBMISSION - NEW FLOW)
+   * POST /api/desa/bankeu/submit-to-kecamatan
+   * Flow: Desa → KECAMATAN → Dinas Terkait → DPMD
+   */
+  /**
+   * Submit proposals to DINAS TERKAIT (FIRST SUBMISSION)
+   * POST /api/desa/bankeu/submit-to-dinas-terkait
+   * NEW FLOW 2026-01-30: Desa → Dinas Terkait (bukan Kecamatan)
+   */
+  async submitToDinasTerkait(req, res) {
     const transaction = await sequelize.transaction();
     
     try {
       const userId = req.user.id;
+
+      logger.info(`📤 SUBMIT TO DINAS TERKAIT (FIRST SUBMISSION) - User: ${userId}`);
+
+      // Check if submission is open
+      const { isOpen } = await checkSubmissionOpen();
+      if (!isOpen) {
+        await transaction.rollback();
+        logger.warn(`⛔ Submission blocked - submission is closed by DPMD`);
+        return res.status(403).json({
+          success: false,
+          message: 'Pengajuan saat ini ditutup oleh DPMD. Silakan hubungi DPMD untuk informasi lebih lanjut.'
+        });
+      }
 
       // Get desa_id from user
       const [users] = await sequelize.query(`
@@ -408,42 +987,35 @@ class BankeuProposalController {
 
       const desaId = users[0].desa_id;
 
-      // Check if already submitted
-      const [existingSubmission] = await sequelize.query(`
-        SELECT id FROM bankeu_proposals 
-        WHERE desa_id = ? AND submitted_to_kecamatan = TRUE
-        LIMIT 1
-      `, { replacements: [desaId] });
-
-      if (existingSubmission.length > 0) {
-        await transaction.rollback();
-        return res.status(400).json({
-          success: false,
-          message: 'Proposal sudah pernah dikirim ke kecamatan'
-        });
-      }
-
-      // Check if all 23 kegiatan have been uploaded (count all proposals regardless of status)
-      const [uploadedCount] = await sequelize.query(`
+      // NEW FLOW 2026-01-30: Submit proposal yang belum pernah submit
+      // Kondisi: submitted_to_dinas_at IS NULL (belum pernah dikirim ke dinas)
+      const [notSubmittedCount] = await sequelize.query(`
         SELECT COUNT(*) as total
         FROM bankeu_proposals
-        WHERE desa_id = ?
+        WHERE desa_id = ? 
+          AND submitted_to_dinas_at IS NULL
+          AND (dinas_status IS NULL OR dinas_status = 'pending')
       `, { replacements: [desaId] });
 
-      if (uploadedCount[0].total < 23) {
+      if (notSubmittedCount[0].total < 1) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: `Belum semua kegiatan diupload. Saat ini baru ${uploadedCount[0].total} dari 23 kegiatan.`
+          message: 'Tidak ada proposal yang perlu dikirim'
         });
       }
 
-      // Mark all proposals as submitted (all statuses, not just pending)
+      const count = notSubmittedCount[0].total;
+
+      // Submit to Dinas Terkait
       await sequelize.query(`
         UPDATE bankeu_proposals
-        SET submitted_to_kecamatan = TRUE,
-            submitted_at = NOW()
-        WHERE desa_id = ?
+        SET submitted_to_dinas_at = NOW(),
+            dinas_status = 'pending',
+            status = 'pending'
+        WHERE desa_id = ? 
+          AND submitted_to_dinas_at IS NULL
+          AND (dinas_status IS NULL OR dinas_status = 'pending')
       `, { 
         replacements: [desaId],
         transaction 
@@ -451,18 +1023,401 @@ class BankeuProposalController {
 
       await transaction.commit();
 
-      logger.info(`✅ All proposals from desa ${desaId} submitted to kecamatan`);
+      logger.info(`✅ ${count} proposals from desa ${desaId} submitted to DINAS TERKAIT`);
 
       res.json({
         success: true,
-        message: 'Semua proposal berhasil dikirim ke kecamatan'
+        message: `${count} proposal berhasil dikirim ke Dinas Terkait`
+      });
+    } catch (error) {
+      if (transaction && !transaction.finished) {
+        await transaction.rollback();
+      }
+      logger.error('Error submitting to dinas:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Gagal mengirim proposal ke dinas terkait',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * DEPRECATED: Kept for backward compatibility
+   * Use submitToDinasTerkait instead
+   */
+  async submitToKecamatan(req, res) {
+    return this.submitToDinasTerkait(req, res);
+  }
+
+  /**
+   * Resubmit proposals (REVISI dari Dinas/Kecamatan/DPMD)
+   * POST /api/desa/bankeu/resubmit
+   * NEW FLOW 2026-01-30: Desa upload ulang → Dinas Terkait
+   * UPDATED 2026-02-04: Support destination parameter untuk split Kecamatan vs Dinas
+   */
+  async resubmitProposal(req, res) {
+    const transaction = await sequelize.transaction();
+    
+    try {
+      const userId = req.user.id;
+      const { destination } = req.body; // 'kecamatan' atau 'dinas'
+
+      logger.info(`📤 RESUBMIT PROPOSAL (REVISI) - User: ${userId}, Destination: ${destination || 'auto-detect'}`);
+
+      // Check if submission is open
+      const { isOpen } = await checkSubmissionOpen();
+      if (!isOpen) {
+        await transaction.rollback();
+        logger.warn(`⛔ Resubmit blocked - submission is closed by DPMD`);
+        return res.status(403).json({
+          success: false,
+          message: 'Pengajuan saat ini ditutup oleh DPMD. Silakan hubungi DPMD untuk informasi lebih lanjut.'
+        });
+      }
+
+      // Get desa_id from user
+      const [users] = await sequelize.query(`
+        SELECT desa_id FROM users WHERE id = ?
+      `, { replacements: [userId] });
+
+      if (!users || users.length === 0 || !users[0].desa_id) {
+        await transaction.rollback();
+        return res.status(403).json({
+          success: false,
+          message: 'User tidak terkait dengan desa'
+        });
+      }
+
+      const desaId = users[0].desa_id;
+
+      // Get all revision proposals to detect origin
+      // Proposal yang SUDAH UPLOAD ULANG: status='pending' tapi punya dinas_status/kecamatan_status/dpmd_status
+      // DAN belum dikirim ulang (submitted_to_dinas_at IS NULL AND submitted_to_kecamatan = FALSE)
+      const [proposals] = await sequelize.query(`
+        SELECT id, dinas_status, kecamatan_status, dpmd_status, status
+        FROM bankeu_proposals
+        WHERE desa_id = ? 
+          AND status = 'pending'
+          AND submitted_to_dinas_at IS NULL
+          AND submitted_to_kecamatan = FALSE
+          AND (dinas_status IS NOT NULL OR kecamatan_status IS NOT NULL OR dpmd_status IS NOT NULL)
+      `, { replacements: [desaId] });
+
+      if (proposals.length < 1) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Tidak ada proposal revisi yang perlu dikirim ulang. Upload ulang proposal yang ditolak terlebih dahulu.'
+        });
+      }
+
+      // Detect rejection origin
+      let fromDPMD = false;
+      let fromKecamatan = false;
+      let fromDinas = false;
+
+      if (destination) {
+        // Jika ada parameter destination, gunakan itu (prioritas tinggi)
+        if (destination === 'kecamatan') {
+          fromKecamatan = true;
+        } else if (destination === 'dinas') {
+          fromDinas = true;
+        }
+        logger.info(`✅ Using explicit destination parameter: ${destination}`);
+      } else {
+        // Fallback: Auto-detect dari proposal pertama (legacy behavior)
+        const firstProposal = proposals[0];
+        fromDPMD = firstProposal.dpmd_status && 
+                   ['rejected', 'revision'].includes(firstProposal.dpmd_status);
+        fromKecamatan = !fromDPMD && 
+                       firstProposal.kecamatan_status && 
+                       ['rejected', 'revision'].includes(firstProposal.kecamatan_status);
+        fromDinas = !fromDPMD && !fromKecamatan && 
+                   firstProposal.dinas_status && 
+                   ['rejected', 'revision'].includes(firstProposal.dinas_status);
+        logger.info(`🔍 Auto-detected Origin - DPMD: ${fromDPMD}, Kecamatan: ${fromKecamatan}, Dinas: ${fromDinas}`);
+      }
+
+      let updateQuery = '';
+      let destinationLabel = '';
+
+      if (fromKecamatan) {
+        // REJECT DARI KECAMATAN → Kirim langsung ke Kecamatan (skip Dinas)
+        // IMPORTANT: Hanya update proposal yang MEMANG dari Kecamatan (ada kecamatan_status rejection tapi TIDAK ada dinas_status rejection)
+        destinationLabel = 'Kecamatan';
+        updateQuery = `
+          UPDATE bankeu_proposals
+          SET submitted_to_kecamatan = TRUE,
+              submitted_to_dinas_at = NOW(),
+              kecamatan_status = 'pending',
+              /* IMPORTANT: KEEP kecamatan_catatan untuk detection tombol Bandingkan */
+              /* kecamatan_catatan = NULL, */ 
+              kecamatan_verified_by = NULL,
+              kecamatan_verified_at = NULL,
+              dpmd_status = NULL,
+              dpmd_catatan = NULL,
+              dpmd_verified_by = NULL,
+              dpmd_verified_at = NULL,
+              submitted_to_dpmd = FALSE,
+              status = 'pending',
+              updated_at = NOW()
+          WHERE desa_id = ? 
+            AND status = 'pending'
+            AND submitted_to_dinas_at IS NULL
+            AND submitted_to_kecamatan = FALSE
+            AND kecamatan_status IN ('rejected', 'revision')
+            AND (dinas_status IS NULL OR dinas_status NOT IN ('rejected', 'revision'))
+            AND dpmd_status IS NULL
+        `;
+      } else {
+        // REJECT DARI DINAS atau DPMD → Kirim ke Dinas (flow normal dari awal)
+        // IMPORTANT: Hanya update proposal yang dari Dinas atau DPMD (ada dinas_status/dpmd_status rejection)
+        destinationLabel = fromDPMD ? 'Dinas Terkait (dari DPMD)' : 'Dinas Terkait';
+        updateQuery = `
+          UPDATE bankeu_proposals
+          SET submitted_to_dinas_at = NOW(),
+              dinas_status = 'pending',
+              dinas_catatan = NULL,
+              dinas_verified_by = NULL,
+              dinas_verified_at = NULL,
+              kecamatan_status = NULL,
+              kecamatan_catatan = NULL,
+              kecamatan_verified_by = NULL,
+              kecamatan_verified_at = NULL,
+              dpmd_status = NULL,
+              dpmd_catatan = NULL,
+              dpmd_verified_by = NULL,
+              dpmd_verified_at = NULL,
+              submitted_to_kecamatan = FALSE,
+              submitted_to_dpmd = FALSE,
+              status = 'pending',
+              updated_at = NOW()
+          WHERE desa_id = ? 
+            AND status = 'pending'
+            AND submitted_to_dinas_at IS NULL
+            AND submitted_to_kecamatan = FALSE
+            AND (
+              dinas_status IN ('rejected', 'revision') 
+              OR dpmd_status IS NOT NULL
+            )
+        `;
+      }
+
+      await sequelize.query(updateQuery, { 
+        replacements: [desaId],
+        transaction 
+      });
+
+      await transaction.commit();
+
+      const count = proposals.length;
+      logger.info(`✅ ${count} revised proposals from desa ${desaId} resubmitted to ${destinationLabel}`);
+
+      res.json({
+        success: true,
+        message: `${count} proposal revisi berhasil dikirim ulang ke ${destinationLabel}`,
+        data: { count, destination: destinationLabel }
       });
     } catch (error) {
       await transaction.rollback();
-      logger.error('Error submitting to kecamatan:', error);
+      logger.error('Error resubmitting proposals:', error);
       res.status(500).json({
         success: false,
-        message: 'Gagal mengirim proposal ke kecamatan',
+        message: 'Gagal mengirim ulang proposal',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * DEPRECATED: Kept for backward compatibility
+   * Use resubmitProposal instead
+   */
+  async submitToDinas(req, res) {
+    return this.resubmitProposal(req, res);
+  }
+
+  /**
+   * Edit proposal before submission (belum dikirim ke kecamatan/dinas)
+   * PUT /api/desa/bankeu/proposals/:id/edit
+   */
+  async editProposal(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const { judul_proposal, nama_kegiatan_spesifik, volume, lokasi, anggaran_usulan } = req.body;
+
+      logger.info(`✏️ EDIT PROPOSAL REQUEST - ID: ${id}, User: ${userId}`);
+
+      // Get desa_id from user
+      const [users] = await sequelize.query(`
+        SELECT desa_id FROM users WHERE id = ?
+      `, { replacements: [userId] });
+
+      if (!users || users.length === 0 || !users[0].desa_id) {
+        // Delete uploaded file if exists
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        logger.warn(`❌ User ${userId} tidak terkait dengan desa`);
+        return res.status(403).json({
+          success: false,
+          message: 'User tidak terkait dengan desa'
+        });
+      }
+
+      const desaId = users[0].desa_id;
+
+      // Get existing proposal
+      const [proposals] = await sequelize.query(`
+        SELECT bp.*, d.nama as nama_desa
+        FROM bankeu_proposals bp
+        LEFT JOIN desas d ON bp.desa_id = d.id
+        WHERE bp.id = ?
+      `, { replacements: [id] });
+
+      if (!proposals || proposals.length === 0) {
+        // Delete uploaded file if exists
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        logger.warn(`❌ Proposal ${id} tidak ditemukan`);
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal tidak ditemukan'
+        });
+      }
+
+      const proposal = proposals[0];
+      logger.info(`📋 Proposal info - Status: ${proposal.status}, Submitted to Kec: ${proposal.submitted_to_kecamatan}, Submitted to Dinas: ${proposal.submitted_to_dinas_at}`);
+
+      // Check ownership
+      if (proposal.desa_id !== desaId) {
+        // Delete uploaded file if exists
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        logger.warn(`❌ User ${userId} tidak memiliki akses untuk proposal ${id}`);
+        return res.status(403).json({
+          success: false,
+          message: 'Anda tidak memiliki akses untuk mengedit proposal ini'
+        });
+      }
+
+      // Only allow edit if NOT yet submitted to kecamatan and NOT yet submitted to dinas
+      const isSubmittedToKecamatan = proposal.submitted_to_kecamatan;
+      const isSubmittedToDinas = proposal.submitted_to_dinas_at !== null;
+      
+      logger.info(`🔍 Submission check - Kec: ${isSubmittedToKecamatan}, Dinas: ${isSubmittedToDinas}`);
+      
+      if (isSubmittedToKecamatan || isSubmittedToDinas) {
+        // Delete uploaded file if exists
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        logger.warn(`❌ Proposal ${id} sudah dikirim, tidak bisa diedit`);
+        return res.status(400).json({
+          success: false,
+          message: 'Proposal yang sudah dikirim ke Kecamatan atau Dinas tidak dapat diedit. Hapus dan buat ulang jika diperlukan.'
+        });
+      }
+
+      // Build update query
+      const updates = [];
+      const replacements = [];
+
+      // Update judul_proposal if provided
+      if (judul_proposal) {
+        updates.push('judul_proposal = ?');
+        replacements.push(judul_proposal);
+      }
+
+      // Update nama_kegiatan_spesifik if provided
+      if (nama_kegiatan_spesifik) {
+        updates.push('nama_kegiatan_spesifik = ?');
+        replacements.push(nama_kegiatan_spesifik);
+      }
+
+      // Update volume if provided
+      if (volume) {
+        updates.push('volume = ?');
+        replacements.push(volume);
+      }
+
+      // Update lokasi if provided
+      if (lokasi) {
+        updates.push('lokasi = ?');
+        replacements.push(lokasi);
+      }
+
+      // Update anggaran if provided
+      if (anggaran_usulan) {
+        updates.push('anggaran_usulan = ?');
+        replacements.push(anggaran_usulan);
+      }
+
+      // Update file if uploaded
+      if (req.file) {
+        const filePath = req.file.filename;
+        const fileSize = req.file.size;
+
+        updates.push('file_proposal = ?', 'file_size = ?');
+        replacements.push(filePath, fileSize);
+
+        // Delete old file if exists
+        const oldFilePath = proposal.file_proposal;
+        if (oldFilePath) {
+          const fullOldPath = path.join(__dirname, '../../storage/uploads/bankeu', oldFilePath);
+          if (fs.existsSync(fullOldPath)) {
+            fs.unlinkSync(fullOldPath);
+            logger.info(`🗑️ Deleted old file: ${oldFilePath}`);
+          }
+        }
+      }
+
+      // Always update updated_at
+      updates.push('updated_at = NOW()');
+
+      // Check if there are updates to make
+      if (updates.length === 1) { // Only updated_at
+        return res.status(400).json({
+          success: false,
+          message: 'Tidak ada data yang diubah'
+        });
+      }
+
+      // Add id at the end for WHERE clause
+      replacements.push(id);
+
+      // Execute update
+      await sequelize.query(`
+        UPDATE bankeu_proposals
+        SET ${updates.join(', ')}
+        WHERE id = ?
+      `, { replacements });
+
+      logger.info(`✏️ Bankeu proposal edited: ${id} by user ${userId}`);
+
+      res.json({
+        success: true,
+        message: 'Proposal berhasil diupdate',
+        data: { id: parseInt(id) }
+      });
+    } catch (error) {
+      // Delete uploaded file on error
+      if (req.file && req.file.path) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (unlinkError) {
+          logger.error('Error deleting file:', unlinkError);
+        }
+      }
+
+      logger.error('Error editing proposal:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Gagal mengedit proposal',
         error: error.message
       });
     }

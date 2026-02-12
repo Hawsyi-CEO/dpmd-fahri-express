@@ -109,9 +109,7 @@ class BidangController {
             total_bumdes: totalBumdes,
             active_bumdes: activeBumdes,
             inactive_bumdes: totalBumdes - activeBumdes,
-            total_unit_usaha: (await prisma.bumdes.aggregate({ 
-              _sum: { jumlah_unit_usaha: true } 
-            }))?._sum?.jumlah_unit_usaha || 0,
+            total_unit_usaha: 0, // Field removed - unit usaha tracked separately
             // Bankeu stats (dari JSON files)
             bankeu_tahap1_uploaded: this.checkFileExists('public/bankeu-tahap1.json'),
             bankeu_tahap2_uploaded: this.checkFileExists('public/bankeu-tahap2.json'),

@@ -32,16 +32,28 @@ const auth = async (req, res, next) => {
       ? parseInt(decoded.bidang_id, 10)
       : null;
 
+    // Coerce dinas_id to integer
+    const dinasId = decoded.dinas_id !== undefined && decoded.dinas_id !== null
+      ? parseInt(decoded.dinas_id, 10)
+      : null;
+
+    // Coerce kecamatan_id to integer
+    const kecamatanId = decoded.kecamatan_id !== undefined && decoded.kecamatan_id !== null
+      ? parseInt(decoded.kecamatan_id, 10)
+      : null;
+
     req.user = {
       id: decoded.id,
       name: decoded.name,
       email: decoded.email,
       role: decoded.role,
       desa_id: Number.isNaN(desaId) ? null : desaId,
-      bidang_id: Number.isNaN(bidangId) ? null : bidangId
+      bidang_id: Number.isNaN(bidangId) ? null : bidangId,
+      dinas_id: Number.isNaN(dinasId) ? null : dinasId,
+      kecamatan_id: Number.isNaN(kecamatanId) ? null : kecamatanId
     };
     
-    logger.info(`✅ Auth successful: User ${req.user.id} (${req.user.role}) - Bidang: ${req.user.bidang_id}`);
+    logger.info(`✅ Auth successful: User ${req.user.id} (${req.user.role}) - Bidang: ${req.user.bidang_id} - Kecamatan: ${req.user.kecamatan_id}`);
     
     next();
   } catch (error) {
@@ -129,97 +141,42 @@ const generateToken = (user) => {
       role: user.role,
       desa_id: convertBigInt(user.desa_id),
       kecamatan_id: convertBigInt(user.kecamatan_id),
-      bidang_id: convertBigInt(user.bidang_id)
+      bidang_id: convertBigInt(user.bidang_id),
+      dinas_id: convertBigInt(user.dinas_id)
     },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN }
   );
 };
 
-// VPN IP-based authentication (no token required)
-// HYBRID: Accept both Tailscale IP and secret key
-const vpnAuth = async (req, res, next) => {
-  try {
-    // Get client IP address
-    const forwardedFor = req.headers['x-forwarded-for'];
-    const realIP = req.headers['x-real-ip'];
-    const remoteAddr = req.connection.remoteAddress || req.socket.remoteAddress;
-    
-    // Get VPN secret from query or header
-    const vpnSecret = req.query.secret || req.headers['x-vpn-secret'];
-    const expectedSecret = process.env.VPN_SECRET_KEY || 'DPMD-INTERNAL-2025';
-    
-    // Parse forwarded IPs
-    let clientIP = remoteAddr;
-    if (forwardedFor) {
-      const ips = forwardedFor.split(',').map(ip => ip.trim());
-      clientIP = ips[0];
-    } else if (realIP) {
-      clientIP = realIP;
-    }
-
-    logger.info(`🔐 VPN Auth - IP: ${clientIP}, HasSecret: ${!!vpnSecret}`);
-
-    // Function to check if IP is in Tailscale range (100.64.0.0/10)
-    const isIPInTailscaleRange = (ip) => {
-      // Allow localhost for development
-      if (ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1') {
-        logger.info('✅ VPN Auth: Localhost detected (development mode)');
-        return true;
-      }
-
-      // Remove IPv6 prefix if present
-      const cleanIP = ip.replace('::ffff:', '');
-      
-      // Check Tailscale range: 100.64.0.0 to 100.127.255.255
-      const parts = cleanIP.split('.');
-      if (parts.length !== 4) return false;
-      
-      const firstOctet = parseInt(parts[0]);
-      const secondOctet = parseInt(parts[1]);
-      
-      // Tailscale uses 100.64.0.0/10 (100.64.0.0 - 100.127.255.255)
-      return firstOctet === 100 && secondOctet >= 64 && secondOctet <= 127;
-    };
-
-    const isVpnIP = isIPInTailscaleRange(clientIP);
-    const hasValidSecret = vpnSecret && vpnSecret === expectedSecret;
-
-    // ✅ GRANT ACCESS: Tailscale IP OR valid secret key
-    if (isVpnIP || hasValidSecret) {
-      const accessMethod = isVpnIP ? 'tailscale-ip' : 'secret-key';
-      logger.info(`✅ VPN Auth success via ${accessMethod}: IP=${clientIP}`);
-      
-      // Set dummy VPN user
-      req.user = {
-        id: 'vpn-user',
-        name: 'VPN User',
-        email: 'vpn@internal',
-        role: 'vpn_access',
-        accessMethod
-      };
-      
-      return next();
-    }
-
-    // ❌ DENY ACCESS
-    logger.warn(`❌ VPN Auth failed: IP ${clientIP} not in VPN range and no valid secret`);
-    return res.status(403).json({
+// Middleware to check if user has dinas_terkait or verifikator_dinas role and dinas_id
+const authorizeDinas = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
       success: false,
-      message: 'Access denied - VPN connection or valid secret key required',
-      data: {
-        ip: clientIP,
-        hasSecret: !!vpnSecret,
-        reason: 'Not connected via Tailscale VPN and no valid secret provided'
-      }
-    });
-  } catch (error) {
-    logger.error('VPN Authentication failed:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'VPN authentication failed'
+      message: 'Unauthorized - No user found'
     });
   }
+
+  const allowedDinasRoles = ['dinas_terkait', 'verifikator_dinas'];
+  if (!allowedDinasRoles.includes(req.user.role)) {
+    logger.warn(`❌ Dinas access denied - User ${req.user.email} has role ${req.user.role}, expected one of: ${allowedDinasRoles.join(', ')}`);
+    return res.status(403).json({
+      success: false,
+      message: 'Access forbidden - Requires dinas role'
+    });
+  }
+
+  if (!req.user.dinas_id) {
+    logger.warn(`❌ Dinas access denied - User ${req.user.email} has no dinas_id assigned`);
+    return res.status(403).json({
+      success: false,
+      message: 'Access forbidden - No dinas assignment found'
+    });
+  }
+
+  logger.info(`✅ Dinas authorization passed - User ${req.user.email} (dinas_id: ${req.user.dinas_id}, role: ${req.user.role})`);
+  next();
 };
 
-module.exports = { auth, checkRole, generateToken, vpnAuth };
+module.exports = { auth, checkRole, generateToken, authorizeDinas };

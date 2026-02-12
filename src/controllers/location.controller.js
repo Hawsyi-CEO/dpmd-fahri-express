@@ -34,9 +34,15 @@ class LocationController {
   // GET /api/desas - Get all desas
   async getDesas(req, res, next) {
     try {
-      logger.info('Fetching all desas');
+      logger.info('Fetching all desas (excluding kelurahan)');
 
       const desas = await prisma.desas.findMany({
+        where: {
+          status_pemerintahan: 'desa' // Exclude kelurahan
+        },
+        include: {
+          kecamatans: true
+        },
         orderBy: { nama: 'asc' }
       });
 
@@ -46,7 +52,11 @@ class LocationController {
       const serializedData = desas.map(desa => ({
         ...desa,
         id: desa.id.toString(),
-        kecamatan_id: desa.kecamatan_id.toString()
+        kecamatan_id: desa.kecamatan_id.toString(),
+        kecamatans: desa.kecamatans ? {
+          ...desa.kecamatans,
+          id: desa.kecamatans.id.toString()
+        } : null
       }));
 
       return res.json({
@@ -112,7 +122,10 @@ class LocationController {
       logger.info(`Fetching desas for kecamatan_id: ${kecamatanId}`);
 
       const desas = await prisma.desas.findMany({
-        where: { kecamatan_id: BigInt(kecamatanId) },
+        where: { 
+          kecamatan_id: BigInt(kecamatanId),
+          status_pemerintahan: 'desa' // Exclude kelurahan
+        },
         orderBy: { nama: 'asc' }
       });
 

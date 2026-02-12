@@ -86,19 +86,22 @@ database-express/seeders/*-data.json
 *_IMPLEMENTATION.md
 *_DESIGN.md
 *_FINAL.md
+*_INVESTIGATION_REPORT.md
+*_SUMMARY.md
 WORKFLOW_STRUCTURE.md
 ROLE_SYSTEM.md
 PEGAWAI_MANAGEMENT_FIX.md
 KEPALA_BIDANG_ACCESS.md
+QUICKSTART_*.md
+SETUP_*.sql
+SETUP_*.md
 
-# Development scripts
+# Development/debug scripts
 assign-*.js
 check-*.js
 revert-*.js
 revert-*.sql
 update-*.sql
-<<<<<<< Updated upstream
-=======
 test-*.js
 fix-*.js
 reset-*.js
@@ -122,4 +125,3 @@ prisma/migrations/*_migration_lock.toml
 # DBML files and folder
 *.dbml
 dbml/
->>>>>>> Stashed changes

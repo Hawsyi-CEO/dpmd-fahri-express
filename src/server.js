@@ -13,6 +13,9 @@ BigInt.prototype.toJSON = function() {
   return this.toString();
 };
 
+// Initialize Sequelize models FIRST before any routes
+const { sequelize } = require('./models');
+
 const logger = require('./utils/logger');
 const errorHandler = require('./middlewares/errorHandler');
 const schedulerService = require('./services/scheduler.service');
@@ -41,7 +44,6 @@ const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const bumdesRoutes = require('./routes/bumdes.routes');
 const musdesusRoutes = require('./routes/musdesus.routes');
-const perjalananDinasRoutes = require('./routes/perjalananDinas.routes');
 const heroGalleryRoutes = require('./routes/heroGallery.routes');
 const publicRoutes = require('./routes/public.routes');
 const locationRoutes = require('./routes/location.routes');
@@ -64,12 +66,20 @@ const bhprdRoutes = require('./routes/bhprd.routes');
 const bhprdT1Routes = require('./routes/bhprd-t1.routes');
 const bhprdT2Routes = require('./routes/bhprd-t2.routes');
 const bhprdT3Routes = require('./routes/bhprd-t3.routes');
-const vpnDashboardRoutes = require('./routes/vpnDashboard.routes');
-const vpnCoreDashboardRoutes = require('./routes/vpnCoreDashboard.routes');
 const pegawaiRoutes = require('./routes/pegawai.routes');
 const bidangRoutes = require('./routes/bidang.routes');
 const bankeuProposalRoutes = require('./routes/bankeuProposal.routes');
+const desaBankeuSuratRoutes = require('./routes/desaBankeuSurat.routes');
+const kecamatanBankeuSuratRoutes = require('./routes/kecamatanBankeuSurat.routes');
 const bankeuVerificationRoutes = require('./routes/bankeuVerification.routes');
+const bankeuMasterKegiatanRoutes = require('./routes/bankeuMasterKegiatan.routes');
+const dinasRoutes = require('./routes/dinas.routes');
+const dinasVerificationRoutes = require('./routes/dinasVerification.routes');
+const dpmdVerificationRoutes = require('./routes/dpmdVerification.routes');
+const dinasVerifikatorRoutes = require('./routes/dinasVerifikator.routes');
+const verifikatorAksesDesaRoutes = require('./routes/verifikatorAksesDesa.routes');
+const beritaAcaraRoutes = require('./routes/beritaAcara.routes');
+const perjadinRoutes = require('./routes/perjadin.routes');
 
 const app = express();
 
@@ -82,7 +92,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      frameAncestors: ["'self'", "http://localhost:5173", "https://dpmd.bogorkab.go.id"],
+      frameAncestors: ["'self'", "http://localhost:5173", "https://dpmd.bogorkab.go.id", "https://dpmdbogorkab.id"],
       objectSrc: ["'self'", "data:", "blob:"],
       frameSrc: ["'self'", "data:", "blob:"],
       scriptSrc: ["'self'", "'unsafe-inline'"],
@@ -111,26 +121,38 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate limiting - More permissive for development
+// Rate limiting - Standard API requests
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // increased from 100 to 1000 requests per windowMs
+  max: 1000, // 1000 requests per windowMs
   message: 'Terlalu banyak request dari IP ini, silakan coba lagi nanti.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limiting - More permissive for Bankeu uploads (1 juta proposals scenario)
+const bankeuUploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5000, // 5000 uploads per 15 minutes per IP
+  message: 'Terlalu banyak upload, silakan tunggu beberapa menit.',
   standardHeaders: true,
   legacyHeaders: false,
 });
 
 // Only apply rate limiting in production
 if (process.env.NODE_ENV === 'production') {
+  // Apply permissive rate limit to bankeu upload routes
+  app.use('/api/desa/bankeu', bankeuUploadLimiter);
+  // Apply standard rate limit to other API routes
   app.use('/api/', limiter);
-  logger.info('🛡️  Rate limiting enabled (1000 requests per 15 minutes)');
+  logger.info('🛡️  Rate limiting enabled (1000 req/15min API, 5000 req/15min Bankeu uploads)');
 } else {
   logger.info('⚠️  Rate limiting disabled for development');
 }
 
-// Body parsers
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Body parsers with increased limits for file metadata
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Compression
 app.use(compression());
@@ -145,6 +167,9 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // Static files - MUST BE BEFORE API ROUTES
+// Handle favicon
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 // Serve uploaded files with CORS headers
 app.use('/storage', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -209,13 +234,25 @@ app.use('/api/desa/aparatur-desa', aparaturDesaRoutes); // Aparatur Desa routes
 app.use('/api/profil-desa', profilDesaRoutes); // Profil Desa routes
 app.use('/api/desa/produk-hukum', produkHukumRoutes); // Produk Hukum routes (desa alias)
 app.use('/api/desa/bankeu', bankeuProposalRoutes); // Bankeu proposal routes for desa
+app.use('/api/desa/bankeu/surat', desaBankeuSuratRoutes); // Surat pengantar & permohonan (desa-level)
+app.use('/api/kecamatan/bankeu/surat', kecamatanBankeuSuratRoutes); // Kecamatan review surat desa
 app.use('/api/kecamatan/bankeu', bankeuVerificationRoutes); // Bankeu verification routes for kecamatan
-app.use('/api/perjalanan-dinas', perjalananDinasRoutes);
-app.use('/api/perjadin', perjalananDinasRoutes); // Alias for perjadin
-app.use('/api/kegiatan', perjalananDinasRoutes); // Alias for perjadin
+app.use('/api/dinas/bankeu', dinasVerificationRoutes); // Bankeu verification routes for dinas terkait
+app.use('/api/dpmd/bankeu', dpmdVerificationRoutes); // Bankeu verification routes for DPMD/SPKED
+app.use('/api/bankeu/master-kegiatan', bankeuMasterKegiatanRoutes); // Master kegiatan CRUD
+app.use('/api/master/dinas', dinasRoutes); // Dinas master data CRUD
+app.use('/api/dinas', require('./routes/dinasConfig.routes')); // Dinas configuration (TTD + PIC)
+app.use('/api/dinas', dinasVerifikatorRoutes); // Dinas verifikator management
+app.use('/api/dinas/verifikator', verifikatorAksesDesaRoutes); // Verifikator akses desa management
+app.use('/api/verifikator/profile', require('./routes/verifikatorProfile.routes')); // Verifikator profile & TTD
+app.use('/api/kecamatan', require('./routes/kecamatanBankeuTimConfig.routes')); // Kecamatan tim verifikasi config
+app.use('/api/bankeu/questionnaire', require('./routes/bankeuQuestionnaire.routes')); // Verification questionnaire
+app.use('/api/berita-acara', beritaAcaraRoutes); // Berita Acara routes
+app.use('/api/contoh-proposal', require('./routes/contohProposal.routes')); // Example proposal files
 app.use('/api/hero-gallery', heroGalleryRoutes);
 app.use('/api/kepala-dinas', kepalaDinasRoutes); // Kepala Dinas dashboard
 app.use('/api/jadwal-kegiatan', require('./routes/jadwalKegiatan.routes')); // Jadwal Kegiatan routes
+app.use('/api/perjadin', perjadinRoutes); // Perjadin (Perjalanan Dinas) routes
 app.use('/api/berita', require('./routes/berita.routes')); // Berita routes
 app.use('/api/kelembagaan', kelembagaanRoutes); // Kelembagaan routes (admin/global)
 app.use('/api/kelembagaan/activity-logs', require('./routes/kelembagaanActivityLogs.routes')); // Activity logs
@@ -234,8 +271,6 @@ app.use('/api/bhprd', bhprdRoutes); // BHPRD (Bagi Hasil Pajak dan Retribusi Dae
 app.use('/api/bhprd-t1', bhprdT1Routes); // BHPRD Tahap 1
 app.use('/api/bhprd-t2', bhprdT2Routes); // BHPRD Tahap 2
 app.use('/api/bhprd-t3', bhprdT3Routes); // BHPRD Tahap 3
-app.use('/api/vpn-dashboard', vpnDashboardRoutes); // VPN Dashboard (IP restricted)
-app.use('/api/vpn-core', vpnCoreDashboardRoutes); // VPN Core Dashboard Access (IP restricted, no auth token)
 
 // 404 handler
 app.use((req, res) => {

@@ -11,7 +11,9 @@ const { auth } = require('../middlewares/auth');
 router.get('/', auth, async (req, res) => {
   try {
     const { bidang_id } = req.query;
-    
+
+    console.log('[Pegawai API] GET / - bidang_id:', bidang_id);
+
     const where = {};
     if (bidang_id) {
       where.id_bidang = BigInt(bidang_id);
@@ -19,27 +21,44 @@ router.get('/', auth, async (req, res) => {
 
     const pegawai = await prisma.pegawai.findMany({
       where,
-      include: {
+      select: {
+        id_pegawai: true,
+        id_bidang: true,
+        nama_pegawai: true,
         bidangs: {
           select: {
             id: true,
             nama: true
           }
-        },
-        users: true
+        }
       },
       orderBy: {
         nama_pegawai: 'asc'
       }
     });
 
+    console.log('[Pegawai API] Found', pegawai.length, 'pegawai');
+
+    // Convert BigInt fields to Number for JSON serialization
+    const serializedPegawai = pegawai.map(p => ({
+      id_pegawai: Number(p.id_pegawai),
+      id_bidang: p.id_bidang ? Number(p.id_bidang) : null,
+      nama_pegawai: p.nama_pegawai,
+      bidangs: p.bidangs ? {
+        id: Number(p.bidangs.id),
+        nama: p.bidangs.nama
+      } : null
+    }));
+
+    console.log('[Pegawai API] Serialized data:', JSON.stringify(serializedPegawai.slice(0, 2)));
+
     res.json({
       success: true,
       message: 'Pegawai retrieved successfully',
-      data: pegawai
+      data: serializedPegawai
     });
   } catch (error) {
-    console.error('Error fetching pegawai:', error);
+    console.error('[Pegawai API] Error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch pegawai',
@@ -63,8 +82,16 @@ router.get('/:id', auth, async (req, res) => {
           }
         },
         users: {
-          include: {
-            position: true
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            desa_id: true,
+            kecamatan_id: true,
+            bidang_id: true,
+            dinas_id: true,
+            pegawai_id: true
           }
         }
       }
@@ -77,10 +104,32 @@ router.get('/:id', auth, async (req, res) => {
       });
     }
 
+    // Convert BigInt fields to Number for JSON serialization
+    const serializedPegawai = {
+      id_pegawai: Number(pegawai.id_pegawai),
+      id_bidang: pegawai.id_bidang ? Number(pegawai.id_bidang) : null,
+      nama_pegawai: pegawai.nama_pegawai,
+      bidangs: pegawai.bidangs ? {
+        id: Number(pegawai.bidangs.id),
+        nama: pegawai.bidangs.nama
+      } : null,
+      users: pegawai.users ? pegawai.users.map(user => ({
+        id: Number(user.id),
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        desa_id: user.desa_id ? Number(user.desa_id) : null,
+        kecamatan_id: user.kecamatan_id ? Number(user.kecamatan_id) : null,
+        bidang_id: user.bidang_id ? Number(user.bidang_id) : null,
+        dinas_id: user.dinas_id ? Number(user.dinas_id) : null,
+        pegawai_id: user.pegawai_id ? Number(user.pegawai_id) : null
+      })) : []
+    };
+
     res.json({
       success: true,
       message: 'Pegawai retrieved successfully',
-      data: pegawai
+      data: serializedPegawai
     });
   } catch (error) {
     console.error('Error fetching pegawai:', error);

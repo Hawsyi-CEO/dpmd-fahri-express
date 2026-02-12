@@ -1,6 +1,9 @@
 const { Sequelize } = require('sequelize');
 const logger = require('../utils/logger');
 
+// Connection pool size based on environment
+const poolMax = process.env.NODE_ENV === 'production' ? 30 : 10;
+
 const sequelize = new Sequelize(
   process.env.DB_NAME,
   process.env.DB_USER,
@@ -11,9 +14,9 @@ const sequelize = new Sequelize(
     dialect: 'mysql',
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
     pool: {
-      max: 5,
-      min: 0,
-      acquire: 30000,
+      max: poolMax,
+      min: 2,
+      acquire: 60000,
       idle: 10000
     },
     define: {

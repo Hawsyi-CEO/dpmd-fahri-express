@@ -16,8 +16,7 @@ class JadwalKegiatanController {
         status, 
         prioritas,
         search,
-        start_date,
-        end_date,
+        tanggal,
         page = 1, 
         limit = 50 
       } = req.query;
@@ -25,7 +24,7 @@ class JadwalKegiatanController {
       console.log('\n🔍 [Jadwal] GET ALL Request from user:', req.user.id);
       console.log('   Role:', req.user.role);
       console.log('   Bidang ID:', req.user.bidang_id);
-      console.log('   Filters:', { status, prioritas, search, start_date, end_date, page, limit });
+      console.log('   Filters:', { status, prioritas, search, tanggal, page, limit });
 
       const skip = (parseInt(page) - 1) * parseInt(limit);
       const where = {};
@@ -45,21 +44,23 @@ class JadwalKegiatanController {
         console.log('   ✓ Filter by prioritas:', prioritas);
       }
 
-      // Date range filter
-      if (start_date || end_date) {
+      // Date filter - find activities on the selected date
+      // Activity spans the date if: tanggal_mulai <= selected_date AND tanggal_selesai >= selected_date
+      if (tanggal) {
+        // Parse the input date as local time (not UTC)
+        const [year, month, day] = tanggal.split('-').map(Number);
+        const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
+        const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999);
+        
         where.AND = where.AND || [];
-        if (start_date) {
-          where.AND.push({
-            tanggal_mulai: { gte: new Date(start_date) }
-          });
-          console.log('   ✓ Filter start_date >=', start_date);
-        }
-        if (end_date) {
-          where.AND.push({
-            tanggal_selesai: { lte: new Date(end_date) }
-          });
-          console.log('   ✓ Filter end_date <=', end_date);
-        }
+        where.AND.push({
+          tanggal_mulai: { lte: endOfDay }
+        });
+        where.AND.push({
+          tanggal_selesai: { gte: startOfDay }
+        });
+        console.log('   ✓ Filter tanggal:', tanggal);
+        console.log('   ✓ Date range:', startOfDay, 'to', endOfDay);
       }
 
       // Search filter

@@ -812,9 +812,10 @@ exports.createSuratMasuk = async (req, res, next) => {
           title: '📨 Surat Masuk Baru',
           body: `${perihal_surat} dari ${asal_surat}`,
           data: {
-            type: 'disposisi',
+            type: 'new_disposisi',
             disposisi_id: disposisi.id.toString(),
             surat_id: suratMasuk.id.toString(),
+            url: '/kepala-dinas/disposisi',
           },
         });
         console.log('✅ [PUSH] Notification sent to Kepala Dinas');
@@ -830,6 +831,15 @@ exports.createSuratMasuk = async (req, res, next) => {
     });
   } catch (error) {
     console.error('❌ [SURAT MASUK] Error:', error);
+    
+    // Handle duplicate nomor surat
+    if (error.code === 'P2002' && error.meta?.target?.includes('nomor_surat')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nomor surat sudah terdaftar. Gunakan nomor surat yang berbeda.',
+      });
+    }
+    
     next(error);
   }
 };

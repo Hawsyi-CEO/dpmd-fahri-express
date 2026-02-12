@@ -14,7 +14,26 @@ class AppSettingsController {
         where: { setting_key: key }
       });
 
+      // Default values for bankeu submission settings
+      const defaultSettings = {
+        'bankeu_submission_desa': true,
+        'bankeu_submission_kecamatan': true
+      };
+
       if (!setting) {
+        // Return default value if setting doesn't exist and has a default
+        if (key in defaultSettings) {
+          return res.json({
+            success: true,
+            data: {
+              key: key,
+              value: defaultSettings[key],
+              description: null,
+              updated_at: null,
+              isDefault: true
+            }
+          });
+        }
         return res.status(404).json({
           success: false,
           message: `Setting '${key}' not found`
@@ -64,18 +83,22 @@ class AppSettingsController {
         });
       }
 
-      // Check if user has permission (only superadmin and pemberdayaan_masyarakat)
+      // Check if user has permission (superadmin or SPKED bidang members)
       const userRole = req.user?.role;
-      const allowedRoles = ['superadmin','kepala_bidang'];
+      const userBidangId = req.user?.bidang_id;
+      const allowedRoles = ['superadmin'];
+      const spkedBidangId = 3; // SPKED = Sarana Prasarana Kewilayahan dan Ekonomi Desa (bidang_id=3)
       
-      console.log('🔐 [App Settings] Update attempt - User role:', userRole, 'Allowed:', allowedRoles);
+      console.log('🔐 [App Settings] Update attempt - User:', req.user?.name, 'Role:', userRole, 'Bidang ID:', userBidangId);
       
-      if (!allowedRoles.includes(userRole)) {
-        console.log('❌ [App Settings] Access denied for role:', userRole);
+      const hasPermission = allowedRoles.includes(userRole) || parseInt(userBidangId) === spkedBidangId;
+      
+      if (!hasPermission) {
+        console.log('❌ [App Settings] Access denied for role:', userRole, 'bidang_id:', userBidangId);
         return res.status(403).json({
           success: false,
-          message: 'Forbidden: Only superadmin and pemberdayaan_masyarakat can update settings',
-          debug: { userRole, allowedRoles }
+          message: 'Forbidden: Only superadmin and Bidang SPKED (bidang_id=3) can update settings',
+          debug: { userRole, userBidangId, required: spkedBidangId }
         });
       }
 

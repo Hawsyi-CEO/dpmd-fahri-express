@@ -128,6 +128,15 @@ class UserController {
           userData.desa = desa;
         }
         
+        // Get dinas if dinas_id exists
+        if (user.dinas_id) {
+          const dinas = await prisma.master_dinas.findUnique({
+            where: { id: user.dinas_id },
+            select: { id: true, kode_dinas: true, nama_dinas: true, singkatan: true }
+          });
+          userData.dinas = dinas;
+        }
+        
         return userData;
       }));
 
@@ -146,6 +155,7 @@ class UserController {
         bidang: user.bidang || null,
         kecamatan: user.kecamatan || null,
         desa: user.desa || null,
+        dinas: user.dinas || null,
         is_active: user.is_active,
         created_at: user.created_at,
         updated_at: user.updated_at
