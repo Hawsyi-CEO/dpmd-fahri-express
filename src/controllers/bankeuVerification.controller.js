@@ -391,19 +391,21 @@ class BankeuVerificationController {
 
       const kecamatanId = users[0].kecamatan_id;
 
+      // FIXED: Statistics harus filter submitted_to_kecamatan = TRUE agar sinkron dengan proposals list
       const [stats] = await sequelize.query(`
         SELECT 
           COUNT(*) as total_proposals,
-          SUM(CASE WHEN bp.status = 'pending' THEN 1 ELSE 0 END) as pending,
-          SUM(CASE WHEN bp.status = 'verified' THEN 1 ELSE 0 END) as verified,
-          SUM(CASE WHEN bp.status = 'rejected' THEN 1 ELSE 0 END) as rejected,
-          SUM(CASE WHEN bp.status = 'revision' THEN 1 ELSE 0 END) as revision,
+          SUM(CASE WHEN bp.kecamatan_status IS NULL OR bp.kecamatan_status = 'pending' THEN 1 ELSE 0 END) as pending,
+          SUM(CASE WHEN bp.kecamatan_status = 'approved' THEN 1 ELSE 0 END) as verified,
+          SUM(CASE WHEN bp.kecamatan_status = 'rejected' THEN 1 ELSE 0 END) as rejected,
+          SUM(CASE WHEN bp.kecamatan_status = 'revision' THEN 1 ELSE 0 END) as revision,
           SUM(CASE WHEN bmk.jenis_kegiatan = 'infrastruktur' THEN 1 ELSE 0 END) as infrastruktur,
           SUM(CASE WHEN bmk.jenis_kegiatan = 'non_infrastruktur' THEN 1 ELSE 0 END) as non_infrastruktur
         FROM bankeu_proposals bp
         INNER JOIN desas d ON bp.desa_id = d.id
         INNER JOIN bankeu_master_kegiatan bmk ON bp.kegiatan_id = bmk.id
         WHERE d.kecamatan_id = ?
+        AND bp.submitted_to_kecamatan = TRUE
         ${tahunFilter ? 'AND bp.tahun_anggaran = ?' : ''}
       `, { replacements: tahunFilter ? [kecamatanId, tahunFilter] : [kecamatanId] });
 

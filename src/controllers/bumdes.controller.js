@@ -696,7 +696,7 @@ class BumdesController {
       logger.info('Getting dokumen badan hukum files (optimized)', { bumdes_id });
 
       // Get base URL for file serving
-      const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3001';
+      const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
 
       // Build where clause
       const whereClause = {};
@@ -794,7 +794,7 @@ class BumdesController {
       logger.info('Getting laporan keuangan files (optimized)', { bumdes_id });
 
       // Get base URL for file serving
-      const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3001';
+      const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
 
       // Build where clause
       const whereClause = {};
@@ -886,7 +886,7 @@ class BumdesController {
       logger.info('Getting produk hukum files (optimized)');
 
       // Get base URL for file serving
-      const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3001';
+      const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
 
       // Get all BUMDES with produk hukum documents
       const allBumdes = await Bumdes.findAll({
