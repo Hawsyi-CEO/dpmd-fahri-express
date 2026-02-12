@@ -25,13 +25,29 @@ class KepalaDinasController {
       const totalPegawai = await prisma.pegawai.count();
       logger.info('Total pegawai:', totalPegawai);
 
+      // Get BUMDes statistics
+      logger.info('Getting BUMDes statistics for dashboard');
+      const bumdesStats = await this.getBumdesStats();
+      logger.info('BUMDes statistics retrieved:', { 
+        total: bumdesStats.total, 
+        aktif: bumdesStats.aktif, 
+        non_aktif: bumdesStats.non_aktif 
+      });
+
+      // Get other statistics
+      const musdesusStats = await this.getMusdesusStats();
+      const perjadinStats = await this.getPerjadinStats();
+
       const response = {
         success: true,
         data: {
           summary: {
             total_desa: totalDesa,
             total_pegawai: totalPegawai
-          }
+          },
+          bumdes: bumdesStats,
+          musdesus: musdesusStats,
+          perjadin: perjadinStats
         }
       };
 
