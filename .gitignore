@@ -121,3 +121,7 @@ storage/surat_masuk/*
 
 # Prisma migrations lock
 prisma/migrations/*_migration_lock.toml
+
+# DBML files and folder
+*.dbml
+dbml/
