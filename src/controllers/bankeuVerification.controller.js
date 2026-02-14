@@ -83,6 +83,8 @@ class BankeuVerificationController {
           bp.submitted_at,
           bp.submitted_to_dpmd,
           bp.submitted_to_dpmd_at,
+          bp.dpmd_status,
+          bp.dpmd_catatan,
           bp.catatan_verifikasi,
           bp.verified_at,
           bp.berita_acara_path,
@@ -430,7 +432,7 @@ class BankeuVerificationController {
   async generateBeritaAcaraDesa(req, res) {
     try {
       const { desaId } = req.params;
-      const { kegiatanId, proposalId } = req.body; // proposalId untuk tim verifikasi per proposal
+      const { kegiatanId, proposalId, optionalItems } = req.body; // proposalId untuk tim verifikasi per proposal, optionalItems untuk infra opsional
       const userId = req.user.id;
 
       // Get user info
@@ -475,7 +477,8 @@ class BankeuVerificationController {
         kecamatanId,
         kegiatanId: kegiatanId ? parseInt(kegiatanId) : null,
         proposalId: proposalId ? parseInt(proposalId) : null,
-        checklistData
+        checklistData,
+        optionalItems: optionalItems || null
       });
 
       // Update proposals with berita acara path

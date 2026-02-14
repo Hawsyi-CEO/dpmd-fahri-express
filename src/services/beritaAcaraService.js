@@ -13,9 +13,10 @@ class BeritaAcaraService {
    * @param {number} params.proposalId - ID proposal (optional, untuk tim verifikasi per proposal)
    * @param {Object} params.qrCode - QR code data { code, imagePath, verificationUrl }
    * @param {Object} params.checklistData - Aggregated checklist data from questionnaires { q1: true, q2: false, ... }
+   * @param {Object} params.optionalItems - Optional infra items to include { item_5: true/false, item_7: true, ... }
    * @returns {Promise<string>} - Path to generated PDF
    */
-  async generateBeritaAcaraVerifikasi({ desaId, kecamatanId, kegiatanId, proposalId = null, qrCode = null, checklistData = null }) {
+  async generateBeritaAcaraVerifikasi({ desaId, kecamatanId, kegiatanId, proposalId = null, qrCode = null, checklistData = null, optionalItems = null }) {
     try {
       // Fetch data
       const [desaData, kecamatanConfig, timVerifikasi, proposalData] = await Promise.all([
@@ -55,7 +56,7 @@ class BeritaAcaraService {
       doc.pipe(stream);
 
       // Generate single page with all content, including QR code and auto-filled checklist
-      this.generatePage1(doc, desaData, kecamatanConfig, proposals, timVerifikasi, qrCode, checklistData);
+      this.generatePage1(doc, desaData, kecamatanConfig, proposals, timVerifikasi, qrCode, checklistData, optionalItems);
 
       doc.end();
 
@@ -218,6 +219,7 @@ class BeritaAcaraService {
       SELECT 
         bp.id,
         mk.nama_kegiatan,
+        mk.jenis_kegiatan,
         mk.dinas_terkait,
         bp.judul_proposal,
         bp.deskripsi,
@@ -255,6 +257,7 @@ class BeritaAcaraService {
       SELECT 
         bp.id,
         mk.nama_kegiatan,
+        mk.jenis_kegiatan,
         mk.dinas_terkait,
         bp.judul_proposal,
         bp.deskripsi,
@@ -293,6 +296,7 @@ class BeritaAcaraService {
       SELECT 
         bp.id,
         mk.nama_kegiatan,
+        mk.jenis_kegiatan,
         mk.dinas_terkait,
         bp.judul_proposal,
         bp.deskripsi,
@@ -327,7 +331,7 @@ class BeritaAcaraService {
    * @param {Object} qrCode - QR code data { code, imagePath, verificationUrl }
    * @param {Object} checklistData - Aggregated checklist data { q1: true/false/null, ... }
    */
-  generatePage1(doc, desaData, kecamatanConfig, proposals, timVerifikasi, qrCode = null, checklistData = null) {
+  generatePage1(doc, desaData, kecamatanConfig, proposals, timVerifikasi, qrCode = null, checklistData = null, optionalItems = null) {
     const pageWidth = doc.page.width;
     const marginLeft = doc.page.margins.left;
     const marginRight = doc.page.margins.right;
@@ -335,6 +339,9 @@ class BeritaAcaraService {
 
     // KOP Header - dari konfigurasi kecamatan
     let headerY = 40;
+    const logoWidth = 45;
+    const logoHeight = 45;
+    const logoGap = 8; // gap antara logo dan teks
     
     // Logo Kabupaten Bogor (di kiri) - try from config first, then fallback to default
     let logoLoaded = false;
@@ -342,7 +349,7 @@ class BeritaAcaraService {
       try {
         const logoPath = path.join(__dirname, '../../storage', kecamatanConfig.logo_path);
         if (fs.existsSync(logoPath)) {
-          doc.image(logoPath, marginLeft, headerY, { width: 65, height: 65 });
+          doc.image(logoPath, marginLeft, headerY, { width: logoWidth, height: logoHeight });
           logoLoaded = true;
         }
       } catch (err) {
@@ -355,7 +362,7 @@ class BeritaAcaraService {
       try {
         const defaultLogoPath = path.join(__dirname, '../../public/logo-bogor.png');
         if (fs.existsSync(defaultLogoPath)) {
-          doc.image(defaultLogoPath, marginLeft, headerY, { width: 65, height: 65 });
+          doc.image(defaultLogoPath, marginLeft, headerY, { width: logoWidth, height: logoHeight });
           logoLoaded = true;
         }
       } catch (err) {
@@ -363,65 +370,70 @@ class BeritaAcaraService {
       }
     }
     
-    // Header text - ALWAYS centered (independent of logo position)
+    // Header text - centered in area AFTER logo (agar tidak menabrak logo)
+    const textStartX = marginLeft + logoWidth + logoGap;
+    const textWidth = contentWidth - logoWidth - logoGap;
+    
     doc.fontSize(14).font('Helvetica-Bold');
-    doc.text('PEMERINTAH KABUPATEN BOGOR', marginLeft, headerY, { 
-      width: contentWidth, 
+    doc.text('PEMERINTAH KABUPATEN BOGOR', textStartX, headerY + 2, { 
+      width: textWidth, 
       align: 'center' 
     });
     
     doc.fontSize(13).font('Helvetica-Bold');
-    doc.text(`KECAMATAN ${(kecamatanConfig.nama_kecamatan || '').toUpperCase()}`, marginLeft, headerY + 18, { 
-      width: contentWidth, 
+    doc.text(`KECAMATAN ${(kecamatanConfig.nama_kecamatan || '').toUpperCase()}`, textStartX, headerY + 19, { 
+      width: textWidth, 
       align: 'center' 
     });
 
-    // Address and contact info
-    headerY += 38;
-    doc.fontSize(9).font('Helvetica');
+    // Address and contact - centered in text area after logo (matching reference format)
+    let subHeaderY = headerY + 38;
+    doc.fontSize(8).font('Helvetica');
     
-    // Alamat
+    // Line 1: Alamat + Kab. Bogor + Kode Pos (regular)
     if (kecamatanConfig.alamat) {
-      doc.text(kecamatanConfig.alamat, marginLeft, headerY, { 
-        width: contentWidth, 
+      let alamatLine = kecamatanConfig.alamat;
+      if (kecamatanConfig.kode_pos) alamatLine += ` Kode Pos ${kecamatanConfig.kode_pos}`;
+      doc.text(alamatLine, textStartX, subHeaderY, { 
+        width: textWidth, 
         align: 'center' 
       });
-      headerY += 11;
+      subHeaderY += 11;
     }
     
-    // Contact line
-    const contactInfo = [];
-    if (kecamatanConfig.telepon) contactInfo.push(`Telp: ${kecamatanConfig.telepon}`);
-    if (kecamatanConfig.email) contactInfo.push(`Email: ${kecamatanConfig.email}`);
-    if (kecamatanConfig.website) contactInfo.push(`Website: ${kecamatanConfig.website}`);
-    
-    if (contactInfo.length > 0) {
-      doc.text(contactInfo.join(' | '), marginLeft, headerY, { 
-        width: contentWidth, 
+    // Line 2: Telp | Website | Email - semua dalam 1 baris
+    const contactParts = [];
+    if (kecamatanConfig.telepon) contactParts.push(`Telp. ${kecamatanConfig.telepon}`);
+    if (kecamatanConfig.website) contactParts.push(kecamatanConfig.website);
+    if (kecamatanConfig.email) contactParts.push(kecamatanConfig.email);
+    if (contactParts.length > 0) {
+      doc.font('Helvetica-Oblique');
+      doc.text(contactParts.join('  |  '), textStartX, subHeaderY, { 
+        width: textWidth, 
         align: 'center' 
       });
-      headerY += 11;
-    }
-    
-    // Kode Pos
-    if (kecamatanConfig.kode_pos) {
-      doc.text(`Kode Pos: ${kecamatanConfig.kode_pos}`, marginLeft, headerY, { 
-        width: contentWidth, 
-        align: 'center' 
-      });
-      headerY += 8;
+      doc.font('Helvetica');
+      subHeaderY += 11;
     }
 
-    // Line separator - single thick line
-    const lineY = headerY + 5;
-    doc.lineWidth(2);
+    // Hitung headerY akhir = max antara bottom logo dan bottom teks
+    const logoBottom = headerY + logoHeight;
+    headerY = Math.max(logoBottom, subHeaderY) + 2;
+
+    // Line separator - double line (tebal atas, tipis bawah) seperti kop surat resmi
+    const lineY = headerY;
+    doc.lineWidth(2.5);
     doc.moveTo(marginLeft, lineY)
        .lineTo(pageWidth - marginRight, lineY)
+       .stroke();
+    doc.lineWidth(0.8);
+    doc.moveTo(marginLeft, lineY + 4)
+       .lineTo(pageWidth - marginRight, lineY + 4)
        .stroke();
     doc.lineWidth(1);
 
     // Title - dynamic Y position based on header height
-    let titleY = lineY + 15;
+    let titleY = lineY + 20;
     doc.fontSize(11).font('Helvetica-Bold');
     doc.text('BERITA ACARA VERIFIKASI', marginLeft, titleY, { 
       width: contentWidth, 
@@ -582,73 +594,85 @@ class BeritaAcaraService {
     const ketX = marginLeft + colWidths.no + colWidths.uraian + colWidths.hasil;
     doc.rect(ketX, tableTop, colWidths.ket, 20).stroke();
 
-    // Checklist items - sesuai screenshot dengan mapping ke questionnaire
-    const checklistItems = [
-      { no: 1, qKey: 'q1', text: 'Surat Pengantar dari Kepala Desa' },
-      { no: 2, qKey: 'q2', text: 'Surat Permohonan Bantuan Keuangan Khusus Akselerasi Pembangunan Perdesaan' },
-      { 
-        no: 3, 
-        qKey: 'q3',
-        text: 'Proposal Bantuan Keuangan Khusus Akselerasi Pembangunan Perdesaan',
-        subItems: [
-          '- Latar Belakang',
-          '- Maksud dan Tujuan',
-          '- Bentuk Kegiatan',
-          '- Rencana Pelaksanaan'
-        ]
-      },
-      { no: 4, qKey: 'q4', text: 'Rencana Penggunaan Bantuan Keuangan dan RAB' },
-      { no: 5, qKey: 'q5', text: 'Foto lokasi rencana pelaksanaan kegiatan (0%)', ket: 'Infrastruktur' },
-      { no: 6, qKey: 'q6', text: 'Peta dan titik lokasi rencana kegiatan', ket: 'Infrastruktur' },
-      { no: 7, qKey: 'q7', text: 'Berita Acara Hasil Musyawarah Desa' },
-      { no: 8, qKey: 'q8', text: 'SK Kepala Desa tentang Penetapan Tim Pelaksana Kegiatan (TPK)' },
-      { 
-        no: 9, 
-        qKey: 'q9',
-        text: 'Ketersediaan lahan dan kepastian status lahan :',
-        subItems: [
-          '- surat pernyataan dari Kepala Desa yang menyatakan bahwa lokasi kegiatan tidak dalam keadaan bermasalah apabila merupakan Aset Desa',
-          '- surat izin/persetujuan pemanfaatan dari perorangan selaku pemilik lahan, yang menyatakan tidak keberatan lahannya akan dipergunakan untuk pembangunan infrastruktur desa dan tanpa persyaratan apa pun, yang disetujui oleh keluarga; persetujuan pemanfaatan barang milik Daerah/Negara dalam hal lahan yang akan dipergunakan untuk pembangunan infrastruktur merupakan milik/dikuasai Pemerintah Daerah/Negara.',
-          '- persetujuan pemanfaatan/penggunaan dari Badan Usaha/Badan Hukum selaku pemilik lahan, yang menyatakan tidak keberatan lahannya akan dipergunakan untuk pembangunan infrastruktur desa dan tanpa persyaratan apa pun.',
-          '- surat pernyataan tidak menuntut ganti rugi atas lahan yang dipergunakan untuk pembangunan infrastruktur desa.'
-        ],
-        ket: 'Infrastruktur'
-      },
-      { no: 10, qKey: 'q10', text: 'Tidak Duplikasi Anggaran' },
-      { no: 11, qKey: 'q11', text: 'Kesesuaian antara lokasi dan usulan' },
-      { no: 12, qKey: 'q12', text: 'Kesesuaian RAB dengan standar harga yang telah ditetapkan di desa' },
-      { no: 13, qKey: 'q13', text: 'Kesesuaian dengan standar teknis konstruksi', ket: 'Infrastruktur' }
-    ];
+    // Determine jenis kegiatan from proposal data
+    const jenisKegiatan = proposals[0]?.jenis_kegiatan || 'infrastruktur';
+    const isInfrastruktur = jenisKegiatan === 'infrastruktur';
+    
+    console.log(`📌 Jenis Kegiatan: ${jenisKegiatan}, isInfrastruktur: ${isInfrastruktur}`);
+
+    // Checklist items berbeda berdasarkan jenis kegiatan
+    let checklistItems = [];
+    
+    if (isInfrastruktur) {
+      // INFRASTRUKTUR - 12 items, items 5,7,8,9 optional (controlled by optionalItems)
+      checklistItems = [
+        { no: 1, itemKey: 'item_1', text: 'Surat Pengantar dari Kepala Desa' },
+        { no: 2, itemKey: 'item_2', text: 'Surat Permohonan Bantuan Keuangan' },
+        { 
+          no: 3, itemKey: 'item_3',
+          text: 'Proposal (Latar Belakang, Maksud dan Tujuan, Bentuk Kegiatan, Jadwal Pelaksanaan)',
+          subItems: [
+            '- Latar Belakang',
+            '- Maksud dan Tujuan',
+            '- Bentuk Kegiatan',
+            '- Jadwal Pelaksanaan'
+          ]
+        },
+        { no: 4, itemKey: 'item_4', text: 'RPA dan RAB' },
+        { no: 5, itemKey: 'item_5', text: 'Surat Pernyataan dari Kepala Desa yang menyatakan bahwa lokasi kegiatan tidak dalam keadaan sengketa/bermasalah apabila merupakan Aset Desa', optional: true },
+        { no: 6, itemKey: 'item_6', text: 'Bukti kepemilikan Aset Desa sesuai ketentuan peraturan perundang-undangan, dalam hal usulan kegiatan yang diusulkan berupa Rehab Kantor Desa' },
+        { no: 7, itemKey: 'item_7', text: 'Dokumen kesediaan peralihan hak melalui hibah dari warga masyarakat baik perorangan maupun Badan Usaha/Badan Hukum kepada Desa atas lahan/tanah yang menjadi Aset Desa sebagai dampak kegiatan pembangunan infrastruktur desa', optional: true },
+        { no: 8, itemKey: 'item_8', text: 'Dokumen pernyataan kesanggupan dari warga masyarakat untuk tidak meminta ganti rugi', optional: true },
+        { no: 9, itemKey: 'item_9', text: 'Persetujuan pemanfaatan barang milik Daerah/Negara dalam hal lahan yang akan dipergunakan untuk pembangunan infrastruktur desa', optional: true },
+        { no: 10, itemKey: 'item_10', text: 'Foto lokasi rencana pelaksanaan kegiatan' },
+        { no: 11, itemKey: 'item_11', text: 'Peta lokasi rencana kegiatan' },
+        { no: 12, itemKey: 'item_12', text: 'Berita Acara Musyawarah Desa' },
+      ];
+    } else {
+      // NON INFRASTRUKTUR - 5 items
+      checklistItems = [
+        { no: 1, itemKey: 'item_1', text: 'Surat Pengantar dari Kepala Desa' },
+        { no: 2, itemKey: 'item_2', text: 'Surat Permohonan Bantuan Keuangan Khusus Akselerasi Pembangunan Perdesaan' },
+        { 
+          no: 3, itemKey: 'item_3',
+          text: 'Proposal Bantuan Keuangan (Latar Belakang, Maksud dan Tujuan, Bentuk Kegiatan, Jadwal Pelaksanaan)',
+          subItems: [
+            '- Latar Belakang',
+            '- Maksud dan Tujuan',
+            '- Bentuk Kegiatan',
+            '- Jadwal Pelaksanaan'
+          ]
+        },
+        { no: 4, itemKey: 'item_4', text: 'Rencana Anggaran Biaya' },
+        { no: 5, itemKey: 'item_5', text: 'Tidak Duplikasi Anggaran' },
+      ];
+    }
 
     yPos = tableTop + 20; // Start after header
     doc.font('Helvetica').fontSize(9);
 
     // Debug log
     console.log('🔍 Checklist Data:', JSON.stringify(checklistData, null, 2));
+    console.log('🔍 Optional Items:', JSON.stringify(optionalItems, null, 2));
 
     checklistItems.forEach((item) => {
       const hasSubItems = item.subItems && item.subItems.length > 0;
       
-      // Get checklist status from aggregated questionnaire data
-      // checklistData uses item_1, item_2 format, so convert qKey (q1) to item_1 format
-      const itemKey = `item_${item.no}`;
-      const checkStatus = checklistData ? checklistData[itemKey] : null;
+      // For optional items (infra 5,7,8,9), check if included via optionalItems
+      // If optionalItems provided and item is optional but not selected, show with dash/empty
+      const isOptional = item.optional === true;
+      const optionalIncluded = isOptional ? (optionalItems && optionalItems[item.itemKey] === true) : true;
       
-      console.log(`📋 Item ${item.no}: key=${itemKey}, status=${checkStatus}`);
+      // Get checklist status from aggregated questionnaire data
+      const checkStatus = checklistData ? checklistData[item.itemKey] : null;
+      
+      console.log(`📋 Item ${item.no}: key=${item.itemKey}, status=${checkStatus}, optional=${isOptional}, included=${optionalIncluded}`);
       
       // Calculate row height dynamically based on actual text height
-      let estimatedHeight = 22;
+      const textHeight = doc.heightOfString(item.text, { width: colWidths.uraian - 8, lineGap: 2 });
+      let estimatedHeight = Math.max(22, textHeight + 10);
       if (hasSubItems) {
-        // Item 9 has 4 long wrapped text in sub-items
-        if (item.no === 9) {
-          estimatedHeight = 200; // Increased untuk 4 sub-items agar semua text masuk dalam table
-        } else if (item.no === 3) {
-          // Item 3 has 4 short sub-items
-          estimatedHeight = 100; // Increased untuk ruang lebih di rencana pelaksanaan
-        }
-      } else if (item.no === 2) {
-        // Item 2 has long text that needs wrapping
-        estimatedHeight = 35; // Increased untuk text panjang
+        estimatedHeight = 100;
       }
       const rowHeight = estimatedHeight;
       
@@ -720,8 +744,13 @@ class BeritaAcaraService {
       const checkCenterX = xPos + (colWidths.hasil / 2);
       const markY = yPos + (rowHeight / 2);
       
-      // Draw checkmark if status is true
-      if (checkStatus === true) {
+      if (isOptional && !optionalIncluded) {
+        // Optional item not included - show dash "-"
+        doc.save();
+        doc.fontSize(12).font('Helvetica');
+        doc.text('-', checkCenterX - 4, markY - 6, { width: 10, align: 'center' });
+        doc.restore();
+      } else if (checkStatus === true) {
         // Draw checkmark using path (V shape)
         doc.save();
         doc.strokeColor('#008000'); // Green
@@ -740,8 +769,15 @@ class BeritaAcaraService {
       doc.rect(xPos, yPos, colWidths.hasil, rowHeight).stroke();
       xPos += colWidths.hasil;
       
-      // KET column
-      if (item.ket) {
+      // KET column - show "Opsional" for optional items
+      if (isOptional) {
+        doc.fontSize(7).font('Helvetica-Oblique');
+        doc.text(optionalIncluded ? 'Ada' : 'Tidak Ada', xPos + 3, yPos + 4, { 
+          width: colWidths.ket - 6, 
+          align: 'left' 
+        });
+        doc.font('Helvetica').fontSize(9);
+      } else if (item.ket) {
         doc.fontSize(8).font('Helvetica');
         doc.text(item.ket, xPos + 3, yPos + 4, { 
           width: colWidths.ket - 6, 
@@ -1283,6 +1319,9 @@ class BeritaAcaraService {
 
     // KOP Header
     let headerY = 40;
+    const logoWidth = 45;
+    const logoHeight = 45;
+    const logoGap = 8;
     
     // Logo
     let logoLoaded = false;
@@ -1290,7 +1329,7 @@ class BeritaAcaraService {
       try {
         const logoPath = path.join(__dirname, '../../storage', kecamatanConfig.logo_path);
         if (fs.existsSync(logoPath)) {
-          doc.image(logoPath, marginLeft, headerY, { width: 65, height: 65 });
+          doc.image(logoPath, marginLeft, headerY, { width: logoWidth, height: logoHeight });
           logoLoaded = true;
         }
       } catch (err) {
@@ -1302,62 +1341,70 @@ class BeritaAcaraService {
       try {
         const defaultLogoPath = path.join(__dirname, '../../public/logo-bogor.png');
         if (fs.existsSync(defaultLogoPath)) {
-          doc.image(defaultLogoPath, marginLeft, headerY, { width: 65, height: 65 });
+          doc.image(defaultLogoPath, marginLeft, headerY, { width: logoWidth, height: logoHeight });
         }
       } catch (err) {}
     }
 
-    // Header text
+    // Header text - centered in area AFTER logo
+    const textStartX = marginLeft + logoWidth + logoGap;
+    const textWidth = contentWidth - logoWidth - logoGap;
+    
     doc.fontSize(14).font('Helvetica-Bold');
-    doc.text('PEMERINTAH KABUPATEN BOGOR', marginLeft, headerY, { 
-      width: contentWidth, 
+    doc.text('PEMERINTAH KABUPATEN BOGOR', textStartX, headerY + 2, { 
+      width: textWidth, 
       align: 'center' 
     });
     
     doc.fontSize(13).font('Helvetica-Bold');
-    doc.text(`KECAMATAN ${(kecamatanConfig.nama_kecamatan || '').toUpperCase()}`, marginLeft, headerY + 18, { 
-      width: contentWidth, 
+    doc.text(`KECAMATAN ${(kecamatanConfig.nama_kecamatan || '').toUpperCase()}`, textStartX, headerY + 19, { 
+      width: textWidth, 
       align: 'center' 
     });
 
-    // Address and contact
-    headerY += 38;
-    doc.fontSize(9).font('Helvetica');
+    // Address and contact - centered in text area after logo (matching reference format)
+    let subHeaderY = headerY + 38;
+    doc.fontSize(8).font('Helvetica');
     
+    // Line 1: Alamat + Kab. Bogor + Kode Pos (regular)
     if (kecamatanConfig.alamat) {
-      doc.text(kecamatanConfig.alamat, marginLeft, headerY, { 
-        width: contentWidth, 
+      let alamatLine = kecamatanConfig.alamat;
+      if (kecamatanConfig.kode_pos) alamatLine += ` Kode Pos ${kecamatanConfig.kode_pos}`;
+      doc.text(alamatLine, textStartX, subHeaderY, { 
+        width: textWidth, 
         align: 'center' 
       });
-      headerY += 11;
+      subHeaderY += 11;
     }
     
-    const contactInfo = [];
-    if (kecamatanConfig.telepon) contactInfo.push(`Telp: ${kecamatanConfig.telepon}`);
-    if (kecamatanConfig.email) contactInfo.push(`Email: ${kecamatanConfig.email}`);
-    if (kecamatanConfig.website) contactInfo.push(`Website: ${kecamatanConfig.website}`);
-    
-    if (contactInfo.length > 0) {
-      doc.text(contactInfo.join(' | '), marginLeft, headerY, { 
-        width: contentWidth, 
+    // Line 2: Telp | Website | Email - semua dalam 1 baris
+    const spContactParts = [];
+    if (kecamatanConfig.telepon) spContactParts.push(`Telp. ${kecamatanConfig.telepon}`);
+    if (kecamatanConfig.website) spContactParts.push(kecamatanConfig.website);
+    if (kecamatanConfig.email) spContactParts.push(kecamatanConfig.email);
+    if (spContactParts.length > 0) {
+      doc.font('Helvetica-Oblique');
+      doc.text(spContactParts.join('  |  '), textStartX, subHeaderY, { 
+        width: textWidth, 
         align: 'center' 
       });
-      headerY += 11;
-    }
-    
-    if (kecamatanConfig.kode_pos) {
-      doc.text(`Kode Pos: ${kecamatanConfig.kode_pos}`, marginLeft, headerY, { 
-        width: contentWidth, 
-        align: 'center' 
-      });
-      headerY += 8;
+      doc.font('Helvetica');
+      subHeaderY += 11;
     }
 
-    // Line separator
-    const lineY = headerY + 5;
-    doc.lineWidth(2);
+    // Hitung headerY akhir = max antara bottom logo dan bottom teks
+    const logoBottom = headerY + logoHeight;
+    headerY = Math.max(logoBottom, subHeaderY) + 2;
+
+    // Line separator - double line (tebal atas, tipis bawah)
+    const lineY = headerY;
+    doc.lineWidth(2.5);
     doc.moveTo(marginLeft, lineY)
        .lineTo(pageWidth - marginRight, lineY)
+       .stroke();
+    doc.lineWidth(0.8);
+    doc.moveTo(marginLeft, lineY + 4)
+       .lineTo(pageWidth - marginRight, lineY + 4)
        .stroke();
     doc.lineWidth(1);
 

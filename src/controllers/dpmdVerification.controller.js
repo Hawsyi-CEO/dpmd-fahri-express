@@ -198,10 +198,10 @@ class DPMDVerificationController {
       logger.info(`🔍 DPMD VERIFY - ID: ${id}, Action: ${action}, User: ${userId}`);
 
       // Validate action
-      if (!['approved', 'rejected', 'revision'].includes(action)) {
+      if (!['approved', 'rejected', 'revision', 'revisi_dokumen_kecamatan'].includes(action)) {
         return res.status(400).json({
           success: false,
-          message: 'Action tidak valid. Gunakan: approved, rejected, atau revision'
+          message: 'Action tidak valid. Gunakan: approved, rejected, revision, atau revisi_dokumen_kecamatan'
         });
       }
 
@@ -222,6 +222,45 @@ class DPMDVerificationController {
         return res.status(400).json({
           success: false,
           message: 'Proposal belum disetujui oleh Kecamatan'
+        });
+      }
+
+      // REVISI DOKUMEN KECAMATAN: Only send back to kecamatan to regenerate BA/SP
+      // Keeps kecamatan_status = 'approved', only resets dpmd submission and clears BA/SP paths
+      if (action === 'revisi_dokumen_kecamatan') {
+        logger.info(`📄 DPMD requesting BA/SP revision for proposal ${id} → back to Kecamatan`);
+
+        await prisma.bankeu_proposals.update({
+          where: { id: BigInt(id) },
+          data: {
+            dpmd_status: 'revision',
+            dpmd_catatan: catatan || 'Revisi Surat Pengantar dan/atau Berita Acara Kecamatan',
+            dpmd_verified_by: BigInt(userId),
+            dpmd_verified_at: new Date(),
+            // Return to Kecamatan - only reset DPMD submission
+            submitted_to_dpmd: false,
+            submitted_to_dpmd_at: null,
+            // Clear BA & SP paths so kecamatan must regenerate
+            berita_acara_path: null,
+            berita_acara_generated_at: null,
+            surat_pengantar: null,
+            // Keep kecamatan_status = 'approved' so kecamatan can directly regenerate
+            // Keep dinas_status intact
+            // Keep status as-is (not resetting to desa)
+          }
+        });
+
+        logger.info(`✅ DPMD returned proposal ${id} to Kecamatan for BA/SP revision`);
+
+        return res.json({
+          success: true,
+          message: 'Proposal dikembalikan ke Kecamatan untuk revisi Surat Pengantar dan Berita Acara',
+          data: {
+            id,
+            dpmd_status: 'revision',
+            returned_to: 'kecamatan',
+            revision_type: 'dokumen_kecamatan'
+          }
         });
       }
 

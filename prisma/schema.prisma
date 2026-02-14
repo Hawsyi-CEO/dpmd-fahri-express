@@ -8,6 +8,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model activity_logs {
   id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
   user_id     BigInt    @db.UnsignedBigInt
@@ -114,11 +115,9 @@ model bankeu_proposal_kegiatan {
   @@index([proposal_id], map: "idx_proposal_id")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model bankeu_proposals {
   id                                                  BigInt                               @id @default(autoincrement()) @db.UnsignedBigInt
   desa_id                                             BigInt                               @db.UnsignedBigInt
-  tahun_anggaran                                      Int                                  @default(2026) @db.Year
   kegiatan_id                                         Int?                                 @db.UnsignedTinyInt
   judul_proposal                                      String                               @db.VarChar(255)
   nama_kegiatan_spesifik                              String?                              @db.VarChar(255)
@@ -139,13 +138,13 @@ model bankeu_proposals {
   dinas_verified_by                                   Int?
   dinas_catatan                                       String?                              @db.Text
   kecamatan_status                                    bankeu_proposals_kecamatan_status?
+  kecamatan_catatan                                   String?                              @db.Text
   kecamatan_verified_at                               DateTime?                            @db.Timestamp(0)
   kecamatan_verified_by                               BigInt?                              @db.UnsignedBigInt
-  kecamatan_catatan                                   String?                              @db.Text
   dpmd_status                                         bankeu_proposals_dpmd_status?
+  dpmd_catatan                                        String?                              @db.Text
   dpmd_verified_at                                    DateTime?                            @db.Timestamp(0)
   dpmd_verified_by                                    BigInt?                              @db.UnsignedBigInt
-  dpmd_catatan                                        String?                              @db.Text
   submitted_to_kecamatan                              Boolean?                             @default(false)
   submitted_at                                        DateTime?                            @db.Timestamp(0)
   submitted_to_dpmd                                   Boolean?                             @default(false)
@@ -158,6 +157,7 @@ model bankeu_proposals {
   created_by                                          BigInt                               @db.UnsignedBigInt
   created_at                                          DateTime?                            @default(now()) @db.Timestamp(0)
   updated_at                                          DateTime?                            @default(now()) @db.Timestamp(0)
+  tahun_anggaran                                      Int                                  @default(2026) @db.Year
   bankeu_proposal_kegiatan                            bankeu_proposal_kegiatan[]
   users_bankeu_proposals_dpmd_verified_byTousers      users?                               @relation("bankeu_proposals_dpmd_verified_byTousers", fields: [dpmd_verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_dpmd_verified_by")
   users_bankeu_proposals_kecamatan_verified_byTousers users?                               @relation("bankeu_proposals_kecamatan_verified_byTousers", fields: [kecamatan_verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_kecamatan_verified_by")
@@ -347,7 +347,6 @@ model bumdes {
   @@index([status], map: "idx_status")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model desa_bankeu_surat {
   id                     BigInt                              @id @default(autoincrement()) @db.UnsignedBigInt
   desa_id                BigInt                              @db.UnsignedBigInt
@@ -370,10 +369,10 @@ model desa_bankeu_surat {
   @@index([desa_id], map: "idx_desa_id")
   @@index([kecamatan_status], map: "idx_kecamatan_status")
   @@index([submitted_to_kecamatan], map: "idx_submitted")
-  @@index([submitted_to_kecamatan], map: "idx_submitted_to_kecamatan")
   @@index([tahun], map: "idx_tahun")
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model desas {
   id                        BigInt                      @id @default(autoincrement()) @db.UnsignedBigInt
   kecamatan_id              BigInt                      @db.UnsignedBigInt
@@ -410,6 +409,17 @@ model dinas {
   nama       String    @db.VarChar(255)
   created_at DateTime? @db.Timestamp(0)
   updated_at DateTime? @db.Timestamp(0)
+}
+
+model dinas_config {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  dinas_id    BigInt    @unique(map: "unique_dinas_id") @db.UnsignedBigInt
+  nama_pic    String?   @db.VarChar(255)
+  nip_pic     String?   @db.VarChar(50)
+  jabatan_pic String?   @db.VarChar(255)
+  ttd_path    String?   @db.VarChar(255)
+  created_at  DateTime? @default(now()) @db.Timestamp(0)
+  updated_at  DateTime? @default(now()) @db.Timestamp(0)
 }
 
 model dinas_verifikator {
@@ -472,6 +482,7 @@ model hero_galleries {
   updated_at DateTime? @db.Timestamp(0)
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model jadwal_kegiatan {
   id                                       BigInt                    @id @default(autoincrement()) @db.UnsignedBigInt
   judul                                    String                    @db.VarChar(255)
@@ -717,6 +728,7 @@ model pejabat_ttd {
   @@index([pejabat_id], map: "idx_pejabat")
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model pengurus {
   id                    String                      @id @db.Char(36)
   desa_id               BigInt                      @db.UnsignedBigInt
@@ -1037,7 +1049,6 @@ model users {
   @@index([pegawai_id], map: "users_pegawai_id_index")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model verifikator_akses_desa {
   id                BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
   verifikator_id    BigInt            @db.UnsignedBigInt
