@@ -655,140 +655,153 @@ class BeritaAcaraService {
     console.log('🔍 Checklist Data:', JSON.stringify(checklistData, null, 2));
     console.log('🔍 Optional Items:', JSON.stringify(optionalItems, null, 2));
 
-    checklistItems.forEach((item) => {
+    // Helper function to draw a single checklist row
+    const drawChecklistRow = (item, currentY) => {
       const hasSubItems = item.subItems && item.subItems.length > 0;
-      
-      // For optional items (infra 5,7,8,9), check if included via optionalItems
-      // If optionalItems provided and item is optional but not selected, show with dash/empty
       const isOptional = item.optional === true;
       const optionalIncluded = isOptional ? (optionalItems && optionalItems[item.itemKey] === true) : true;
-      
-      // Get checklist status from aggregated questionnaire data
       const checkStatus = checklistData ? checklistData[item.itemKey] : null;
       
       console.log(`📋 Item ${item.no}: key=${item.itemKey}, status=${checkStatus}, optional=${isOptional}, included=${optionalIncluded}`);
       
-      // Calculate row height dynamically based on actual text height
+      // Calculate row height
       const textHeight = doc.heightOfString(item.text, { width: colWidths.uraian - 8, lineGap: 2 });
       let estimatedHeight = Math.max(22, textHeight + 10);
-      if (hasSubItems) {
-        estimatedHeight = 100;
-      }
+      if (hasSubItems) estimatedHeight = 100;
       const rowHeight = estimatedHeight;
-      
-      // Check if we need a new page
-      if (yPos + rowHeight > doc.page.height - doc.page.margins.bottom - 50) {
-        doc.addPage();
-        yPos = doc.page.margins.top + 20;
-      }
 
-      xPos = marginLeft;
+      let xp = marginLeft;
       
       // NO column
       doc.fontSize(9).font('Helvetica');
-      doc.text(`${item.no}`, xPos + 5, yPos + 7, { 
-        width: colWidths.no - 10, 
-        align: 'center' 
-      });
-      doc.rect(xPos, yPos, colWidths.no, rowHeight).stroke();
-      xPos += colWidths.no;
+      doc.text(`${item.no}`, xp + 5, currentY + 7, { width: colWidths.no - 10, align: 'center' });
+      doc.rect(xp, currentY, colWidths.no, rowHeight).stroke();
+      xp += colWidths.no;
       
       // URAIAN column
-      let uraianY = yPos + 5;
+      let uraianY = currentY + 5;
       doc.fontSize(9).font('Helvetica');
+      doc.text(item.text, xp + 4, uraianY, { width: colWidths.uraian - 8, align: 'left', lineGap: 2 });
       
-      // For items without sub-items, calculate actual text height
-      if (!hasSubItems) {
-        const textHeight = doc.heightOfString(item.text, { 
-          width: colWidths.uraian - 8, 
-          lineGap: 2
-        });
-      }
-      
-      doc.text(item.text, xPos + 4, uraianY, { 
-        width: colWidths.uraian - 8, 
-        align: 'left',
-        lineGap: 2
-      });
-      
-      // Sub-items
       if (hasSubItems) {
-        // Calculate spacing after main text
-        const mainTextHeight = doc.heightOfString(item.text, { 
-          width: colWidths.uraian - 8, 
-          lineGap: 2
-        });
-        uraianY += mainTextHeight + 8; // More spacing after main text
-        
+        const mainTextHeight = doc.heightOfString(item.text, { width: colWidths.uraian - 8, lineGap: 2 });
+        uraianY += mainTextHeight + 8;
         doc.fontSize(8).font('Helvetica');
-        item.subItems.forEach((subItem, idx) => {
-          const textHeight = doc.heightOfString(subItem, { 
-            width: colWidths.uraian - 12, 
-            lineGap: 2
-          });
-          
-          doc.text(subItem, xPos + 8, uraianY, { 
-            width: colWidths.uraian - 12, 
-            align: 'left',
-            lineGap: 2
-          });
-          uraianY += textHeight + 4; // Spacing between sub-items
+        item.subItems.forEach((subItem) => {
+          const subH = doc.heightOfString(subItem, { width: colWidths.uraian - 12, lineGap: 2 });
+          doc.text(subItem, xp + 8, uraianY, { width: colWidths.uraian - 12, align: 'left', lineGap: 2 });
+          uraianY += subH + 4;
         });
         doc.fontSize(9);
       }
+      doc.rect(xp, currentY, colWidths.uraian, rowHeight).stroke();
+      xp += colWidths.uraian;
       
-      doc.rect(xPos, yPos, colWidths.uraian, rowHeight).stroke();
-      xPos += colWidths.uraian;
-      
-      // HASIL column - single checkbox
-      const checkCenterX = xPos + (colWidths.hasil / 2);
-      const markY = yPos + (rowHeight / 2);
+      // HASIL column
+      const checkCenterX = xp + (colWidths.hasil / 2);
+      const markY = currentY + (rowHeight / 2);
       
       if (isOptional && !optionalIncluded) {
-        // Optional item not included - show dash "-"
         doc.save();
         doc.fontSize(12).font('Helvetica');
         doc.text('-', checkCenterX - 4, markY - 6, { width: 10, align: 'center' });
         doc.restore();
       } else if (checkStatus === true) {
-        // Draw checkmark using path (V shape)
         doc.save();
-        doc.strokeColor('#008000'); // Green
+        doc.strokeColor('#008000');
         doc.lineWidth(2);
-        
-        // Draw V checkmark
         const checkX = checkCenterX - 6;
-        const checkY = markY - 3;
-        doc.moveTo(checkX, checkY)
-           .lineTo(checkX + 4, checkY + 6)
-           .lineTo(checkX + 12, checkY - 4)
-           .stroke();
-        
+        const checkY2 = markY - 3;
+        doc.moveTo(checkX, checkY2).lineTo(checkX + 4, checkY2 + 6).lineTo(checkX + 12, checkY2 - 4).stroke();
         doc.restore();
       }
-      doc.rect(xPos, yPos, colWidths.hasil, rowHeight).stroke();
-      xPos += colWidths.hasil;
+      doc.rect(xp, currentY, colWidths.hasil, rowHeight).stroke();
+      xp += colWidths.hasil;
       
-      // KET column - show "Opsional" for optional items
+      // KET column
       if (isOptional) {
         doc.fontSize(7).font('Helvetica-Oblique');
-        doc.text(optionalIncluded ? 'Ada' : 'Tidak Ada', xPos + 3, yPos + 4, { 
-          width: colWidths.ket - 6, 
-          align: 'left' 
-        });
+        doc.text(optionalIncluded ? 'Ada' : 'Tidak Ada', xp + 3, currentY + 4, { width: colWidths.ket - 6, align: 'left' });
         doc.font('Helvetica').fontSize(9);
       } else if (item.ket) {
         doc.fontSize(8).font('Helvetica');
-        doc.text(item.ket, xPos + 3, yPos + 4, { 
-          width: colWidths.ket - 6, 
-          align: 'left' 
-        });
+        doc.text(item.ket, xp + 3, currentY + 4, { width: colWidths.ket - 6, align: 'left' });
         doc.fontSize(9);
       }
-      doc.rect(xPos, yPos, colWidths.ket, rowHeight).stroke();
+      doc.rect(xp, currentY, colWidths.ket, rowHeight).stroke();
       
-      yPos += rowHeight;
-    });
+      return rowHeight;
+    };
+
+    // Helper function to draw table header
+    const drawTableHeader = (startY) => {
+      doc.fontSize(9).font('Helvetica-Bold');
+      
+      // Header background
+      doc.rect(marginLeft, startY, contentWidth, 20).fill('#f0f0f0');
+      doc.fillColor('#000000');
+      
+      let xh = marginLeft;
+      doc.text('NO', xh + 5, startY + 10, { width: colWidths.no - 10, align: 'center' });
+      xh += colWidths.no;
+      doc.text('URAIAN', xh + 5, startY + 10, { width: colWidths.uraian - 10, align: 'center' });
+      xh += colWidths.uraian;
+      doc.text('HASIL', xh + (colWidths.hasil / 2) - 15, startY + 10, { width: 30, align: 'center' });
+      xh += colWidths.hasil;
+      doc.text('KET', xh + 5, startY + 10, { width: colWidths.ket - 10, align: 'center' });
+      
+      // Borders
+      doc.lineWidth(1);
+      doc.rect(marginLeft, startY, contentWidth, 20).stroke();
+      doc.moveTo(marginLeft + colWidths.no, startY).lineTo(marginLeft + colWidths.no, startY + 20).stroke();
+      doc.moveTo(marginLeft + colWidths.no + colWidths.uraian, startY).lineTo(marginLeft + colWidths.no + colWidths.uraian, startY + 20).stroke();
+      doc.moveTo(marginLeft + colWidths.no + colWidths.uraian + colWidths.hasil, startY).lineTo(marginLeft + colWidths.no + colWidths.uraian + colWidths.hasil, startY + 20).stroke();
+      
+      doc.font('Helvetica').fontSize(9);
+      return startY + 20;
+    };
+
+    // For infrastruktur: split items 1-9 on page 1, items 10-12 on page 2
+    // For non-infrastruktur: all items on page 1
+    if (isInfrastruktur) {
+      // Page 1: items 1-9
+      const page1Items = checklistItems.filter(item => item.no <= 9);
+      page1Items.forEach((item) => {
+        const rowH = drawChecklistRow(item, yPos);
+        yPos += rowH;
+      });
+
+      // Force page 2 for items 10-12 + tim verifikasi
+      doc.addPage();
+      yPos = doc.page.margins.top + 20;
+      
+      // Redraw table header on page 2
+      yPos = drawTableHeader(yPos);
+      
+      // Items 10-12
+      const page2Items = checklistItems.filter(item => item.no >= 10);
+      page2Items.forEach((item) => {
+        const rowH = drawChecklistRow(item, yPos);
+        yPos += rowH;
+      });
+    } else {
+      // Non-infrastruktur: all items on single page
+      checklistItems.forEach((item) => {
+        // Check if we need a new page
+        const textHeight = doc.heightOfString(item.text, { width: colWidths.uraian - 8, lineGap: 2 });
+        let estimatedHeight = Math.max(22, textHeight + 10);
+        if (item.subItems && item.subItems.length > 0) estimatedHeight = 100;
+        
+        if (yPos + estimatedHeight > doc.page.height - doc.page.margins.bottom - 50) {
+          doc.addPage();
+          yPos = doc.page.margins.top + 20;
+          yPos = drawTableHeader(yPos);
+        }
+        
+        const rowH = drawChecklistRow(item, yPos);
+        yPos += rowH;
+      });
+    }
     
     // Add Tim Verifikasi section below the table
     yPos += 20;
