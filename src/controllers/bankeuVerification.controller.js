@@ -901,11 +901,11 @@ class BankeuVerificationController {
         });
       }
 
-      // Validate required fields
-      if (!jabatan || !nama || !nip) {
+      // Validate required fields (NIP optional - some members don't have NIP)
+      if (!jabatan || !nama) {
         return res.status(400).json({
           success: false,
-          message: 'Jabatan, nama, dan NIP wajib diisi'
+          message: 'Jabatan dan nama wajib diisi'
         });
       }
 
