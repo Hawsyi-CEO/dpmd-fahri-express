@@ -711,6 +711,7 @@ const submitVerification = async (req, res) => {
       userId: parseInt(user_id),
       userName: req.user.name || `User ${user_id}`,
       userRole: role,
+      bidangId: 3,
       module: 'bankeu',
       action: actionMap[action] || action,
       entityType: 'bankeu_proposal',
