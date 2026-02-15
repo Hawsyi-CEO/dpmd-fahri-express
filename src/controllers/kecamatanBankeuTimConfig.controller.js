@@ -488,6 +488,54 @@ class KecamatanBankeuTimConfigController {
       });
     }
   }
+
+  /**
+   * Get distinct anggota yang pernah ditambahkan di kecamatan ini
+   * GET /api/kecamatan/:kecamatanId/bankeu/tim-config/anggota-list
+   * Returns unique (nama, nip, jabatan_label) combinations
+   */
+  async getAnggotaList(req, res) {
+    try {
+      const { kecamatanId } = req.params;
+
+      const query = `
+        SELECT DISTINCT t.nama, t.nip, t.jabatan_label as jabatan
+        FROM tim_verifikasi_kecamatan t
+        WHERE t.kecamatan_id = :kecamatanId
+          AND t.jabatan LIKE 'anggota_%'
+          AND t.is_active = 1
+          AND t.nama IS NOT NULL
+          AND t.nama != ''
+        ORDER BY t.nama ASC
+      `;
+
+      const results = await sequelize.query(query, {
+        replacements: { kecamatanId },
+        type: sequelize.QueryTypes.SELECT
+      });
+
+      // Deduplicate by nama (case-insensitive)
+      const seen = new Set();
+      const unique = results.filter(r => {
+        const key = r.nama.toLowerCase().trim();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      res.json({
+        success: true,
+        data: unique
+      });
+    } catch (error) {
+      console.error('Error getting anggota list:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Gagal mengambil daftar anggota',
+        error: error.message
+      });
+    }
+  }
 }
 
 module.exports = new KecamatanBankeuTimConfigController();
