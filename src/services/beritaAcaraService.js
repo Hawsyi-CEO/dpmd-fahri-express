@@ -903,10 +903,7 @@ class BeritaAcaraService {
     const ketua = timVerifikasi.find(t => t.jabatan === 'ketua');
     const sekretaris = timVerifikasi.find(t => t.jabatan === 'sekretaris');
     const anggota = timVerifikasi.filter(t => 
-      t.jabatan === 'anggota' || 
-      t.jabatan === 'anggota_1' || 
-      t.jabatan === 'anggota_2' || 
-      t.jabatan === 'anggota_3'
+      t.jabatan === 'anggota' || t.jabatan.startsWith('anggota_')
     );
     
     // Add Verifikator Dinas as first anggota if available from proposals
@@ -927,93 +924,59 @@ class BeritaAcaraService {
     console.log('Sekretaris:', sekretaris);
     console.log('Anggota:', anggota);
 
-    // 1. Ketua
-    doc.fontSize(10).font('Helvetica');
-    doc.text('1. Ketua', marginLeft, yPos);
-    if (ketua) {
-      doc.text(`: ${ketua.jabatan_label || ketua.nama || 'Ketua Tim'}`, marginLeft + 80, yPos);
-      
-      if (ketua.ttd) {
-        try {
-          // Handle various path formats: 'uploads/xxx', 'xxx', or full path
-          let ttdFile = ketua.ttd;
-          if (ttdFile.startsWith('uploads/')) {
-            ttdFile = ttdFile.substring(8); // Remove 'uploads/' prefix
-          }
-          const ttdPath = path.join(__dirname, '../../storage/uploads', ttdFile);
-          console.log('🔍 Ketua TTD Path:', ttdPath, '| Original:', ketua.ttd, '| Exists:', fs.existsSync(ttdPath));
-          
-          if (fs.existsSync(ttdPath)) {
-            yPos += 20;
-            doc.image(ttdPath, marginLeft + 80, yPos, { width: 60, height: 25 });
-            yPos += 30;
-            doc.fontSize(8).font('Helvetica');
-            doc.text(ketua.nama || '', marginLeft + 50, yPos, { width: 120, align: 'center' });
-          }
-        } catch (err) {
-          console.error('❌ Error loading Ketua TTD:', err.message);
-        }
+    // Helper: check page overflow and add new page if needed
+    const pageBottom = doc.page.height - doc.page.margins.bottom;
+    const checkPageOverflow = (neededHeight) => {
+      if (yPos + neededHeight > pageBottom) {
+        doc.addPage();
+        yPos = doc.page.margins.top + 30;
       }
-    } else {
-      doc.text(': ......................................', marginLeft + 80, yPos);
-    }
-    
-    yPos += 25;
+    };
 
-    // 2. Sekretaris
-    doc.fontSize(10).font('Helvetica');
-    doc.text('2. Sekretaris', marginLeft, yPos);
-    if (sekretaris) {
-      doc.text(`: ${sekretaris.jabatan_label || sekretaris.nama || 'Sekretaris'}`, marginLeft + 80, yPos);
-      
-      if (sekretaris.ttd) {
-        try {
-          let ttdFile = sekretaris.ttd;
-          if (ttdFile.startsWith('uploads/')) {
-            ttdFile = ttdFile.substring(8);
-          }
-          const ttdPath = path.join(__dirname, '../../storage/uploads', ttdFile);
-          console.log('🔍 Sekretaris TTD Path:', ttdPath, '| Original:', sekretaris.ttd, '| Exists:', fs.existsSync(ttdPath));
-          if (fs.existsSync(ttdPath)) {
-            yPos += 20;
-            doc.image(ttdPath, marginLeft + 80, yPos, { width: 60, height: 25 });
-            yPos += 30;
-            doc.fontSize(8).font('Helvetica');
-            doc.text(sekretaris.nama || '', marginLeft + 50, yPos, { width: 120, align: 'center' });
-          }
-        } catch (err) {}
-      }
-    } else {
-      doc.text(': ......................................', marginLeft + 80, yPos);
-    }
-    
-    yPos += 25;
+    // Helper: render a tim member (jabatan label, title, ttd, name)
+    const renderTimMember = (number, roleLabel, member) => {
+      const memberHeight = member?.ttd ? 80 : 25;
+      checkPageOverflow(memberHeight);
 
-    // 3. & 4. Anggota
-    anggota.forEach((member, index) => {
       doc.fontSize(10).font('Helvetica');
-      doc.text(`${index + 3}. Anggota`, marginLeft, yPos);
-      doc.text(`: ${member.jabatan_label || member.nama || 'Anggota Tim'}`, marginLeft + 80, yPos);
-      
-      if (member.ttd) {
-        try {
-          let ttdFile = member.ttd;
-          if (ttdFile.startsWith('uploads/')) {
-            ttdFile = ttdFile.substring(8);
+      doc.text(`${number}. ${roleLabel}`, marginLeft, yPos);
+      if (member) {
+        doc.text(`: ${member.jabatan_label || member.nama || roleLabel}`, marginLeft + 80, yPos);
+        
+        if (member.ttd) {
+          try {
+            let ttdFile = member.ttd;
+            if (ttdFile.startsWith('uploads/')) {
+              ttdFile = ttdFile.substring(8);
+            }
+            const ttdPath = path.join(__dirname, '../../storage/uploads', ttdFile);
+            if (fs.existsSync(ttdPath)) {
+              yPos += 20;
+              doc.image(ttdPath, marginLeft + 80, yPos, { width: 60, height: 25 });
+              yPos += 30;
+              doc.fontSize(8).font('Helvetica');
+              doc.text(member.nama || '', marginLeft + 50, yPos, { width: 120, align: 'center' });
+            }
+          } catch (err) {
+            console.error(`❌ Error loading ${roleLabel} TTD:`, err.message);
           }
-          const ttdPath = path.join(__dirname, '../../storage/uploads', ttdFile);
-          console.log(`🔍 Anggota ${index + 1} TTD Path:`, ttdPath, '| Original:', member.ttd, '| Exists:', fs.existsSync(ttdPath));
-          if (fs.existsSync(ttdPath)) {
-            yPos += 20;
-            doc.image(ttdPath, marginLeft + 80, yPos, { width: 60, height: 25 });
-            yPos += 30;
-            doc.fontSize(8).font('Helvetica');
-            doc.text(member.nama || '', marginLeft + 50, yPos, { width: 120, align: 'center' });
-          }
-        } catch (err) {}
+        }
+      } else {
+        doc.text(': ......................................', marginLeft + 80, yPos);
       }
       
       yPos += 25;
+    };
+
+    // 1. Ketua
+    renderTimMember(1, 'Ketua', ketua);
+
+    // 2. Sekretaris
+    renderTimMember(2, 'Sekretaris', sekretaris);
+
+    // 3+ Anggota
+    anggota.forEach((member, index) => {
+      renderTimMember(index + 3, 'Anggota', member);
     });
   }
 
@@ -1055,89 +1018,66 @@ class BeritaAcaraService {
     const ketua = timVerifikasi.find(t => t.jabatan === 'ketua');
     const sekretaris = timVerifikasi.find(t => t.jabatan === 'sekretaris');
     const anggota = timVerifikasi.filter(t => 
-      t.jabatan === 'anggota' || 
-      t.jabatan === 'anggota_1' || 
-      t.jabatan === 'anggota_2' || 
-      t.jabatan === 'anggota_3'
+      t.jabatan === 'anggota' || t.jabatan.startsWith('anggota_')
     );
 
-    // 1. Ketua
-    doc.fontSize(10).font('Helvetica');
-    doc.text('1. Ketua', marginLeft, yPos);
-    if (ketua) {
-      doc.text(`: ${ketua.jabatan_label || ketua.nama || 'Ketua Tim'}`, marginLeft + 80, yPos);
-      
-      // Add signature if available
-      if (ketua.ttd) {
-        try {
-          const ttdPath = path.join(__dirname, '../../storage/uploads', ketua.ttd);
-          if (fs.existsSync(ttdPath)) {
-            yPos += 20;
-            doc.image(ttdPath, marginLeft + 80, yPos, { width: 60, height: 25 });
-            yPos += 30;
-            // Add name below signature (centered)
-            doc.fontSize(8).font('Helvetica');
-            doc.text(ketua.nama || '', marginLeft + 50, yPos, { width: 120, align: 'center' });
-          }
-        } catch (err) {}
+    // Helper: check page overflow and add new page if needed
+    const pageBottom = doc.page.height - doc.page.margins.bottom;
+    const checkPageOverflow = (neededHeight) => {
+      if (yPos + neededHeight > pageBottom) {
+        doc.addPage();
+        yPos = doc.page.margins.top + 30;
       }
-    } else {
-      doc.text(': ......................................', marginLeft + 80, yPos);
-    }
-    
-    yPos += 25;
+    };
 
-    // 2. Sekretaris
-    doc.fontSize(10).font('Helvetica');
-    doc.text('2. Sekretaris', marginLeft, yPos);
-    if (sekretaris) {
-      doc.text(`: ${sekretaris.jabatan_label || sekretaris.nama || 'Sekretaris'}`, marginLeft + 80, yPos);
-      
-      // Add signature if available
-      if (sekretaris.ttd) {
-        try {
-          const ttdPath = path.join(__dirname, '../../storage/uploads', sekretaris.ttd);
-          if (fs.existsSync(ttdPath)) {
-            yPos += 20;
-            doc.image(ttdPath, marginLeft + 80, yPos, { width: 60, height: 25 });
-            yPos += 30;
-            // Add name below signature (centered)
-            doc.fontSize(8).font('Helvetica');
-            doc.text(sekretaris.nama || '', marginLeft + 50, yPos, { width: 120, align: 'center' });
-          }
-        } catch (err) {}
-      }
-    } else {
-      doc.text(': ......................................', marginLeft + 80, yPos);
-    }
-    
-    yPos += 25;
+    // Helper: render a tim member (jabatan label, title, ttd, name)
+    const renderTimMember = (number, roleLabel, member) => {
+      const memberHeight = member?.ttd ? 80 : 25;
+      checkPageOverflow(memberHeight);
 
-    // 3. & 4. Anggota
-    anggota.forEach((member, index) => {
       doc.fontSize(10).font('Helvetica');
-      doc.text(`${index + 3}. Anggota`, marginLeft, yPos);
-      doc.text(`: ${member.jabatan_label || member.nama || 'Anggota Tim'}`, marginLeft + 80, yPos);
-      
-      // Add signature if available
-      if (member.ttd) {
-        try {
-          const ttdPath = path.join(__dirname, '../../storage/uploads', member.ttd);
-          if (fs.existsSync(ttdPath)) {
-            yPos += 20;
-            doc.image(ttdPath, marginLeft + 80, yPos, { width: 60, height: 25 });
-            yPos += 30;
-            // Add name below signature (centered)
-            doc.fontSize(8).font('Helvetica');
-            doc.text(member.nama || '', marginLeft + 50, yPos, { width: 120, align: 'center' });
+      doc.text(`${number}. ${roleLabel}`, marginLeft, yPos);
+      if (member) {
+        doc.text(`: ${member.jabatan_label || member.nama || roleLabel}`, marginLeft + 80, yPos);
+        
+        if (member.ttd) {
+          try {
+            let ttdFile = member.ttd;
+            if (ttdFile.startsWith('uploads/')) {
+              ttdFile = ttdFile.substring(8);
+            }
+            const ttdPath = path.join(__dirname, '../../storage/uploads', ttdFile);
+            if (fs.existsSync(ttdPath)) {
+              yPos += 20;
+              doc.image(ttdPath, marginLeft + 80, yPos, { width: 60, height: 25 });
+              yPos += 30;
+              doc.fontSize(8).font('Helvetica');
+              doc.text(member.nama || '', marginLeft + 50, yPos, { width: 120, align: 'center' });
+            }
+          } catch (err) {
+            console.error(`❌ Error loading ${roleLabel} TTD:`, err.message);
           }
-        } catch (err) {}
+        }
+      } else {
+        doc.text(': ......................................', marginLeft + 80, yPos);
       }
       
       yPos += 25;
+    };
+
+    // 1. Ketua
+    renderTimMember(1, 'Ketua', ketua);
+
+    // 2. Sekretaris
+    renderTimMember(2, 'Sekretaris', sekretaris);
+
+    // 3+ Anggota
+    anggota.forEach((member, index) => {
+      renderTimMember(index + 3, 'Anggota', member);
     });
 
     // Keterangan anggota
+    checkPageOverflow(20);
     yPos += 5;
     doc.fontSize(8).font('Helvetica-Oblique');
     doc.text('*Anggota yang memverifikasi disesuaikan dengan program/kegiatan yang diusulkan', marginLeft, yPos, {
