@@ -481,33 +481,28 @@ class BeritaAcaraService {
     doc.fontSize(10).font('Helvetica');
     const leftCol = marginLeft + 5;
     const colonCol = marginLeft + 110;
-    
-    doc.text('1. Desa', leftCol, yPos);
-    doc.text(':', colonCol, yPos);
-    doc.text(desaData?.nama_desa || '...............................................', colonCol + 15, yPos);
+    const valueX = colonCol + 15;
+    const valueWidth = pageWidth - marginRight - valueX;
+    const lineSpacing = 4;
 
-    yPos += 14;
-    doc.text('2. Kegiatan', leftCol, yPos);
-    doc.text(':', colonCol, yPos);
-    doc.text(firstProposal.judul_proposal || '...............................................', colonCol + 15, yPos);
+    // Helper: render label + value, return actual height used
+    const renderField = (label, value) => {
+      doc.text(label, leftCol, yPos);
+      doc.text(':', colonCol, yPos);
+      const textHeight = doc.heightOfString(value, { width: valueWidth });
+      doc.text(value, valueX, yPos, { width: valueWidth });
+      yPos += Math.max(14, textHeight) + lineSpacing;
+    };
 
-    yPos += 14;
-    doc.text('3. Lokasi kegiatan', leftCol, yPos);
-    doc.text(':', colonCol, yPos);
-    doc.text(firstProposal.lokasi || '...............................................', colonCol + 15, yPos);
+    renderField('1. Desa', desaData?.nama_desa || '...............................................');
+    renderField('2. Kegiatan', firstProposal.judul_proposal || '...............................................');
+    renderField('3. Lokasi kegiatan', firstProposal.lokasi || '...............................................');
+    renderField('4. Volume', firstProposal.volume || '...............................................');
 
-    yPos += 14;
-    doc.text('4. Volume', leftCol, yPos);
-    doc.text(':', colonCol, yPos);
-    doc.text(firstProposal.volume || '...............................................', colonCol + 15, yPos);
-
-    yPos += 14;
-    doc.text('5. Nilai RAB', leftCol, yPos);
-    doc.text(':', colonCol, yPos);
     const nilaiRAB = firstProposal.anggaran_usulan 
       ? `Rp. ${Number(firstProposal.anggaran_usulan).toLocaleString('id-ID')}` 
       : 'Rp. .......................';
-    doc.text(nilaiRAB, colonCol + 15, yPos);
+    renderField('5. Nilai RAB', nilaiRAB);
 
     // Checklist Table
     yPos += 25;
