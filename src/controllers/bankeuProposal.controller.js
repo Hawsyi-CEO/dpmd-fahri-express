@@ -1,6 +1,7 @@
 const prisma = require('../config/prisma');
 const sequelize = require('../config/database');
 const logger = require('../utils/logger');
+const ActivityLogger = require('../utils/activityLogger');
 const path = require('path');
 const fs = require('fs'); 
 
@@ -309,6 +310,22 @@ class BankeuProposalController {
 
       logger.info(`✅ Bankeu proposal uploaded: ${proposalId} with ${kegiatanIdsArray.length} kegiatan by user ${userId}`);
 
+      // Activity Log
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        module: 'bankeu',
+        action: 'create',
+        entityType: 'bankeu_proposal',
+        entityId: proposalId,
+        entityName: judul_proposal,
+        description: `${req.user.name || 'User'} mengupload proposal baru: "${judul_proposal}" (ID: ${proposalId}, Tahun: ${tahunAnggaranValue})`,
+        newValue: { judul_proposal, anggaran_usulan, volume, lokasi, tahun_anggaran: tahunAnggaranValue, kegiatan_ids: kegiatanIdsArray },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
       res.status(201).json({
         success: true,
         message: 'Proposal berhasil diupload',
@@ -539,9 +556,26 @@ class BankeuProposalController {
       `, { replacements });
 
       logger.info(`♻️ Bankeu proposal updated (revision): ${id} by user ${userId}`);
-      
-      // Log untuk debugging
+
+      // Activity Log
       const destination = returnedFromKecamatan ? 'Kecamatan' : 'Dinas Terkait';
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        module: 'bankeu',
+        action: 'update',
+        entityType: 'bankeu_proposal',
+        entityId: parseInt(id),
+        entityName: proposal.judul_proposal || `Proposal #${id}`,
+        description: `${req.user.name || 'User'} mengupdate revisi proposal #${id} (dikembalikan dari ${destination})`,
+        oldValue: { status: proposal.status, dinas_status: proposal.dinas_status },
+        newValue: { status: 'pending', file_replaced: !!req.file },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
+      // Log untuk debugging
       logger.info(`📋 Revision upload - proposal ${id} siap dikirim ke ${destination}`);
 
       res.json({
@@ -697,6 +731,23 @@ class BankeuProposalController {
 
       logger.info(`🔄 Bankeu proposal file replaced: ${id} by user ${userId}`);
 
+      // Activity Log
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        module: 'bankeu',
+        action: 'update',
+        entityType: 'bankeu_proposal',
+        entityId: parseInt(id),
+        entityName: `Proposal #${id}`,
+        description: `${req.user.name || 'User'} mengganti file proposal #${id}`,
+        oldValue: { file_proposal: proposal.file_proposal },
+        newValue: { file_proposal: filePath, anggaran_usulan: anggaran_usulan || null },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
       res.json({
         success: true,
         message: 'File proposal berhasil diganti',
@@ -802,6 +853,22 @@ class BankeuProposalController {
       `, { replacements: [id] });
 
       logger.info(`✅ Bankeu proposal deleted: ${id}`);
+
+      // Activity Log - CRITICAL: Track siapa yang hapus proposal
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        module: 'bankeu',
+        action: 'delete',
+        entityType: 'bankeu_proposal',
+        entityId: parseInt(id),
+        entityName: proposal.judul_proposal || `Proposal #${id}`,
+        description: `${req.user.name || 'User'} MENGHAPUS proposal #${id} (Desa ID: ${desaId})`,
+        oldValue: { file_proposal: proposal.file_proposal, status: proposal.status, desa_id: proposal.desa_id },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
 
       res.json({
         success: true,
@@ -915,6 +982,22 @@ class BankeuProposalController {
       `, { replacements: [filePath, id] });
 
       logger.info(`✅ Surat ${jenis} uploaded for proposal ${id} by user ${userId}`);
+
+      // Activity Log
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        module: 'bankeu',
+        action: 'upload',
+        entityType: 'bankeu_proposal',
+        entityId: parseInt(id),
+        entityName: `Surat ${jenis} Proposal #${id}`,
+        description: `${req.user.name || 'User'} mengupload surat ${jenis} untuk proposal #${id}`,
+        newValue: { jenis, file: filePath },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
 
       res.json({
         success: true,
@@ -1032,6 +1115,21 @@ class BankeuProposalController {
       await transaction.commit();
 
       logger.info(`✅ ${count} proposals from desa ${desaId} (tahun: ${tahun || 'ALL'}) submitted to DINAS TERKAIT`);
+
+      // Activity Log
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        module: 'bankeu',
+        action: 'submit',
+        entityType: 'bankeu_proposal',
+        entityName: `${count} proposal desa ${desaId}`,
+        description: `${req.user.name || 'User'} mengirim ${count} proposal ke Dinas Terkait (Tahun: ${tahun || 'ALL'}, Desa ID: ${desaId})`,
+        newValue: { count, desa_id: desaId, tahun: tahun || 'ALL', destination: 'dinas_terkait' },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
 
       res.json({
         success: true,
@@ -1229,6 +1327,21 @@ class BankeuProposalController {
       const count = proposals.length;
       logger.info(`✅ ${count} revised proposals from desa ${desaId} resubmitted to ${destinationLabel}`);
 
+      // Activity Log
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        module: 'bankeu',
+        action: 'resubmit',
+        entityType: 'bankeu_proposal',
+        entityName: `${count} proposal revisi desa ${desaId}`,
+        description: `${req.user.name || 'User'} mengirim ulang ${count} proposal revisi ke ${destinationLabel} (Tahun: ${tahun || 'ALL'}, Desa ID: ${desaId})`,
+        newValue: { count, desa_id: desaId, tahun: tahun || 'ALL', destination: destinationLabel },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
       res.json({
         success: true,
         message: `${count} proposal revisi berhasil dikirim ulang ke ${destinationLabel}`,
@@ -1413,6 +1526,23 @@ class BankeuProposalController {
       `, { replacements });
 
       logger.info(`✏️ Bankeu proposal edited: ${id} by user ${userId}`);
+
+      // Activity Log
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        module: 'bankeu',
+        action: 'update',
+        entityType: 'bankeu_proposal',
+        entityId: parseInt(id),
+        entityName: proposal.judul_proposal || `Proposal #${id}`,
+        description: `${req.user.name || 'User'} mengedit proposal #${id} (${proposal.nama_desa || 'Desa'})`,
+        oldValue: { judul_proposal: proposal.judul_proposal, anggaran_usulan: proposal.anggaran_usulan },
+        newValue: { judul_proposal, nama_kegiatan_spesifik, volume, lokasi, anggaran_usulan, file_replaced: !!req.file },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
 
       res.json({
         success: true,

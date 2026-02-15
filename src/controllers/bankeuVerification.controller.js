@@ -1,6 +1,7 @@
 const sequelize = require('../config/database');
 const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
+const ActivityLogger = require('../utils/activityLogger');
 const path = require('path');
 const fs = require('fs');
 const PDFDocument = require('pdfkit');
@@ -216,6 +217,23 @@ class BankeuVerificationController {
 
         logger.info(`✅ Proposal ${id} dikembalikan ke Desa dengan status ${action}`);
 
+        // Activity Log
+        ActivityLogger.log({
+          userId: userId,
+          userName: users[0].name || `User ${userId}`,
+          userRole: req.user.role,
+          module: 'bankeu',
+          action: action === 'rejected' ? 'reject' : 'revision',
+          entityType: 'bankeu_proposal',
+          entityId: parseInt(id),
+          entityName: proposal.judul_proposal || `Proposal #${id}`,
+          description: `Kecamatan ${proposal.kecamatan_nama} (${users[0].name || 'User'}) ${action === 'rejected' ? 'menolak' : 'meminta revisi'} proposal #${id} dari Desa ${proposal.desa_nama}`,
+          oldValue: { status: proposal.status, kecamatan_status: proposal.kecamatan_status },
+          newValue: { kecamatan_status: action, catatan: catatan || null },
+          ipAddress: ActivityLogger.getIpFromRequest(req),
+          userAgent: ActivityLogger.getUserAgentFromRequest(req)
+        });
+
         return res.json({
           success: true,
           message: `Proposal dikembalikan ke Desa untuk ${action === 'rejected' ? 'diperbaiki' : 'direvisi'}`,
@@ -243,6 +261,22 @@ class BankeuVerificationController {
       });
 
       logger.info(`✅ Kecamatan approved proposal ${id} - Siap dikirim ke DPMD`);
+
+      // Activity Log
+      ActivityLogger.log({
+        userId: userId,
+        userName: users[0].name || `User ${userId}`,
+        userRole: req.user.role,
+        module: 'bankeu',
+        action: 'approve',
+        entityType: 'bankeu_proposal',
+        entityId: parseInt(id),
+        entityName: proposal.judul_proposal || `Proposal #${id}`,
+        description: `Kecamatan ${proposal.kecamatan_nama} (${users[0].name || 'User'}) menyetujui proposal #${id} dari Desa ${proposal.desa_nama}`,
+        newValue: { kecamatan_status: 'approved', catatan: catatan || null },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
 
       res.json({
         success: true,
@@ -692,6 +726,21 @@ class BankeuVerificationController {
         `, { replacements: [desaId, kecamatanId] });
         
         logger.info(`🔙 ${totalCount[0].total} proposals returned to desa ${desaId} by user ${userId}`);
+
+        // Activity Log
+        ActivityLogger.log({
+          userId: userId,
+          userName: req.user.name || `User ${userId}`,
+          userRole: req.user.role,
+          module: 'bankeu',
+          action: 'return',
+          entityType: 'bankeu_proposal',
+          entityName: `${totalCount[0].total} proposal desa ${desaId}`,
+          description: `Kecamatan (${req.user.name || 'User'}) mengembalikan ${totalCount[0].total} proposal ke Desa ID: ${desaId}`,
+          newValue: { count: totalCount[0].total, desa_id: desaId, action: 'return' },
+          ipAddress: ActivityLogger.getIpFromRequest(req),
+          userAgent: ActivityLogger.getUserAgentFromRequest(req)
+        });
       } else {
         // Kirim ke DPMD: set submitted_to_dpmd = TRUE dan dpmd_status = pending
         await sequelize.query(`
@@ -705,6 +754,21 @@ class BankeuVerificationController {
         `, { replacements: [desaId, kecamatanId] });
         
         logger.info(`✅ ${totalCount[0].total} proposals submitted to DPMD from desa ${desaId} by user ${userId}`);
+
+        // Activity Log
+        ActivityLogger.log({
+          userId: userId,
+          userName: req.user.name || `User ${userId}`,
+          userRole: req.user.role,
+          module: 'bankeu',
+          action: 'submit',
+          entityType: 'bankeu_proposal',
+          entityName: `${totalCount[0].total} proposal desa ${desaId}`,
+          description: `Kecamatan (${req.user.name || 'User'}) mengirim ${totalCount[0].total} proposal ke DPMD dari Desa ID: ${desaId}`,
+          newValue: { count: totalCount[0].total, desa_id: desaId, destination: 'dpmd' },
+          ipAddress: ActivityLogger.getIpFromRequest(req),
+          userAgent: ActivityLogger.getUserAgentFromRequest(req)
+        });
       }
 
       res.json({

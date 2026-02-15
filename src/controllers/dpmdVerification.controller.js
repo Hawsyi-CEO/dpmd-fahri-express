@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
+const ActivityLogger = require('../utils/activityLogger');
 const fs = require('fs');
 const path = require('path');
 
@@ -252,6 +253,22 @@ class DPMDVerificationController {
 
         logger.info(`✅ DPMD returned proposal ${id} to Kecamatan for BA/SP revision`);
 
+        // Activity Log
+        ActivityLogger.log({
+          userId: userId,
+          userName: req.user.name || `User ${userId}`,
+          userRole: req.user.role,
+          module: 'bankeu',
+          action: 'revision',
+          entityType: 'bankeu_proposal',
+          entityId: parseInt(id),
+          entityName: `Proposal #${id}`,
+          description: `DPMD/SPKED (${req.user.name || 'User'}) meminta revisi dokumen Kecamatan untuk proposal #${id} (Desa ID: ${proposal.desa_id})`,
+          newValue: { dpmd_status: 'revision', revision_type: 'dokumen_kecamatan', catatan: catatan || null },
+          ipAddress: ActivityLogger.getIpFromRequest(req),
+          userAgent: ActivityLogger.getUserAgentFromRequest(req)
+        });
+
         return res.json({
           success: true,
           message: 'Proposal dikembalikan ke Kecamatan untuk revisi Surat Pengantar dan Berita Acara',
@@ -294,6 +311,23 @@ class DPMDVerificationController {
 
         logger.info(`✅ DPMD returned proposal ${id} to DESA with status ${action}`);
 
+        // Activity Log
+        ActivityLogger.log({
+          userId: userId,
+          userName: req.user.name || `User ${userId}`,
+          userRole: req.user.role,
+          module: 'bankeu',
+          action: action === 'rejected' ? 'reject' : 'revision',
+          entityType: 'bankeu_proposal',
+          entityId: parseInt(id),
+          entityName: `Proposal #${id}`,
+          description: `DPMD/SPKED (${req.user.name || 'User'}) ${action === 'rejected' ? 'menolak' : 'meminta revisi'} proposal #${id} (Desa ID: ${proposal.desa_id})`,
+          oldValue: { dpmd_status: proposal.dpmd_status, status: proposal.status },
+          newValue: { dpmd_status: action, catatan: catatan || null, returned_to: 'desa' },
+          ipAddress: ActivityLogger.getIpFromRequest(req),
+          userAgent: ActivityLogger.getUserAgentFromRequest(req)
+        });
+
         return res.json({
           success: true,
           message: `Proposal dikembalikan ke Desa untuk ${action === 'rejected' ? 'diperbaiki' : 'direvisi'}`,
@@ -318,6 +352,22 @@ class DPMDVerificationController {
       });
 
       logger.info(`✅ DPMD FINAL APPROVED proposal ${id}`);
+
+      // Activity Log
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        module: 'bankeu',
+        action: 'approve',
+        entityType: 'bankeu_proposal',
+        entityId: parseInt(id),
+        entityName: `Proposal #${id}`,
+        description: `DPMD/SPKED (${req.user.name || 'User'}) FINAL APPROVED proposal #${id} (Desa ID: ${proposal.desa_id})`,
+        newValue: { dpmd_status: 'approved', status: 'verified' },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
 
       res.json({
         success: true,
@@ -458,6 +508,22 @@ class DPMDVerificationController {
 
       logger.info(`✅ DPMD deleted proposal ${id} (${proposal.judul_proposal}) from desa ${proposal.desas?.nama}`);
 
+      // Activity Log - CRITICAL: Track siapa yang hapus
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        module: 'bankeu',
+        action: 'delete',
+        entityType: 'bankeu_proposal',
+        entityId: parseInt(id),
+        entityName: proposal.judul_proposal || `Proposal #${id}`,
+        description: `DPMD/SPKED (${req.user.name || 'User'}) MENGHAPUS proposal #${id} "${proposal.judul_proposal}" dari Desa ${proposal.desas?.nama || 'Unknown'} (ID: ${proposal.desa_id})`,
+        oldValue: { judul_proposal: proposal.judul_proposal, desa_id: Number(proposal.desa_id), status: proposal.status, dpmd_status: proposal.dpmd_status },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
       return res.json({
         success: true,
         message: `Proposal "${proposal.judul_proposal}" berhasil dihapus`
@@ -545,6 +611,21 @@ class DPMDVerificationController {
 
       logger.info(`✅ DPMD bulk deleted ${proposals.length} proposals from desa ${desaName} (ID: ${desaId}), all stages: ${deleteAll}`);
 
+      // Activity Log - CRITICAL: Track bulk delete
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        module: 'bankeu',
+        action: 'delete',
+        entityType: 'bankeu_proposal',
+        entityName: `${proposals.length} proposal Desa ${desaName}`,
+        description: `DPMD/SPKED (${req.user.name || 'User'}) BULK DELETE ${proposals.length} proposal dari Desa ${desaName} (ID: ${desaId}, all stages: ${deleteAll})`,
+        oldValue: { count: proposals.length, desa_id: parseInt(desaId), desa_nama: desaName, all_stages: deleteAll, proposal_ids: proposals.map(p => Number(p.id)) },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
       return res.json({
         success: true,
         message: `${proposals.length} proposal dari Desa ${desaName} berhasil dihapus`
@@ -613,6 +694,21 @@ class DPMDVerificationController {
       });
 
       logger.info(`✅ DPMD deleted ${deleted.count} surat from desa ${desaName} (ID: ${desaId})`);
+
+      // Activity Log
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        module: 'bankeu',
+        action: 'delete',
+        entityType: 'desa_bankeu_surat',
+        entityName: `Surat Desa ${desaName}`,
+        description: `DPMD/SPKED (${req.user.name || 'User'}) menghapus ${deleted.count} surat dari Desa ${desaName} (ID: ${desaId})`,
+        oldValue: { count: deleted.count, desa_id: parseInt(desaId), desa_nama: desaName },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
 
       return res.json({
         success: true,

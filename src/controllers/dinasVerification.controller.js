@@ -1,6 +1,7 @@
 const prisma = require('../config/prisma');
 const { Prisma } = require('@prisma/client');
 const { copyFileToReference } = require('../utils/fileHelper');
+const ActivityLogger = require('../utils/activityLogger');
 
 /**
  * Get all proposals for a specific dinas
@@ -703,6 +704,24 @@ const submitVerification = async (req, res) => {
     } else {
       message = 'Verifikasi perlu revisi. Proposal dikembalikan ke Desa.';
     }
+
+    // Activity Log
+    const actionMap = { approved: 'approve', rejected: 'reject', revision: 'revision' };
+    ActivityLogger.log({
+      userId: parseInt(user_id),
+      userName: req.user.name || `User ${user_id}`,
+      userRole: role,
+      module: 'bankeu',
+      action: actionMap[action] || action,
+      entityType: 'bankeu_proposal',
+      entityId: parseInt(proposalId),
+      entityName: `Proposal #${proposalId}`,
+      description: `Dinas (${req.user.name || 'User'}) ${action === 'approved' ? 'menyetujui' : action === 'rejected' ? 'menolak' : 'meminta revisi'} proposal #${proposalId} (Desa ID: ${proposal.desa_id})`,
+      oldValue: { dinas_status: proposal.dinas_status },
+      newValue: { dinas_status: action, catatan_umum: catatan_umum || null, forwarded_to: action === 'approved' ? 'kecamatan' : 'desa' },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
+    });
 
     // Serialize BigInt fields to string for JSON response
     const serializedProposal = {
