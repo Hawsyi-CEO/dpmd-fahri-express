@@ -261,6 +261,7 @@ app.use('/api/admin', kelembagaanRoutes); // Admin alias for kelembagaan
 app.use('/api/produk-hukum', produkHukumRoutes); // Produk Hukum routes
 app.use('/api/bankeu-t1', bankeuT1Routes); // Bantuan Keuangan Tahap 1
 app.use('/api/bankeu-t2', bankeuT2Routes); // Bantuan Keuangan Tahap 2
+app.use('/api/public/bankeu', require('./routes/bankeuPublic.routes')); // Public bankeu transparency (no auth)
 app.use('/api/add', addRoutes); // ADD (Alokasi Dana Desa) routes
 app.use('/api/dd', ddRoutes); // DD (Dana Desa) routes
 app.use('/api/dd-earmarked-t1', ddEarmarkedT1Routes); // DD Earmarked Tahap 1
