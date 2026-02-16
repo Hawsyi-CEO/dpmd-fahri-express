@@ -5,6 +5,9 @@ const ActivityLogger = require('../utils/activityLogger');
 const path = require('path');
 const fs = require('fs'); 
 
+// Batas maksimal anggaran per proposal (1.5 Miliar)
+const MAX_ANGGARAN = 1_500_000_000;
+
 /**
  * Helper: Check if bankeu submission is open for desa
  * @returns {Promise<{isOpen: boolean, setting: object|null}>}
@@ -243,6 +246,18 @@ class BankeuProposalController {
         });
       }
 
+      // Validate anggaran limit
+      if (anggaran_usulan) {
+        const anggaranNum = parseInt(String(anggaran_usulan).replace(/\D/g, ''), 10);
+        if (anggaranNum > MAX_ANGGARAN) {
+          if (req.file && req.file.path) fs.unlinkSync(req.file.path);
+          return res.status(400).json({
+            success: false,
+            message: `Anggaran usulan tidak boleh lebih dari Rp 1.500.000.000 (1,5 Miliar). Nilai yang diinput: Rp ${anggaranNum.toLocaleString('id-ID')}`
+          });
+        }
+      }
+
       // Validate file upload
       if (!req.file) {
         return res.status(400).json({
@@ -453,10 +468,18 @@ class BankeuProposalController {
       const updates = [];
       const replacements = [];
 
-      // Update anggaran if provided
+      // Update anggaran if provided (with validation)
       if (anggaran_usulan) {
+        const anggaranNum = parseInt(String(anggaran_usulan).replace(/\D/g, ''), 10);
+        if (anggaranNum > MAX_ANGGARAN) {
+          if (req.file && req.file.path) fs.unlinkSync(req.file.path);
+          return res.status(400).json({
+            success: false,
+            message: `Anggaran usulan tidak boleh lebih dari Rp 1.500.000.000 (1,5 Miliar). Nilai yang diinput: Rp ${anggaranNum.toLocaleString('id-ID')}`
+          });
+        }
         updates.push('anggaran_usulan = ?');
-        replacements.push(anggaran_usulan);
+        replacements.push(anggaranNum);
       }
 
       // Update nama kegiatan spesifik if provided
@@ -719,8 +742,16 @@ class BankeuProposalController {
       const updateValues = [filePath, fileSize];
 
       if (anggaran_usulan) {
+        const anggaranNum = parseInt(String(anggaran_usulan).replace(/\D/g, ''), 10);
+        if (anggaranNum > MAX_ANGGARAN) {
+          if (req.file && req.file.path) fs.unlinkSync(req.file.path);
+          return res.status(400).json({
+            success: false,
+            message: `Anggaran usulan tidak boleh lebih dari Rp 1.500.000.000 (1,5 Miliar). Nilai yang diinput: Rp ${anggaranNum.toLocaleString('id-ID')}`
+          });
+        }
         updateFields.push('anggaran_usulan = ?');
-        updateValues.push(anggaran_usulan);
+        updateValues.push(anggaranNum);
       }
 
       updateValues.push(id);
@@ -1486,10 +1517,18 @@ class BankeuProposalController {
         replacements.push(lokasi);
       }
 
-      // Update anggaran if provided
+      // Update anggaran if provided (with validation)
       if (anggaran_usulan) {
+        const anggaranNum = parseInt(String(anggaran_usulan).replace(/\D/g, ''), 10);
+        if (anggaranNum > MAX_ANGGARAN) {
+          if (req.file && req.file.path) fs.unlinkSync(req.file.path);
+          return res.status(400).json({
+            success: false,
+            message: `Anggaran usulan tidak boleh lebih dari Rp 1.500.000.000 (1,5 Miliar). Nilai yang diinput: Rp ${anggaranNum.toLocaleString('id-ID')}`
+          });
+        }
         updates.push('anggaran_usulan = ?');
-        replacements.push(anggaran_usulan);
+        replacements.push(anggaranNum);
       }
 
       // Update file if uploaded

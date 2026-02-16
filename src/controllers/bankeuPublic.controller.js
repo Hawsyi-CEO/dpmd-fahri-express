@@ -88,6 +88,17 @@ class BankeuPublicController {
         return 'di_desa';
       };
 
+      // Count total desa (hanya status_pemerintahan = 'desa', bukan kelurahan)
+      const totalDesaCount = await prisma.desas.count({
+        where: { status_pemerintahan: 'desa' }
+      });
+
+      // Desa yang sudah mengusulkan = sudah submit ke dinas terkait (submitted_to_dinas_at NOT NULL)
+      const proposalsSubmitted = proposals.filter(p => p.submitted_to_dinas_at !== null);
+      const desaSudahMengusulkan = new Set(proposalsSubmitted.map(p => Number(p.desa_id)).filter(Boolean));
+      // Desa yang punya proposal tapi belum kirim ke dinas
+      const desaAllProposals = new Set(proposals.map(p => Number(p.desa_id)).filter(Boolean));
+
       // Build summary
       const summary = {
         total: proposals.length,
@@ -95,7 +106,11 @@ class BankeuPublicController {
         di_dinas: 0,
         di_kecamatan: 0,
         selesai: 0,
-        total_anggaran: 0
+        total_anggaran: 0,
+        total_desa: totalDesaCount,
+        desa_mengusulkan: desaSudahMengusulkan.size,
+        desa_belum_mengusulkan: totalDesaCount - desaSudahMengusulkan.size,
+        desa_draft: desaAllProposals.size - desaSudahMengusulkan.size
       };
 
       // Build kecamatan aggregation 
