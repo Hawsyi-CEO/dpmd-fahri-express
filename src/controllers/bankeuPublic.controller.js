@@ -24,7 +24,12 @@ class BankeuPublicController {
           id: true,
           desa_id: true,
           kegiatan_id: true,
+          judul_proposal: true,
+          nama_kegiatan_spesifik: true,
+          volume: true,
+          lokasi: true,
           anggaran_usulan: true,
+          status: true,
           dinas_status: true,
           kecamatan_status: true,
           dpmd_status: true,
@@ -32,6 +37,14 @@ class BankeuPublicController {
           submitted_to_kecamatan: true,
           submitted_to_dpmd: true,
           created_at: true,
+          bankeu_proposal_kegiatan: {
+            select: {
+              kegiatan_id: true,
+              bankeu_master_kegiatan: {
+                select: { id: true, nama_kegiatan: true, dinas_terkait: true }
+              }
+            }
+          },
           desas: {
             select: {
               nama: true,
@@ -44,36 +57,34 @@ class BankeuPublicController {
         orderBy: { created_at: 'desc' }
       });
 
-      // Get kegiatan info (direct FK + many-to-many pivot)
-      const kegiatanIds = [...new Set(proposals.map(p => p.kegiatan_id).filter(Boolean))];
+      // Get kegiatan info from direct FK
       const allKegiatan = await prisma.bankeu_master_kegiatan.findMany({
         select: { id: true, nama_kegiatan: true, dinas_terkait: true }
       });
       const kegiatanMap = {};
       allKegiatan.forEach(k => { kegiatanMap[Number(k.id)] = k; });
 
-      // Get pivot table kegiatan for proposals without direct kegiatan_id
-      const proposalIdsWithoutKegiatan = proposals.filter(p => !p.kegiatan_id).map(p => p.id);
-      let pivotMap = {};
-      if (proposalIdsWithoutKegiatan.length > 0) {
-        const pivots = await prisma.bankeu_proposal_kegiatan.findMany({
-          where: { proposal_id: { in: proposalIdsWithoutKegiatan } },
-          select: { proposal_id: true, kegiatan_id: true }
-        });
-        pivots.forEach(pv => {
-          const kid = Number(pv.kegiatan_id);
-          if (!pivotMap[Number(pv.proposal_id)]) pivotMap[Number(pv.proposal_id)] = kegiatanMap[kid];
-        });
-      }
-
-      // Calculate stages
+      // Calculate stages for public display
+      // di_dpmd = selesai (sudah sampai DPMD = selesai)
+      // revisi/ditolak tetap masuk ke stage terakhir mereka berada
       const getStage = (p) => {
+        // Sudah di DPMD atau approved DPMD = selesai
         if (p.dpmd_status === 'approved') return 'selesai';
-        if (p.submitted_to_dpmd) return 'di_dpmd';
-        if (p.kecamatan_status === 'approved') return 'di_dpmd';
+        if (p.dpmd_status === 'rejected' || p.dpmd_status === 'revision' || p.dpmd_status === 'in_review' || p.dpmd_status === 'pending') return 'selesai';
+        if (p.submitted_to_dpmd) return 'selesai';
+        if (p.kecamatan_status === 'approved') return 'selesai';
+        
+        // Di Kecamatan (termasuk yang revision/rejected di kecamatan)
         if (p.submitted_to_kecamatan && p.dinas_status === 'approved') return 'di_kecamatan';
         if (p.dinas_status === 'approved') return 'di_kecamatan';
+        if (p.kecamatan_status === 'rejected' || p.kecamatan_status === 'revision' || p.kecamatan_status === 'in_review' || p.kecamatan_status === 'pending') {
+          if (p.submitted_to_kecamatan) return 'di_kecamatan';
+        }
+        
+        // Di Dinas (termasuk yang revision/rejected di dinas)
         if (p.submitted_to_dinas_at) return 'di_dinas';
+        
+        // Masih di Desa
         return 'di_desa';
       };
 
@@ -83,7 +94,6 @@ class BankeuPublicController {
         di_desa: 0,
         di_dinas: 0,
         di_kecamatan: 0,
-        di_dpmd: 0,
         selesai: 0,
         total_anggaran: 0
       };
@@ -95,7 +105,27 @@ class BankeuPublicController {
       const publicProposals = proposals.map(p => {
         const stage = getStage(p);
         const anggaran = Number(p.anggaran_usulan) || 0;
-        const kegiatan = kegiatanMap[Number(p.kegiatan_id)] || pivotMap[Number(p.id)];
+        
+        // Resolve kegiatan: direct FK first, then pivot table, then nama_kegiatan_spesifik
+        let kegiatanName = '-';
+        let dinasTerkait = '-';
+        
+        if (p.kegiatan_id && kegiatanMap[Number(p.kegiatan_id)]) {
+          kegiatanName = kegiatanMap[Number(p.kegiatan_id)].nama_kegiatan;
+          dinasTerkait = kegiatanMap[Number(p.kegiatan_id)].dinas_terkait || '-';
+        } else if (p.bankeu_proposal_kegiatan?.length > 0) {
+          // Use first kegiatan from pivot table
+          const pivotKeg = p.bankeu_proposal_kegiatan[0]?.bankeu_master_kegiatan;
+          if (pivotKeg) {
+            kegiatanName = pivotKeg.nama_kegiatan;
+            dinasTerkait = pivotKeg.dinas_terkait || '-';
+          }
+        }
+        
+        // Fallback to nama_kegiatan_spesifik if available
+        if (kegiatanName === '-' && p.nama_kegiatan_spesifik) {
+          kegiatanName = p.nama_kegiatan_spesifik;
+        }
 
         // Update summary
         summary[stage] = (summary[stage] || 0) + 1;
@@ -120,10 +150,12 @@ class BankeuPublicController {
         return {
           kecamatan: kecName,
           desa: desaName,
-          kegiatan: kegiatan?.nama_kegiatan || '-',
-          dinas_terkait: kegiatan?.dinas_terkait || '-',
+          kegiatan: kegiatanName,
+          dinas_terkait: dinasTerkait,
           anggaran: anggaran,
-          stage: stage
+          stage: stage,
+          lokasi: p.lokasi || '-',
+          volume: p.volume || '-'
         };
       });
 
