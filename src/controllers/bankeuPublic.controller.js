@@ -104,7 +104,10 @@ class BankeuPublicController {
       // Build sanitized proposal list (public-safe)
       const publicProposals = proposals.map(p => {
         const stage = getStage(p);
-        const anggaran = Number(p.anggaran_usulan) || 0;
+        const rawAnggaran = Number(p.anggaran_usulan) || 0;
+        // Cap at 1.5 Miliar for public display (avoid outlier/data-entry-error skewing)
+        const MAX_ANGGARAN = 1_500_000_000;
+        const anggaran = Math.min(rawAnggaran, MAX_ANGGARAN);
         
         // Resolve kegiatan: direct FK first, then pivot table, then nama_kegiatan_spesifik
         let kegiatanName = '-';
