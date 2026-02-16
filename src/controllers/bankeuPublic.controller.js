@@ -88,16 +88,32 @@ class BankeuPublicController {
         return 'di_desa';
       };
 
-      // Count total desa (hanya status_pemerintahan = 'desa', bukan kelurahan)
-      const totalDesaCount = await prisma.desas.count({
-        where: { status_pemerintahan: 'desa' }
+      // Get all desa (hanya status_pemerintahan = 'desa', bukan kelurahan) with kecamatan
+      const allDesaList = await prisma.desas.findMany({
+        where: { status_pemerintahan: 'desa' },
+        select: { id: true, nama: true, kecamatan_id: true, kecamatans: { select: { nama: true } } },
+        orderBy: { nama: 'asc' }
       });
+      const totalDesaCount = allDesaList.length;
 
       // Desa yang sudah mengusulkan = sudah submit ke dinas terkait (submitted_to_dinas_at NOT NULL)
       const proposalsSubmitted = proposals.filter(p => p.submitted_to_dinas_at !== null);
       const desaSudahMengusulkan = new Set(proposalsSubmitted.map(p => Number(p.desa_id)).filter(Boolean));
       // Desa yang punya proposal tapi belum kirim ke dinas
       const desaAllProposals = new Set(proposals.map(p => Number(p.desa_id)).filter(Boolean));
+
+      // Build desa partisipasi per kecamatan (grouped)
+      const desaPartisipasi = {};
+      allDesaList.forEach(d => {
+        const kecName = d.kecamatans?.nama || 'Lainnya';
+        if (!desaPartisipasi[kecName]) desaPartisipasi[kecName] = { sudah: [], belum: [] };
+        const desaId = Number(d.id);
+        if (desaSudahMengusulkan.has(desaId)) {
+          desaPartisipasi[kecName].sudah.push(d.nama);
+        } else {
+          desaPartisipasi[kecName].belum.push(d.nama);
+        }
+      });
 
       // Build summary
       const summary = {
@@ -184,6 +200,7 @@ class BankeuPublicController {
         summary,
         proposals: publicProposals,
         kecamatan: kecamatanAgg,
+        desa_partisipasi: desaPartisipasi,
         tahun_anggaran: tahun
       });
 
