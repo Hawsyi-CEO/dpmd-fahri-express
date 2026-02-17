@@ -913,22 +913,6 @@ model push_subscriptions {
   @@index([user_id], map: "push_subscriptions_user_id_index")
 }
 
-model notification_logs {
-  id           BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  title        String    @db.VarChar(255)
-  body         String    @db.Text
-  target_type  String    @db.VarChar(50) // 'broadcast', 'roles', 'users'
-  target_value String?   @db.Text        // JSON: role names or user IDs
-  sent_count   Int       @default(0)
-  failed_count Int       @default(0)
-  sender_id    BigInt    @db.UnsignedBigInt
-  created_at   DateTime? @default(now()) @db.Timestamp(0)
-  sender       users     @relation("notification_logs_sender", fields: [sender_id], references: [id], onDelete: Cascade)
-
-  @@index([sender_id], map: "notification_logs_sender_id_index")
-  @@index([created_at], map: "notification_logs_created_at_index")
-}
-
 model rts {
   id                 String                  @id @db.Char(36)
   rw_id              String                  @db.Char(36)
@@ -1059,7 +1043,6 @@ model users {
   lampiran_surat                                                 lampiran_surat[]
   perjadin_grup                                                  perjadin_grup[]
   push_subscriptions                                             push_subscriptions[]
-  notification_logs_notification_logs_sender_idTousers           notification_logs[]         @relation("notification_logs_sender")
   surat_masuk                                                    surat_masuk[]
   pegawai                                                        pegawai?                    @relation(fields: [pegawai_id], references: [id_pegawai], onDelete: Cascade, onUpdate: NoAction, map: "users_pegawai_id_foreign")
 

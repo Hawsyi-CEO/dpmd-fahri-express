@@ -130,23 +130,12 @@ router.get('/check', auth, async (req, res) => {
 
 /**
  * GET /api/push-notification/statistics
- * Get notification statistics (real data from notification_logs)
+ * Get notification statistics
  */
 router.get('/statistics', auth, async (req, res) => {
   try {
     // Count total subscriptions
     const totalSubscribers = await prisma.push_subscriptions.count();
-
-    // Count total sent from notification_logs
-    let totalSent = 0;
-    try {
-      const aggregate = await prisma.notification_logs.aggregate({
-        _sum: { sent_count: true }
-      });
-      totalSent = aggregate._sum.sent_count || 0;
-    } catch (e) {
-      totalSent = 0;
-    }
 
     // Count today's schedules
     const today = new Date();
@@ -184,7 +173,7 @@ router.get('/statistics', auth, async (req, res) => {
     res.json({
       success: true,
       data: {
-        totalSent,
+        totalSent: 0,
         totalSubscribers,
         uniqueSubscribedUsers: subscribedUsers.length,
         todaySchedules,
@@ -203,67 +192,14 @@ router.get('/statistics', auth, async (req, res) => {
 
 /**
  * GET /api/push-notification/history
- * Get notification history from notification_logs
+ * Notification history (disabled - no notification_logs table)
  */
 router.get('/history', auth, async (req, res) => {
-  try {
-    const { page = 1, limit = 20 } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    let logs = [];
-    let total = 0;
-
-    try {
-      [logs, total] = await Promise.all([
-        prisma.notification_logs.findMany({
-          orderBy: { created_at: 'desc' },
-          skip,
-          take: parseInt(limit),
-          include: {
-            sender: {
-              select: { id: true, name: true, role: true }
-            }
-          }
-        }),
-        prisma.notification_logs.count()
-      ]);
-    } catch (e) {
-      logs = [];
-      total = 0;
-    }
-
-    const data = logs.map(log => ({
-      id: log.id,
-      title: log.title,
-      body: log.body,
-      targetType: log.target_type,
-      targetValue: log.target_value ? (() => { try { return JSON.parse(log.target_value); } catch { return log.target_value; } })() : null,
-      sentTo: log.sent_count,
-      failedCount: log.failed_count,
-      sender: log.sender?.name || 'System',
-      senderRole: log.sender?.role || '-',
-      createdAt: log.created_at,
-      success: log.failed_count === 0
-    }));
-
-    res.json({
-      success: true,
-      data,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        totalPages: Math.ceil(total / parseInt(limit))
-      }
-    });
-  } catch (error) {
-    console.error('Error getting history:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get history',
-      error: error.message
-    });
-  }
+  res.json({
+    success: true,
+    data: [],
+    pagination: { page: 1, limit: 20, total: 0, totalPages: 0 }
+  });
 });
 
 /**
@@ -454,23 +390,6 @@ router.post('/send', auth, async (req, res) => {
         success: false,
         message: 'roles, userId, userIds, or broadcast flag is required'
       });
-    }
-
-    // Log notification to database
-    try {
-      await prisma.notification_logs.create({
-        data: {
-          title: title || payload?.title || 'Untitled',
-          body: body || payload?.body || '',
-          target_type: logTargetType,
-          target_value: logTargetValue,
-          sent_count: result.sentTo || 0,
-          failed_count: result.failed || 0,
-          sender_id: BigInt(req.user.id)
-        }
-      });
-    } catch (logError) {
-      console.error('Error logging notification:', logError.message);
     }
 
     console.log('   ✅ Notification sent to', result.sentTo || 0, 'users');
