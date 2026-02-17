@@ -175,7 +175,10 @@ class RTController {
           newValue: { nomor: newItem.nomor, rw_id: newItem.rw_id, status_kelembagaan: newItem.status_kelembagaan },
           userId: user.id,
           userName: user.name,
-          userRole: user.role
+          userRole: user.role,
+          bidangId: user.bidang_id,
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent')
         });
         
         console.log('✅ RT creation activity logged successfully');
@@ -233,7 +236,10 @@ class RTController {
         newValue: { nomor: updated.nomor, alamat: updated.alamat },
         userId: user.id,
         userName: user.name,
-        userRole: user.role
+        userRole: user.role,
+        bidangId: user.bidang_id,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
       });
 
       res.json({ success: true, data: updated });
@@ -287,7 +293,10 @@ class RTController {
         newValue: { status_kelembagaan: updated.status_kelembagaan },
         userId: user.id,
         userName: user.name,
-        userRole: user.role
+        userRole: user.role,
+        bidangId: user.bidang_id,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
       });
 
       res.json({ success: true, data: updated });
@@ -341,7 +350,10 @@ class RTController {
         newValue: { status_verifikasi: updated.status_verifikasi },
         userId: user.id,
         userName: user.name,
-        userRole: user.role
+        userRole: user.role,
+        bidangId: user.bidang_id,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
       });
 
       res.json({ success: true, data: updated });

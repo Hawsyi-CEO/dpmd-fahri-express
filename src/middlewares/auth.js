@@ -179,4 +179,21 @@ const authorizeDinas = (req, res, next) => {
   next();
 };
 
-module.exports = { auth, checkRole, generateToken, authorizeDinas };
+/**
+ * Require Superadmin Role
+ * Middleware untuk endpoint yang hanya boleh diakses superadmin
+ */
+const requireSuperadmin = (req, res, next) => {
+  if (req.user.role !== 'superadmin') {
+    logger.warn(`❌ Superadmin access denied - User ${req.user.email} (role: ${req.user.role})`);
+    return res.status(403).json({
+      success: false,
+      message: 'Access forbidden - Requires superadmin role'
+    });
+  }
+
+  logger.info(`✅ Superadmin authorization passed - User ${req.user.email}`);
+  next();
+};
+
+module.exports = { auth, checkRole, generateToken, authorizeDinas, requireSuperadmin };

@@ -80,6 +80,7 @@ const dinasVerifikatorRoutes = require('./routes/dinasVerifikator.routes');
 const verifikatorAksesDesaRoutes = require('./routes/verifikatorAksesDesa.routes');
 const beritaAcaraRoutes = require('./routes/beritaAcara.routes');
 const perjadinRoutes = require('./routes/perjadin.routes');
+const externalApiRoutes = require('./routes/externalApi.routes');
 
 const app = express();
 
@@ -254,6 +255,7 @@ app.use('/api/kepala-dinas', kepalaDinasRoutes); // Kepala Dinas dashboard
 app.use('/api/jadwal-kegiatan', require('./routes/jadwalKegiatan.routes')); // Jadwal Kegiatan routes
 app.use('/api/perjadin', perjadinRoutes); // Perjadin (Perjalanan Dinas) routes
 app.use('/api/berita', require('./routes/berita.routes')); // Berita routes
+app.use('/api/activity-logs', require('./routes/activityLog.routes')); // Global Activity Logs (Superadmin)
 app.use('/api/kelembagaan', kelembagaanRoutes); // Kelembagaan routes (admin/global)
 app.use('/api/kelembagaan/activity-logs', require('./routes/kelembagaanActivityLogs.routes')); // Activity logs
 app.use('/api/activity-logs', require('./routes/activityLogs.routes')); // General activity logs (bankeu, etc.)
@@ -273,6 +275,9 @@ app.use('/api/bhprd', bhprdRoutes); // BHPRD (Bagi Hasil Pajak dan Retribusi Dae
 app.use('/api/bhprd-t1', bhprdT1Routes); // BHPRD Tahap 1
 app.use('/api/bhprd-t2', bhprdT2Routes); // BHPRD Tahap 2
 app.use('/api/bhprd-t3', bhprdT3Routes); // BHPRD Tahap 3
+
+// External API Proxy routes (DPMD Bogorkab)
+app.use('/api/external', externalApiRoutes);
 
 // 404 handler
 app.use((req, res) => {

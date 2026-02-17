@@ -198,7 +198,10 @@ class RWController {
           newValue: { nomor: newItem.nomor, status_kelembagaan: newItem.status_kelembagaan },
           userId: user.id,
           userName: user.name,
-          userRole: user.role
+          userRole: user.role,
+          bidangId: user.bidang_id,
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent')
         });
         
         console.log('✅ RW creation activity logged successfully');
@@ -256,7 +259,10 @@ class RWController {
         newValue: { nomor: updated.nomor, alamat: updated.alamat },
         userId: user.id,
         userName: user.name,
-        userRole: user.role
+        userRole: user.role,
+        bidangId: user.bidang_id,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
       });
 
       res.json({ success: true, data: updated });
@@ -311,7 +317,10 @@ class RWController {
           newValue: { status_kelembagaan: updated.status_kelembagaan },
           userId: user.id,
           userName: user.name,
-          userRole: user.role
+          userRole: user.role,
+          bidangId: user.bidang_id,
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent')
         });
       } catch (logError) {
         console.error('Error logging activity:', logError);
@@ -370,7 +379,10 @@ class RWController {
           newValue: { status_verifikasi: updated.status_verifikasi },
           userId: user.id,
           userName: user.name,
-          userRole: user.role
+          userRole: user.role,
+          bidangId: user.bidang_id,
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent')
         });
       } catch (logError) {
         console.error('Error logging activity:', logError);
