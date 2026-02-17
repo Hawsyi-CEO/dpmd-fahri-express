@@ -1,7 +1,28 @@
 const prisma = require('../config/prisma');
 const path = require('path');
 const fs = require('fs').promises;
-const { sendDisposisiNotification } = require('./pushNotifications.controller');
+const PushNotificationService = require('../services/pushNotificationService');
+
+// Wrapper to match old interface
+const sendDisposisiNotification = async (disposisi) => {
+  const dariUser = disposisi.users_disposisi_dari_user_idTousers;
+  const keUser = disposisi.users_disposisi_ke_user_idTousers;
+  const surat = disposisi.surat_masuk;
+
+  if (!keUser?.id) return;
+
+  const disposisiData = {
+    id: disposisi.id,
+    perihal: surat?.perihal || 'Disposisi baru',
+    dari_user: dariUser?.name || 'Unknown',
+    nomor_surat: surat?.nomor_surat || ''
+  };
+
+  await PushNotificationService.notifyNewDisposisi(
+    disposisiData,
+    [parseInt(keUser.id)]
+  );
+};
 
 /**
  * @route POST /api/surat-masuk

@@ -5,7 +5,12 @@
 
 const express = require('express');
 const router = express.Router();
+const { auth, checkRole } = require('../middlewares/auth');
 const cronSchedulerService = require('../services/cronScheduler.service');
+
+// All cron test routes require auth + superadmin or sekretariat
+router.use(auth);
+router.use(checkRole(['superadmin']));
 
 // Test morning reminder (today's schedule)
 router.get('/test-morning-reminder', async (req, res) => {
