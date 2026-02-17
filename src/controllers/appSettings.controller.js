@@ -83,22 +83,39 @@ class AppSettingsController {
         });
       }
 
-      // Check if user has permission (superadmin or SPKED bidang members)
+      // Check if user has permission
       const userRole = req.user?.role;
       const userBidangId = req.user?.bidang_id;
-      const allowedRoles = ['superadmin'];
-      const spkedBidangId = 3; // SPKED = Sarana Prasarana Kewilayahan dan Ekonomi Desa (bidang_id=3)
+      const isSuperadmin = userRole === 'superadmin';
+      const pmdBidangId = 5; // PMD = Pemberdayaan Masyarakat Desa
+      const spkedBidangId = 3; // SPKED = Sarana Prasarana Kewilayahan dan Ekonomi Desa
       
-      console.log('🔐 [App Settings] Update attempt - User:', req.user?.name, 'Role:', userRole, 'Bidang ID:', userBidangId);
+      console.log('🔐 [App Settings] Update attempt - User:', req.user?.name, 'Role:', userRole, 'Bidang ID:', userBidangId, 'Key:', key);
       
-      const hasPermission = allowedRoles.includes(userRole) || parseInt(userBidangId) === spkedBidangId;
+      // Permission rules by setting key
+      let hasPermission = false;
+      let requiredPermission = '';
+      
+      if (key === 'kelembagaan_edit_mode') {
+        // Kelembagaan settings: Only Superadmin OR PMD
+        hasPermission = isSuperadmin || parseInt(userBidangId) === pmdBidangId;
+        requiredPermission = 'Superadmin atau Bidang PMD (bidang_id=5)';
+      } else if (key === 'bankeu_submission_desa' || key === 'bankeu_submission_kecamatan') {
+        // Bankeu settings: Only Superadmin OR SPKED
+        hasPermission = isSuperadmin || parseInt(userBidangId) === spkedBidangId;
+        requiredPermission = 'Superadmin atau Bidang SPKED (bidang_id=3)';
+      } else {
+        // Other settings: Only Superadmin OR SPKED
+        hasPermission = isSuperadmin || parseInt(userBidangId) === spkedBidangId;
+        requiredPermission = 'Superadmin atau Bidang SPKED (bidang_id=3)';
+      }
       
       if (!hasPermission) {
-        console.log('❌ [App Settings] Access denied for role:', userRole, 'bidang_id:', userBidangId);
+        console.log('❌ [App Settings] Access denied for role:', userRole, 'bidang_id:', userBidangId, 'key:', key);
         return res.status(403).json({
           success: false,
-          message: 'Forbidden: Only superadmin and Bidang SPKED (bidang_id=3) can update settings',
-          debug: { userRole, userBidangId, required: spkedBidangId }
+          message: `Forbidden: Hanya ${requiredPermission} yang dapat mengubah setting ini`,
+          debug: { userRole, userBidangId, settingKey: key, required: requiredPermission }
         });
       }
 

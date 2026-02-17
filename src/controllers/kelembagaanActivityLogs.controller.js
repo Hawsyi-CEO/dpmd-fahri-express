@@ -49,11 +49,15 @@ const getListActivityLogs = async (req, res) => {
         logs: logs.map(log => ({
           id: log.id,
           kelembagaan_nama: log.kelembagaan_nama,
+          kelembagaan_type: log.kelembagaan_type,
           activity_type: log.activity_type,
+          entity_type: log.entity_type,
+          entity_name: log.entity_name,
           action_description: log.action_description,
           user_name: log.user_name,
           user_role: log.user_role,
           created_at: log.created_at,
+          old_value: log.old_value,
           new_value: log.new_value
         }))
       }

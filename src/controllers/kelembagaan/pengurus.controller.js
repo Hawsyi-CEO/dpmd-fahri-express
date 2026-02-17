@@ -143,7 +143,10 @@ class PengurusController {
         newValue: { nama_lengkap, jabatan, status_jabatan: 'aktif' },
         userId: user.id,
         userName: user.name,
-        userRole: user.role
+        userRole: user.role,
+        bidangId: user.bidang_id,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
       });
 
       res.json({ success: true, data: pengurus });
@@ -200,7 +203,10 @@ class PengurusController {
         newValue: { nama: updated.nama, jabatan: updated.jabatan },
         userId: user.id,
         userName: user.name,
-        userRole: user.role
+        userRole: user.role,
+        bidangId: user.bidang_id,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
       });
 
       res.json({ success: true, data: updated });
@@ -249,7 +255,10 @@ class PengurusController {
         newValue: null,
         userId: user.id,
         userName: user.name,
-        userRole: user.role
+        userRole: user.role,
+        bidangId: user.bidang_id,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
       });
 
       res.json({ success: true, message: 'Pengurus berhasil dihapus' });
@@ -304,7 +313,10 @@ class PengurusController {
         newValue: { status: updated.status },
         userId: user.id,
         userName: user.name,
-        userRole: user.role
+        userRole: user.role,
+        bidangId: user.bidang_id,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
       });
 
       res.json({ success: true, data: updated });
@@ -501,7 +513,10 @@ class PengurusController {
         newValue: { status_verifikasi: updated.status_verifikasi },
         userId: user.id,
         userName: user.name,
-        userRole: user.role
+        userRole: user.role,
+        bidangId: user.bidang_id,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
       });
 
       console.log('✅ Activity logged successfully');

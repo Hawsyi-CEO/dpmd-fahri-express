@@ -139,7 +139,10 @@ function createSingletonController(type, tableName, displayName) {
             newValue: { nama: newItem.nama, status_kelembagaan: newItem.status_kelembagaan },
             userId: user.id,
             userName: user.name,
-            userRole: user.role
+            userRole: user.role,
+            bidangId: user.bidang_id,
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent')
           });
           
           console.log(`✅ ${displayName} creation activity logged successfully`);
@@ -199,7 +202,10 @@ function createSingletonController(type, tableName, displayName) {
           newValue: { nama: updated.nama, alamat: updated.alamat },
           userId: user.id,
           userName: user.name,
-          userRole: user.role
+          userRole: user.role,
+          bidangId: user.bidang_id,
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent')
         });
 
         res.json({ success: true, data: updated });
@@ -255,7 +261,10 @@ function createSingletonController(type, tableName, displayName) {
           newValue: { status_kelembagaan: updated.status_kelembagaan },
           userId: user.id,
           userName: user.name,
-          userRole: user.role
+          userRole: user.role,
+          bidangId: user.bidang_id,
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent')
         });
 
         res.json({ success: true, data: updated });
@@ -312,7 +321,10 @@ function createSingletonController(type, tableName, displayName) {
           newValue: { status_verifikasi: updated.status_verifikasi },
           userId: user.id,
           userName: user.name,
-          userRole: user.role
+          userRole: user.role,
+          bidangId: user.bidang_id,
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent')
         });
 
         res.json({ success: true, data: updated });

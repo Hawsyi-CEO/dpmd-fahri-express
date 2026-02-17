@@ -5,6 +5,7 @@
 
 const { PrismaClient } = require('@prisma/client');
 const { v4: uuidv4 } = require('uuid');
+const ActivityLogger = require('../../utils/activityLogger');
 const prisma = new PrismaClient();
 
 // Activity Log Types
@@ -25,7 +26,10 @@ const ENTITY_TYPES = {
 };
 
 /**
- * Log kelembagaan activity
+ * Log kelembagaan activity (DUAL LOGGING)
+ * Menulis ke 2 tabel:
+ * 1. kelembagaan_activity_logs - untuk tracking spesifik kelembagaan
+ * 2. activity_logs - untuk tracking global aplikasi
  */
 async function logKelembagaanActivity({
   kelembagaanType,
@@ -40,7 +44,10 @@ async function logKelembagaanActivity({
   newValue,
   userId,
   userName,
-  userRole
+  userRole,
+  bidangId = null,
+  ipAddress = null,
+  userAgent = null
 }) {
   try {
     // Build action description
@@ -75,6 +82,7 @@ async function logKelembagaanActivity({
         actionDescription = `${userName} melakukan aktivitas pada ${entityName}`;
     }
 
+    // 1. LOG KE KELEMBAGAAN_ACTIVITY_LOGS (spesifik kelembagaan)
     await prisma.kelembagaan_activity_logs.create({
       data: {
         id: uuidv4(), // Generate UUID for primary key
@@ -95,6 +103,28 @@ async function logKelembagaanActivity({
         created_at: new Date()
       }
     });
+
+    // 2. LOG KE ACTIVITY_LOGS (global tracking)
+    // Note: entityId untuk kelembagaan adalah UUID (string), tidak bisa dikonversi ke BigInt
+    // Jadi kita set null untuk activity_logs dan pakai entityName untuk referensi
+    await ActivityLogger.log({
+      userId: userId,
+      userName: userName,
+      userRole: userRole,
+      bidangId: bidangId,
+      module: 'kelembagaan',
+      action: activityType, // create, update, toggle_status, verify, dll
+      entityType: `${kelembagaanType}_${entityType}`, // rw_lembaga, rt_pengurus, dll
+      entityId: null, // UUID tidak bisa jadi BigInt, gunakan entityName sebagai referensi
+      entityName: `${kelembagaanNama} - ${entityName}`,
+      description: `[${kelembagaanType.toUpperCase()}] ${actionDescription}`,
+      oldValue: oldValue,
+      newValue: newValue,
+      ipAddress: ipAddress,
+      userAgent: userAgent
+    });
+
+    console.log(`✅ Dual logging completed: ${kelembagaanType} - ${actionDescription}`);
   } catch (error) {
     console.error('Error logging kelembagaan activity:', error);
     // Don't throw - logging should not break the main operation
