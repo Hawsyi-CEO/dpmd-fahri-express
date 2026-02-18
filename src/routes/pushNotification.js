@@ -394,6 +394,43 @@ router.post('/send', auth, async (req, res) => {
 
     console.log('   ✅ Notification sent to', result.sentTo || 0, 'users');
 
+    // Store notification records in DB for target users
+    try {
+      const notifPayload = {
+        title: title || payload?.title || 'Notifikasi',
+        body: body || payload?.body || '',
+        data: data || payload?.data || {}
+      };
+
+      let targetIds = [];
+      if (userId) {
+        targetIds = [parseInt(userId)];
+      } else if (userIds && Array.isArray(userIds)) {
+        targetIds = userIds.map(id => parseInt(id));
+      } else if (roles && Array.isArray(roles)) {
+        // Get user IDs by roles
+        const roleUsers = await prisma.users.findMany({
+          where: { role: { in: roles }, is_active: true },
+          select: { id: true }
+        });
+        targetIds = roleUsers.map(u => Number(u.id));
+      } else if (broadcast) {
+        // Get all active user IDs
+        const allUsers = await prisma.users.findMany({
+          where: { is_active: true },
+          select: { id: true }
+        });
+        targetIds = allUsers.map(u => Number(u.id));
+      }
+
+      if (targetIds.length > 0) {
+        const StaticPushService = require('../services/pushNotificationService');
+        await StaticPushService.storeNotifications(targetIds, notifPayload, req.user.id);
+      }
+    } catch (storeErr) {
+      console.error('   ⚠️ Failed to store notification records:', storeErr.message);
+    }
+
     res.json({
       success: true,
       message: 'Push notification sent',
@@ -453,104 +490,44 @@ router.post('/test', auth, async (req, res) => {
 
 /**
  * GET /api/push-notification/notifications
- * Get notifications for current user (based on activity logs)
+ * Get notifications for current user from notifications table
  */
 router.get('/notifications', auth, async (req, res) => {
   try {
     const userId = req.user.id;
-    const userRole = req.user.role;
-    const { limit = 10 } = req.query;
-    
-    let notifications = [];
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
-    try {
-      // For superadmin: get recent activity logs from all bidang
-      if (userRole === 'superadmin') {
-        const activityLogs = await prisma.activity_logs.findMany({
-          where: {
-            created_at: { gte: sevenDaysAgo }
-          },
-          include: {
-            users: { select: { name: true } },
-            bidangs: { select: { nama: true } }
-          },
-          orderBy: { created_at: 'desc' },
-          take: parseInt(limit)
-        });
-        
-        notifications = activityLogs.map(log => ({
-          id: log.id,
-          title: `${log.action_type || 'Activity'} - ${log.bidangs?.nama || 'System'}`,
-          message: log.description || `${log.users?.name} melakukan aktivitas`,
-          time: formatTimeAgo(log.created_at),
-          read: false,
-          type: log.action_type || 'activity',
-          timestamp: log.created_at
-        }));
-      } 
-      // For bidang users: get activity logs from their bidang
-      else if (['kepala_bidang', 'ketua_tim', 'pegawai'].includes(userRole)) {
-        const user = await prisma.users.findUnique({
-          where: { id: parseInt(userId) },
-          select: { bidang_id: true }
-        });
-        
-        if (user?.bidang_id) {
-          const activityLogs = await prisma.activity_logs.findMany({
-            where: {
-              bidang_id: user.bidang_id,
-              created_at: { gte: sevenDaysAgo }
-            },
-            include: {
-              users: { select: { name: true } }
-            },
-            orderBy: { created_at: 'desc' },
-            take: parseInt(limit)
-          });
-          
-          notifications = activityLogs.map(log => ({
-            id: log.id,
-            title: log.action_type || 'Activity',
-            message: log.description || `${log.users?.name} melakukan aktivitas`,
-            time: formatTimeAgo(log.created_at),
-            read: false,
-            type: log.action_type || 'activity',
-            timestamp: log.created_at
-          }));
+    const { limit = 20, offset = 0 } = req.query;
+
+    const [notifications, unreadCount] = await Promise.all([
+      prisma.notifications.findMany({
+        where: { user_id: BigInt(userId) },
+        orderBy: { created_at: 'desc' },
+        take: parseInt(limit),
+        skip: parseInt(offset),
+        include: {
+          sender: { select: { name: true } }
         }
-      }
-      // For kepala_dinas and sekretaris_dinas: get from disposisi
-      else if (['kepala_dinas', 'sekretaris_dinas'].includes(userRole)) {
-        const disposisi = await prisma.surat_masuk.findMany({
-          where: {
-            created_at: { gte: sevenDaysAgo }
-          },
-          orderBy: { created_at: 'desc' },
-          take: Math.floor(parseInt(limit) / 2)
-        });
-        
-        notifications = disposisi.map(d => ({
-          id: `disposisi-${d.id}`,
-          title: 'Disposisi Baru',
-          message: `${d.nomor_surat || ''} - ${d.perihal || ''}`,
-          time: formatTimeAgo(d.created_at),
-          read: false,
-          type: 'disposisi',
-          timestamp: d.created_at
-        }));
-      }
-    } catch (dbError) {
-      console.error('Database query error:', dbError);
-      // Return empty notifications if table doesn't exist or query fails
-      notifications = [];
-    }
+      }),
+      prisma.notifications.count({
+        where: { user_id: BigInt(userId), is_read: false }
+      })
+    ]);
+
+    const formattedNotifications = notifications.map(n => ({
+      id: n.id,
+      title: n.title,
+      message: n.message,
+      type: n.type,
+      read: n.is_read,
+      data: n.data,
+      sent_by_name: n.sender?.name || null,
+      time: formatTimeAgo(n.created_at),
+      timestamp: n.created_at
+    }));
 
     res.json({
       success: true,
-      data: notifications,
-      unreadCount: notifications.length
+      data: formattedNotifications,
+      unreadCount
     });
   } catch (error) {
     console.error('Error getting notifications:', error);
@@ -559,6 +536,40 @@ router.get('/notifications', auth, async (req, res) => {
       message: 'Failed to get notifications',
       error: error.message
     });
+  }
+});
+
+/**
+ * POST /api/push-notification/notifications/mark-read
+ * Mark specific notifications as read
+ * Body: { ids: [1, 2, 3] } or { all: true }
+ */
+router.post('/notifications/mark-read', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { ids, all } = req.body;
+
+    if (all) {
+      await prisma.notifications.updateMany({
+        where: { user_id: BigInt(userId), is_read: false },
+        data: { is_read: true, read_at: new Date() }
+      });
+    } else if (ids && Array.isArray(ids) && ids.length > 0) {
+      await prisma.notifications.updateMany({
+        where: {
+          id: { in: ids.map(id => BigInt(id)) },
+          user_id: BigInt(userId)
+        },
+        data: { is_read: true, read_at: new Date() }
+      });
+    } else {
+      return res.status(400).json({ success: false, message: 'ids array or all:true required' });
+    }
+
+    res.json({ success: true, message: 'Notifications marked as read' });
+  } catch (error) {
+    console.error('Error marking notifications as read:', error);
+    res.status(500).json({ success: false, message: 'Failed to mark as read', error: error.message });
   }
 });
 

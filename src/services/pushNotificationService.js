@@ -1,8 +1,39 @@
 const { webpush } = require('../config/push-notification');
 const PushSubscription = require('../models/pushSubscription');
 const logger = require('../utils/logger');
+const prisma = require('../config/prisma');
 
 class PushNotificationService {
+
+  /**
+   * Store notification records in DB for target users
+   * @param {Array<number>} userIds 
+   * @param {Object} payload - { title, body, data }
+   * @param {number|null} sentBy - user ID who triggered
+   */
+  static async storeNotifications(userIds, payload, sentBy = null) {
+    try {
+      if (!userIds || userIds.length === 0) return;
+
+      const type = payload.data?.type || payload.tag || 'general';
+      const records = userIds.map(userId => ({
+        user_id: BigInt(userId),
+        title: payload.title || 'Notifikasi',
+        message: payload.body || payload.message || null,
+        type: type,
+        is_read: false,
+        data: payload.data ? JSON.stringify(payload.data) : null,
+        sent_by: sentBy ? BigInt(sentBy) : null,
+        created_at: new Date(),
+      }));
+
+      await prisma.notifications.createMany({ data: records });
+      logger.info(`📝 Stored ${records.length} notification records in DB`);
+    } catch (error) {
+      // Don't fail the push send if DB storage fails
+      logger.error('Error storing notifications in DB:', error);
+    }
+  }
   /**
    * Send push notification ke user tertentu
    */
@@ -197,6 +228,7 @@ class PushNotificationService {
       ]
     };
 
+    await this.storeNotifications(targetUserIds, payload);
     return await this.sendToMultipleUsers(targetUserIds, payload);
   }
 
@@ -219,6 +251,7 @@ class PushNotificationService {
       vibrate: [100, 50, 100]
     };
 
+    await this.storeNotifications(targetUserIds, payload);
     return await this.sendToMultipleUsers(targetUserIds, payload);
   }
 
@@ -262,6 +295,7 @@ class PushNotificationService {
       }
     };
 
+    await this.storeNotifications(targetUserIds, payload);
     return await this.sendToMultipleUsers(targetUserIds, payload);
   }
 
