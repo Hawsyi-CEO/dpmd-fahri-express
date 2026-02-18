@@ -22,6 +22,11 @@ router.get('/aparatur-desa/stats', externalController.getAparaturDesaStats);
 // GET /api/external/aparatur-desa/:id - Get single aparatur desa by ID
 router.get('/aparatur-desa/:id', externalController.getAparaturDesaById);
 
+// ===== Dashboard Statistics Routes =====
+
+// GET /api/external/dashboard - Get dashboard statistics (Kepala Desa, Perangkat Desa, BPD)
+router.get('/dashboard', externalController.getDashboardStats);
+
 // ===== Location Routes =====
 
 // GET /api/external/kecamatan - Get list of kecamatan

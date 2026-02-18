@@ -37,10 +37,15 @@ const getAPIToken = async () => {
 	}
 
 	console.log('[ExternalAPI] Authenticating with DPMD API...');
+	console.log('[ExternalAPI] Using credentials:', EXTERNAL_API_USERNAME ? 'provided' : 'missing');
+
+	if (!EXTERNAL_API_USERNAME || !EXTERNAL_API_PASSWORD) {
+		throw new Error('Parameter tidak lengkap - EXTERNAL_DPMD_USERNAME dan EXTERNAL_DPMD_PASSWORD harus diset di .env');
+	}
 
 	try {
 		const response = await axios.post(`${EXTERNAL_API_BASE}/auth/login`, {
-			username: EXTERNAL_API_USERNAME,
+			email: EXTERNAL_API_USERNAME,
 			password: EXTERNAL_API_PASSWORD
 		});
 
@@ -68,6 +73,15 @@ const isTokenValid = () => {
 	if (!jwtExpiry) return true;
 	// Buffer 5 menit sebelum expire
 	return Date.now() < (jwtExpiry - 5 * 60 * 1000);
+};
+
+/**
+ * Helper: Remove dots from district/village code
+ * Database: "32.01.01" → API: "320101"
+ */
+const formatDistrictCode = (code) => {
+	if (!code) return '';
+	return code.replace(/\./g, '');
 };
 
 /**
@@ -128,16 +142,16 @@ const fetchAparaturDesa = async (params = {}) => {
 		const response = await makeExternalRequest('/apparatus', {
 			method: 'GET',
 			params: {
-				...(params.name && { name: params.name }),
-				...(params.job_type && { job_type: params.job_type }),
-				...(params.master_district_id && { master_district_id: params.master_district_id }),
-				...(params.master_village_id && { master_village_id: params.master_village_id }),
-				...(params.gender && { gender: params.gender }),
-				...(params.status_pns && { status_pns: params.status_pns }),
-				...(params.min_age && { min_age: params.min_age }),
-				...(params.max_age && { max_age: params.max_age }),
-				...(params.page && { page: params.page }),
-				...(params.limit && { limit: params.limit })
+				name: params.name || '',
+				job_type: params.job_type || '',
+				master_district_id: formatDistrictCode(params.master_district_id),
+				master_village_id: formatDistrictCode(params.master_village_id),
+				gender: params.gender || '',
+				status_pns: params.status_pns || '',
+				min_age: params.min_age || '',
+				max_age: params.max_age || '',
+				page: params.page || 1,
+				limit: params.limit || 10
 			}
 		});
 
@@ -172,7 +186,7 @@ const fetchAparaturDesaStats = async (params = {}) => {
 		const response = await makeExternalRequest('/apparatus/stats', {
 			method: 'GET',
 			params: {
-				...(params.master_district_id && { master_district_id: params.master_district_id })
+				master_district_id: formatDistrictCode(params.master_district_id)
 			}
 		});
 
@@ -207,7 +221,7 @@ const fetchDesaByKecamatan = async (districtId) => {
 	try {
 		const response = await makeExternalRequest('/master-village', {
 			method: 'GET',
-			params: { master_district_id: districtId }
+			params: { master_district_id: formatDistrictCode(districtId) }
 		});
 
 		return response.data;
@@ -238,6 +252,23 @@ const getTokenStatus = () => {
 	};
 };
 
+/**
+ * Fetch Dashboard Statistics from external API
+ * GET /dashboard
+ * Returns statistics for Kepala Desa, Perangkat Desa, and BPD
+ */
+const fetchDashboardStats = async () => {
+	console.log('[ExternalAPI] Fetching dashboard stats...');
+	
+	try {
+		const response = await makeExternalRequest('/dashboard');
+		return response.data?.data || response.data;
+	} catch (error) {
+		console.error('[ExternalAPI] Dashboard stats error:', error.message);
+		throw error;
+	}
+};
+
 module.exports = {
 	getAPIToken,
 	makeExternalRequest,
@@ -246,6 +277,7 @@ module.exports = {
 	fetchAparaturDesaStats,
 	fetchKecamatanList,
 	fetchDesaByKecamatan,
+	fetchDashboardStats,
 	clearTokenCache,
 	getTokenStatus
 };
