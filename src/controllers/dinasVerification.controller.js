@@ -705,24 +705,64 @@ const submitVerification = async (req, res) => {
       message = 'Verifikasi perlu revisi. Proposal dikembalikan ke Desa.';
     }
 
-    // Activity Log
+    // Activity Log - deduplicate: if same user did same action on same proposal, update instead of creating new
     const actionMap = { approved: 'approve', rejected: 'reject', revision: 'revision' };
-    ActivityLogger.log({
-      userId: parseInt(user_id),
-      userName: req.user.name || `User ${user_id}`,
-      userRole: role,
-      bidangId: 3,
-      module: 'bankeu',
-      action: actionMap[action] || action,
-      entityType: 'bankeu_proposal',
-      entityId: parseInt(proposalId),
-      entityName: `Proposal #${proposalId}`,
-      description: `Dinas (${req.user.name || 'User'}) ${action === 'approved' ? 'menyetujui' : action === 'rejected' ? 'menolak' : 'meminta revisi'} proposal #${proposalId} (Desa ID: ${proposal.desa_id})`,
-      oldValue: { dinas_status: proposal.dinas_status },
-      newValue: { dinas_status: action, catatan_umum: catatan_umum || null, forwarded_to: action === 'approved' ? 'kecamatan' : 'desa' },
-      ipAddress: ActivityLogger.getIpFromRequest(req),
-      userAgent: ActivityLogger.getUserAgentFromRequest(req)
-    });
+    const logAction = actionMap[action] || action;
+    const logUserId = parseInt(user_id);
+    const logEntityId = parseInt(proposalId);
+    
+    try {
+      // Check for existing log with same action by same user on same proposal
+      const existingLog = await prisma.activity_logs.findFirst({
+        where: {
+          entity_type: 'bankeu_proposal',
+          entity_id: BigInt(logEntityId),
+          module: 'bankeu',
+          action: logAction,
+          user_id: logUserId
+        },
+        orderBy: { created_at: 'desc' }
+      });
+
+      const newLogValue = { dinas_status: action, catatan_umum: catatan_umum || null, forwarded_to: action === 'approved' ? 'kecamatan' : 'desa' };
+      const logDescription = `Dinas (${req.user.name || 'User'}) ${action === 'approved' ? 'menyetujui' : action === 'rejected' ? 'menolak' : 'meminta revisi'} proposal #${proposalId} (Desa ID: ${proposal.desa_id})`;
+
+      if (existingLog) {
+        // Update existing log entry instead of creating duplicate
+        await prisma.activity_logs.update({
+          where: { id: existingLog.id },
+          data: {
+            description: logDescription,
+            old_value: JSON.stringify({ dinas_status: proposal.dinas_status }),
+            new_value: JSON.stringify(newLogValue),
+            ip_address: ActivityLogger.getIpFromRequest(req),
+            user_agent: ActivityLogger.getUserAgentFromRequest(req),
+            created_at: new Date()
+          }
+        });
+        console.log(`[ActivityLog] Updated existing log #${existingLog.id} for proposal #${proposalId}`);
+      } else {
+        // Create new log entry
+        ActivityLogger.log({
+          userId: logUserId,
+          userName: req.user.name || `User ${user_id}`,
+          userRole: role,
+          bidangId: 3,
+          module: 'bankeu',
+          action: logAction,
+          entityType: 'bankeu_proposal',
+          entityId: logEntityId,
+          entityName: `Proposal #${proposalId}`,
+          description: logDescription,
+          oldValue: { dinas_status: proposal.dinas_status },
+          newValue: newLogValue,
+          ipAddress: ActivityLogger.getIpFromRequest(req),
+          userAgent: ActivityLogger.getUserAgentFromRequest(req)
+        });
+      }
+    } catch (logError) {
+      console.error('[ActivityLog] Error handling dedup log:', logError);
+    }
 
     // Serialize BigInt fields to string for JSON response
     const serializedProposal = {

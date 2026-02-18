@@ -217,23 +217,57 @@ class BankeuVerificationController {
 
         logger.info(`✅ Proposal ${id} dikembalikan ke Desa dengan status ${action}`);
 
-        // Activity Log
-        ActivityLogger.log({
-          userId: userId,
-          userName: users[0].name || `User ${userId}`,
-          userRole: req.user.role,
-          bidangId: 3,
-          module: 'bankeu',
-          action: action === 'rejected' ? 'reject' : 'revision',
-          entityType: 'bankeu_proposal',
-          entityId: parseInt(id),
-          entityName: proposal.judul_proposal || `Proposal #${id}`,
-          description: `Kecamatan ${proposal.kecamatan_nama} (${users[0].name || 'User'}) ${action === 'rejected' ? 'menolak' : 'meminta revisi'} proposal #${id} dari Desa ${proposal.desa_nama}`,
-          oldValue: { status: proposal.status, kecamatan_status: proposal.kecamatan_status },
-          newValue: { kecamatan_status: action, catatan: catatan || null },
-          ipAddress: ActivityLogger.getIpFromRequest(req),
-          userAgent: ActivityLogger.getUserAgentFromRequest(req)
-        });
+        // Activity Log - deduplicate: update existing same-action log instead of creating new
+        const kecLogAction = action === 'rejected' ? 'reject' : 'revision';
+        try {
+          const existingLog = await prisma.activity_logs.findFirst({
+            where: {
+              entity_type: 'bankeu_proposal',
+              entity_id: BigInt(parseInt(id)),
+              module: 'bankeu',
+              action: kecLogAction,
+              user_id: userId
+            },
+            orderBy: { created_at: 'desc' }
+          });
+
+          const kecLogDesc = `Kecamatan ${proposal.kecamatan_nama} (${users[0].name || 'User'}) ${action === 'rejected' ? 'menolak' : 'meminta revisi'} proposal #${id} dari Desa ${proposal.desa_nama}`;
+          const kecNewValue = { kecamatan_status: action, catatan: catatan || null };
+
+          if (existingLog) {
+            await prisma.activity_logs.update({
+              where: { id: existingLog.id },
+              data: {
+                description: kecLogDesc,
+                old_value: JSON.stringify({ status: proposal.status, kecamatan_status: proposal.kecamatan_status }),
+                new_value: JSON.stringify(kecNewValue),
+                ip_address: ActivityLogger.getIpFromRequest(req),
+                user_agent: ActivityLogger.getUserAgentFromRequest(req),
+                created_at: new Date()
+              }
+            });
+            console.log(`[ActivityLog] Updated existing log #${existingLog.id} for kecamatan proposal #${id}`);
+          } else {
+            ActivityLogger.log({
+              userId: userId,
+              userName: users[0].name || `User ${userId}`,
+              userRole: req.user.role,
+              bidangId: 3,
+              module: 'bankeu',
+              action: kecLogAction,
+              entityType: 'bankeu_proposal',
+              entityId: parseInt(id),
+              entityName: proposal.judul_proposal || `Proposal #${id}`,
+              description: kecLogDesc,
+              oldValue: { status: proposal.status, kecamatan_status: proposal.kecamatan_status },
+              newValue: kecNewValue,
+              ipAddress: ActivityLogger.getIpFromRequest(req),
+              userAgent: ActivityLogger.getUserAgentFromRequest(req)
+            });
+          }
+        } catch (logError) {
+          console.error('[ActivityLog] Error handling dedup log:', logError);
+        }
 
         return res.json({
           success: true,
