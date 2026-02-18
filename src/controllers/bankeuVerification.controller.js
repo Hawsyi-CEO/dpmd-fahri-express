@@ -232,7 +232,7 @@ class BankeuVerificationController {
           });
 
           const kecLogDesc = `Kecamatan ${proposal.kecamatan_nama} (${users[0].name || 'User'}) ${action === 'rejected' ? 'menolak' : 'meminta revisi'} proposal #${id} dari Desa ${proposal.desa_nama}`;
-          const kecNewValue = { kecamatan_status: action, catatan: catatan || null };
+          const kecNewValue = { kecamatan_status: action, catatan: catatan || null, file_proposal: proposal.file_proposal || null };
 
           if (existingLog) {
             await prisma.activity_logs.update({
@@ -309,7 +309,7 @@ class BankeuVerificationController {
         entityId: parseInt(id),
         entityName: proposal.judul_proposal || `Proposal #${id}`,
         description: `Kecamatan ${proposal.kecamatan_nama} (${users[0].name || 'User'}) menyetujui proposal #${id} dari Desa ${proposal.desa_nama}`,
-        newValue: { kecamatan_status: 'approved', catatan: catatan || null },
+        newValue: { kecamatan_status: 'approved', catatan: catatan || null, file_proposal: proposal.file_proposal || null },
         ipAddress: ActivityLogger.getIpFromRequest(req),
         userAgent: ActivityLogger.getUserAgentFromRequest(req)
       });

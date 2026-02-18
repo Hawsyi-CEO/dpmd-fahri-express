@@ -724,7 +724,7 @@ const submitVerification = async (req, res) => {
         orderBy: { created_at: 'desc' }
       });
 
-      const newLogValue = { dinas_status: action, catatan_umum: catatan_umum || null, forwarded_to: action === 'approved' ? 'kecamatan' : 'desa' };
+      const newLogValue = { dinas_status: action, catatan_umum: catatan_umum || null, forwarded_to: action === 'approved' ? 'kecamatan' : 'desa', file_proposal: proposal.file_proposal || null };
       const logDescription = `Dinas (${req.user.name || 'User'}) ${action === 'approved' ? 'menyetujui' : action === 'rejected' ? 'menolak' : 'meminta revisi'} proposal #${proposalId} (Desa ID: ${proposal.desa_id})`;
 
       if (existingLog) {
