@@ -88,6 +88,24 @@ model app_settings {
   @@index([setting_key], map: "idx_setting_key")
 }
 
+model bankeu_surat_templates {
+  id                 Int                              @id @default(autoincrement()) @db.UnsignedInt
+  kode               String                           @unique(map: "unique_kode") @db.VarChar(50)
+  nama               String                           @db.VarChar(255)
+  deskripsi          String?                          @db.Text
+  kategori           bankeu_surat_templates_kategori  @default(desa)
+  content_html       String                           @db.LongText
+  placeholders       Json?
+  is_active          Boolean                          @default(true)
+  updated_by_user_id BigInt?                          @db.UnsignedBigInt
+  created_at         DateTime?                        @default(now()) @db.Timestamp(0)
+  updated_at         DateTime?                        @db.Timestamp(0)
+  users              users?                           @relation("surat_template_updater", fields: [updated_by_user_id], references: [id], onDelete: SetNull, map: "fk_surat_template_user")
+
+  @@index([kategori], map: "idx_kategori")
+  @@index([updated_by_user_id], map: "fk_surat_template_user")
+}
+
 model bankeu_master_kegiatan {
   id                       Int                                   @id @default(autoincrement()) @db.UnsignedTinyInt
   jenis_kegiatan           bankeu_master_kegiatan_jenis_kegiatan
@@ -1030,6 +1048,7 @@ model users {
   pegawai_id                                                     BigInt?                     @db.UnsignedBigInt
   activity_logs                                                  activity_logs[]
   app_settings                                                   app_settings[]
+  bankeu_surat_templates                                         bankeu_surat_templates[]    @relation("surat_template_updater")
   bankeu_proposals_bankeu_proposals_dpmd_verified_byTousers      bankeu_proposals[]          @relation("bankeu_proposals_dpmd_verified_byTousers")
   bankeu_proposals_bankeu_proposals_kecamatan_verified_byTousers bankeu_proposals[]          @relation("bankeu_proposals_kecamatan_verified_byTousers")
   bankeu_proposals_bankeu_proposals_created_byTousers            bankeu_proposals[]          @relation("bankeu_proposals_created_byTousers")
@@ -1069,6 +1088,11 @@ model verifikator_akses_desa {
 enum bankeu_master_kegiatan_jenis_kegiatan {
   infrastruktur
   non_infrastruktur
+}
+
+enum bankeu_surat_templates_kategori {
+  desa
+  kecamatan
 }
 
 enum pejabat_ttd_jenis_pejabat {

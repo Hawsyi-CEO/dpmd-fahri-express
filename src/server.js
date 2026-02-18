@@ -241,6 +241,7 @@ app.use('/api/kecamatan/bankeu', bankeuVerificationRoutes); // Bankeu verificati
 app.use('/api/dinas/bankeu', dinasVerificationRoutes); // Bankeu verification routes for dinas terkait
 app.use('/api/dpmd/bankeu', dpmdVerificationRoutes); // Bankeu verification routes for DPMD/SPKED
 app.use('/api/bankeu/master-kegiatan', bankeuMasterKegiatanRoutes); // Master kegiatan CRUD
+app.use('/api/bankeu/surat-templates', require('./routes/bankeuSuratTemplate.routes')); // Surat template management
 app.use('/api/master/dinas', dinasRoutes); // Dinas master data CRUD
 app.use('/api/dinas', require('./routes/dinasConfig.routes')); // Dinas configuration (TTD + PIC)
 app.use('/api/dinas', dinasVerifikatorRoutes); // Dinas verifikator management
