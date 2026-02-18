@@ -370,7 +370,39 @@ class PosyanduController {
         orderBy: [{ desa_id: 'asc' }, { nama: 'asc' }]
       });
 
-      res.json({ success: true, data: items });
+      // Get ketua for each Posyandu
+      const enrichedData = await Promise.all(
+        items.map(async (posyandu) => {
+          const ketua = await prisma.pengurus.findFirst({
+            where: {
+              pengurusable_type: 'posyandus',
+              pengurusable_id: posyandu.id,
+              status_jabatan: 'aktif',
+              jabatan: {
+                in: ['Ketua', 'ketua', 'KETUA', 'Ketua Posyandu', 'ketua posyandu']
+              }
+            },
+            select: {
+              nama_lengkap: true
+            }
+          });
+
+          return {
+            id: posyandu.id,
+            nama: posyandu.nama,
+            alamat: posyandu.alamat,
+            status_kelembagaan: posyandu.status_kelembagaan,
+            status_verifikasi: posyandu.status_verifikasi,
+            desa_id: posyandu.desa_id,
+            desa: posyandu.desas,
+            ketua_nama: ketua?.nama_lengkap || null,
+            created_at: posyandu.created_at,
+            updated_at: posyandu.updated_at
+          };
+        })
+      );
+
+      res.json({ success: true, data: enrichedData });
     } catch (error) {
       console.error('Error in listPosyandu:', error);
       res.status(500).json({ success: false, message: 'Gagal mengambil data Posyandu', error: error.message });

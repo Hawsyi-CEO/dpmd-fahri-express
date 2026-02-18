@@ -233,14 +233,14 @@ class SummaryController {
       ] = await Promise.all([
         prisma.pengurus.count({ 
           where: { 
-            pengurusable_type: 'rw',
+            pengurusable_type: 'rws',
             pengurusable_id: { in: activeRws.map(r => r.id) },
             status_jabatan: 'aktif'
           } 
         }),
         prisma.pengurus.count({ 
           where: { 
-            pengurusable_type: 'rt',
+            pengurusable_type: 'rts',
             pengurusable_id: { in: activeRts.map(r => r.id) },
             status_jabatan: 'aktif'
           } 
@@ -330,15 +330,15 @@ class SummaryController {
         pengurusKelurahanRw, pengurusKelurahanRt, pengurusKelurahanPosyandu, pengurusKelurahanKarangTaruna,
         pengurusKelurahanLpm, pengurusKelurahanSatlinmas, pengurusKelurahanPkk
       ] = await Promise.all([
-        prisma.pengurus.count({ where: { pengurusable_type: 'rw', pengurusable_id: { in: desaActiveIds.rw }, status_jabatan: 'aktif' } }),
-        prisma.pengurus.count({ where: { pengurusable_type: 'rt', pengurusable_id: { in: desaActiveIds.rt }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'rws', pengurusable_id: { in: desaActiveIds.rw }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'rts', pengurusable_id: { in: desaActiveIds.rt }, status_jabatan: 'aktif' } }),
         prisma.pengurus.count({ where: { pengurusable_type: 'posyandus', pengurusable_id: { in: desaActiveIds.posyandu }, status_jabatan: 'aktif' } }),
         prisma.pengurus.count({ where: { pengurusable_type: 'karang_tarunas', pengurusable_id: { in: desaActiveIds.karangTaruna }, status_jabatan: 'aktif' } }),
         prisma.pengurus.count({ where: { pengurusable_type: 'lpms', pengurusable_id: { in: desaActiveIds.lpm }, status_jabatan: 'aktif' } }),
         prisma.pengurus.count({ where: { pengurusable_type: 'satlinmas', pengurusable_id: { in: desaActiveIds.satlinmas }, status_jabatan: 'aktif' } }),
         prisma.pengurus.count({ where: { pengurusable_type: 'pkks', pengurusable_id: { in: desaActiveIds.pkk }, status_jabatan: 'aktif' } }),
-        prisma.pengurus.count({ where: { pengurusable_type: 'rw', pengurusable_id: { in: kelurahanActiveIds.rw }, status_jabatan: 'aktif' } }),
-        prisma.pengurus.count({ where: { pengurusable_type: 'rt', pengurusable_id: { in: kelurahanActiveIds.rt }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'rws', pengurusable_id: { in: kelurahanActiveIds.rw }, status_jabatan: 'aktif' } }),
+        prisma.pengurus.count({ where: { pengurusable_type: 'rts', pengurusable_id: { in: kelurahanActiveIds.rt }, status_jabatan: 'aktif' } }),
         prisma.pengurus.count({ where: { pengurusable_type: 'posyandus', pengurusable_id: { in: kelurahanActiveIds.posyandu }, status_jabatan: 'aktif' } }),
         prisma.pengurus.count({ where: { pengurusable_type: 'karang_tarunas', pengurusable_id: { in: kelurahanActiveIds.karangTaruna }, status_jabatan: 'aktif' } }),
         prisma.pengurus.count({ where: { pengurusable_type: 'lpms', pengurusable_id: { in: kelurahanActiveIds.lpm }, status_jabatan: 'aktif' } }),

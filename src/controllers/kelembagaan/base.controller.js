@@ -107,11 +107,15 @@ async function logKelembagaanActivity({
     // 2. LOG KE ACTIVITY_LOGS (global tracking)
     // Note: entityId untuk kelembagaan adalah UUID (string), tidak bisa dikonversi ke BigInt
     // Jadi kita set null untuk activity_logs dan pakai entityName untuk referensi
+    // IMPORTANT: Kelembagaan adalah tanggung jawab Bidang PMD (bidang_id: 5)
+    // Jika user tidak punya bidang_id (superadmin/desa), set ke 5 agar muncul di activity log PMD
+    const effectiveBidangId = bidangId || 5;
+    
     await ActivityLogger.log({
       userId: userId,
       userName: userName,
       userRole: userRole,
-      bidangId: bidangId,
+      bidangId: effectiveBidangId,
       module: 'kelembagaan',
       action: activityType, // create, update, toggle_status, verify, dll
       entityType: `${kelembagaanType}_${entityType}`, // rw_lembaga, rt_pengurus, dll
