@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bankeuVerificationController = require('../controllers/bankeuVerification.controller');
+const dinasVerificationController = require('../controllers/dinasVerification.controller');
 const { auth } = require('../middlewares/auth');
 const multer = require('multer');
 const path = require('path');
@@ -43,6 +44,9 @@ router.get('/proposals', bankeuVerificationController.getProposalsByKecamatan);
 
 // Verify (approve/reject) proposal
 router.patch('/proposals/:id/verify', bankeuVerificationController.verifyProposal);
+
+// Get proposal verification history (reuse from dinas controller - same activity_logs table)
+router.get('/proposals/:proposalId/history', dinasVerificationController.getProposalVerificationHistory);
 
 // Get statistics
 router.get('/statistics', bankeuVerificationController.getStatistics);
