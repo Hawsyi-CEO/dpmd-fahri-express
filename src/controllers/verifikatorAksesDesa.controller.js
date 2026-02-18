@@ -319,9 +319,12 @@ exports.getAvailableDesas = async (req, res) => {
         k.kode as kode_kecamatan
       FROM desas d
       INNER JOIN kecamatans k ON d.kecamatan_id = k.id
-      LEFT JOIN verifikator_akses_desa vad ON d.id = vad.desa_id
-      LEFT JOIN dinas_verifikator dv ON vad.verifikator_id = dv.id AND dv.dinas_id = ${dinas_id}
-      WHERE vad.id IS NULL OR dv.id IS NULL
+      WHERE d.id NOT IN (
+        SELECT vad.desa_id 
+        FROM verifikator_akses_desa vad
+        INNER JOIN dinas_verifikator dv ON vad.verifikator_id = dv.id
+        WHERE dv.dinas_id = ${dinas_id}
+      )
       ORDER BY k.nama, d.nama
     `;
 
