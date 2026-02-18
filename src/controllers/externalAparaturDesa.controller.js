@@ -4,6 +4,8 @@
  */
 
 const externalApiService = require('../services/externalApiProxy.service');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 /**
  * Get all aparatur desa from external API
@@ -116,17 +118,33 @@ const getAparaturDesaStats = async (req, res) => {
 };
 
 /**
- * Get list of kecamatan from external API
+ * Get list of kecamatan from database
  * GET /api/external/kecamatan
  */
 const getKecamatanList = async (req, res) => {
 	try {
-		const data = await externalApiService.fetchKecamatanList();
+		const kecamatanList = await prisma.kecamatans.findMany({
+			orderBy: { nama: 'asc' },
+			select: {
+				id: true,
+				kode: true,
+				nama: true
+			}
+		});
+
+		// Format to match external API format (code without dots)
+		const data = kecamatanList.map(kec => ({
+			id: Number(kec.id),
+			code: kec.kode.replace(/\./g, ''),
+			name: kec.nama,
+			// Keep original kode for reference
+			kode: kec.kode
+		}));
 
 		res.json({
 			success: true,
 			message: 'Daftar Kecamatan',
-			...data
+			data
 		});
 	} catch (error) {
 		console.error('[ExternalController] Error:', error.message);
@@ -139,7 +157,7 @@ const getKecamatanList = async (req, res) => {
 };
 
 /**
- * Get list of desa by kecamatan from external API
+ * Get list of desa by kecamatan from database
  * GET /api/external/desa
  */
 const getDesaByKecamatan = async (req, res) => {
@@ -153,12 +171,48 @@ const getDesaByKecamatan = async (req, res) => {
 			});
 		}
 
-		const data = await externalApiService.fetchDesaByKecamatan(master_district_id);
+		// Convert code without dots to code with dots for database query
+		// e.g., "320101" -> "32.01.01"
+		let kodeKecamatan = master_district_id;
+		if (!master_district_id.includes('.') && master_district_id.length === 6) {
+			kodeKecamatan = `${master_district_id.slice(0,2)}.${master_district_id.slice(2,4)}.${master_district_id.slice(4,6)}`;
+		}
+
+		// Find kecamatan by kode
+		const kecamatan = await prisma.kecamatans.findFirst({
+			where: { kode: kodeKecamatan }
+		});
+
+		if (!kecamatan) {
+			return res.json({
+				success: true,
+				message: 'Daftar Desa',
+				data: []
+			});
+		}
+
+		const desaList = await prisma.desas.findMany({
+			where: { kecamatan_id: kecamatan.id },
+			orderBy: { nama: 'asc' },
+			select: {
+				id: true,
+				kode: true,
+				nama: true
+			}
+		});
+
+		// Format to match external API format
+		const data = desaList.map(desa => ({
+			id: Number(desa.id),
+			code: desa.kode.replace(/\./g, ''),
+			name: desa.nama,
+			kode: desa.kode
+		}));
 
 		res.json({
 			success: true,
 			message: 'Daftar Desa',
-			...data
+			data
 		});
 	} catch (error) {
 		console.error('[ExternalController] Error:', error.message);
@@ -228,6 +282,30 @@ const clearCache = async (req, res) => {
 	}
 };
 
+/**
+ * Get dashboard statistics from external API
+ * GET /api/external/dashboard
+ * Returns statistics for Kepala Desa, Perangkat Desa, and BPD
+ */
+const getDashboardStats = async (req, res) => {
+	try {
+		const data = await externalApiService.fetchDashboardStats();
+
+		res.json({
+			success: true,
+			message: 'Dashboard Statistics from External API',
+			data
+		});
+	} catch (error) {
+		console.error('[ExternalController] Dashboard stats error:', error.message);
+		res.status(500).json({
+			success: false,
+			message: 'Gagal mengambil data statistik dashboard',
+			error: error.message
+		});
+	}
+};
+
 module.exports = {
 	getAparaturDesa,
 	getAparaturDesaById,
@@ -235,5 +313,6 @@ module.exports = {
 	getKecamatanList,
 	getDesaByKecamatan,
 	getConnectionStatus,
+	getDashboardStats,
 	clearCache
 };
