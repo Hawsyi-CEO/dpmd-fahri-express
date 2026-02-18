@@ -728,12 +728,19 @@ class BankeuProposalController {
       const fileSize = req.file.size;
       const oldFilePath = proposal.file_proposal;
 
-      // Delete old file if exists
+      // Move old file to reference folder (preserve for history) instead of deleting
       if (oldFilePath) {
-        const fullPath = path.join(__dirname, '../../storage/uploads', oldFilePath);
+        const fullPath = path.join(__dirname, '../../storage/uploads/bankeu', oldFilePath);
+        const referenceDir = path.join(__dirname, '../../storage/uploads/bankeu_reference');
+        const referencePath = path.join(referenceDir, oldFilePath);
+        
+        if (!fs.existsSync(referenceDir)) {
+          fs.mkdirSync(referenceDir, { recursive: true });
+        }
+        
         if (fs.existsSync(fullPath)) {
-          fs.unlinkSync(fullPath);
-          logger.info(`🗑️ Deleted old file: ${oldFilePath}`);
+          fs.renameSync(fullPath, referencePath);
+          logger.info(`📦 Moved old file to reference: ${oldFilePath}`);
         }
       }
 
@@ -1539,13 +1546,20 @@ class BankeuProposalController {
         updates.push('file_proposal = ?', 'file_size = ?');
         replacements.push(filePath, fileSize);
 
-        // Delete old file if exists
+        // Move old file to reference folder (preserve for history) instead of deleting
         const oldFilePath = proposal.file_proposal;
         if (oldFilePath) {
           const fullOldPath = path.join(__dirname, '../../storage/uploads/bankeu', oldFilePath);
+          const referenceDir = path.join(__dirname, '../../storage/uploads/bankeu_reference');
+          const referencePath = path.join(referenceDir, oldFilePath);
+          
+          if (!fs.existsSync(referenceDir)) {
+            fs.mkdirSync(referenceDir, { recursive: true });
+          }
+          
           if (fs.existsSync(fullOldPath)) {
-            fs.unlinkSync(fullOldPath);
-            logger.info(`🗑️ Deleted old file: ${oldFilePath}`);
+            fs.renameSync(fullOldPath, referencePath);
+            logger.info(`📦 Moved old file to reference: ${oldFilePath}`);
           }
         }
       }

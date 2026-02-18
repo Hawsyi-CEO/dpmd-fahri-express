@@ -184,6 +184,23 @@ app.use('/uploads', (req, res, next) => {
   next();
 }, express.static(path.join(__dirname, '../storage/uploads')));
 
+// Serve bankeu proposal files with fallback to bankeu_reference/ (for old/revised files)
+app.get('/storage/uploads/bankeu/resolve/:filename', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  const filename = req.params.filename;
+  const primaryPath = path.join(__dirname, '../storage/uploads/bankeu', filename);
+  const fallbackPath = path.join(__dirname, '../storage/uploads/bankeu_reference', filename);
+  
+  if (fs.existsSync(primaryPath)) {
+    return res.sendFile(primaryPath);
+  } else if (fs.existsSync(fallbackPath)) {
+    return res.sendFile(fallbackPath);
+  } else {
+    return res.status(404).json({ success: false, message: 'File tidak ditemukan' });
+  }
+});
+
 // Serve public files (bankeu2025.json, etc)
 app.use('/public', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');

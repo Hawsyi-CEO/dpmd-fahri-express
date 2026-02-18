@@ -727,8 +727,13 @@ const submitVerification = async (req, res) => {
       const newLogValue = { dinas_status: action, catatan_umum: catatan_umum || null, forwarded_to: action === 'approved' ? 'kecamatan' : 'desa', file_proposal: proposal.file_proposal || null };
       const logDescription = `Dinas (${req.user.name || 'User'}) ${action === 'approved' ? 'menyetujui' : action === 'rejected' ? 'menolak' : 'meminta revisi'} proposal #${proposalId} (Desa ID: ${proposal.desa_id})`;
 
-      if (existingLog) {
-        // Update existing log entry instead of creating duplicate
+      // Only dedup if proposal status hasn't been reset (desa hasn't resubmitted)
+      // If proposal.dinas_status is still 'rejected'/'revision' (same as current action), it means
+      // dinas is re-editing catatan. If it's 'pending'/'in_review', desa already resubmitted → new cycle.
+      const shouldDedup = existingLog && (proposal.dinas_status === 'rejected' || proposal.dinas_status === 'revision');
+
+      if (shouldDedup) {
+        // Update existing log entry (same review session, just editing catatan)
         await prisma.activity_logs.update({
           where: { id: existingLog.id },
           data: {

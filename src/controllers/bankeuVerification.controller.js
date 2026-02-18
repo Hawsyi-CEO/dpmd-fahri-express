@@ -234,7 +234,12 @@ class BankeuVerificationController {
           const kecLogDesc = `Kecamatan ${proposal.kecamatan_nama} (${users[0].name || 'User'}) ${action === 'rejected' ? 'menolak' : 'meminta revisi'} proposal #${id} dari Desa ${proposal.desa_nama}`;
           const kecNewValue = { kecamatan_status: action, catatan: catatan || null, file_proposal: proposal.file_proposal || null };
 
-          if (existingLog) {
+          // Only dedup if proposal status hasn't been reset (desa hasn't resubmitted)
+          // If kecamatan_status is still 'rejected'/'revision', dinas is re-editing catatan
+          // If it's 'pending'/'approved', desa already resubmitted → new cycle
+          const shouldDedup = existingLog && (proposal.kecamatan_status === 'rejected' || proposal.kecamatan_status === 'revision');
+
+          if (shouldDedup) {
             await prisma.activity_logs.update({
               where: { id: existingLog.id },
               data: {
