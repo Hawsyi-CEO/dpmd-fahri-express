@@ -889,7 +889,7 @@ class BankeuVerificationController {
   async saveConfig(req, res) {
     try {
       const { kecamatanId } = req.params;
-      const { nama_camat, nip_camat, alamat, telepon, email, website, kode_pos } = req.body;
+      const { nama_camat, nip_camat, jabatan_penandatangan, alamat, telepon, email, website, kode_pos } = req.body;
       const userId = req.user.id;
 
       // Verify user is from this kecamatan
@@ -914,15 +914,15 @@ class BankeuVerificationController {
         // Update
         await sequelize.query(`
           UPDATE kecamatan_bankeu_config
-          SET nama_camat = ?, nip_camat = ?, alamat = ?, telepon = ?, email = ?, website = ?, kode_pos = ?, updated_at = NOW()
+          SET nama_camat = ?, nip_camat = ?, jabatan_penandatangan = ?, alamat = ?, telepon = ?, email = ?, website = ?, kode_pos = ?, updated_at = NOW()
           WHERE kecamatan_id = ?
-        `, { replacements: [nama_camat, nip_camat, alamat, telepon, email, website, kode_pos, kecamatanId] });
+        `, { replacements: [nama_camat, nip_camat, jabatan_penandatangan || 'Camat', alamat, telepon, email, website, kode_pos, kecamatanId] });
       } else {
         // Insert
         await sequelize.query(`
-          INSERT INTO kecamatan_bankeu_config (kecamatan_id, nama_camat, nip_camat, alamat, telepon, email, website, kode_pos, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-        `, { replacements: [kecamatanId, nama_camat, nip_camat, alamat, telepon, email, website, kode_pos] });
+          INSERT INTO kecamatan_bankeu_config (kecamatan_id, nama_camat, nip_camat, jabatan_penandatangan, alamat, telepon, email, website, kode_pos, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        `, { replacements: [kecamatanId, nama_camat, nip_camat, jabatan_penandatangan || 'Camat', alamat, telepon, email, website, kode_pos] });
       }
 
       const [updated] = await sequelize.query(`

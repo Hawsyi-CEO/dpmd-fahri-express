@@ -38,7 +38,8 @@ exports.getAllVerifikator = async (req, res) => {
         dv.is_active,
         dv.created_at,
         u.name as username,
-        u.email as user_email
+        u.email as user_email,
+        u.plain_password
       FROM dinas_verifikator dv
       JOIN users u ON dv.user_id = u.id
       WHERE dv.dinas_id = ${dinasIdInt}
@@ -98,6 +99,7 @@ exports.createVerifikator = async (req, res) => {
         name: nama,
         email,
         password: hashedPassword,
+        plain_password: password,
         role: 'verifikator_dinas',
         dinas_id: dinasIdInt,
         is_active: true
@@ -297,7 +299,10 @@ exports.resetVerifikatorPassword = async (req, res) => {
     // Update password
     await prisma.users.update({
       where: { id: userId },
-      data: { password: hashedPassword }
+      data: { 
+        password: hashedPassword,
+        plain_password: new_password
+      }
     });
 
     logger.info(`Verifikator password created: ID ${verifikatorId}`);

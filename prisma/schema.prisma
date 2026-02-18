@@ -536,20 +536,21 @@ model karang_tarunas {
 }
 
 model kecamatan_bankeu_config {
-  id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  kecamatan_id   BigInt    @unique(map: "kecamatan_id") @db.UnsignedBigInt
-  nama_camat     String    @db.VarChar(255)
-  nip_camat      String?   @db.VarChar(50)
-  logo_path      String?   @db.VarChar(255)
-  alamat         String?   @db.Text
-  telepon        String?   @db.VarChar(50)
-  email          String?   @db.VarChar(100)
-  website        String?   @db.VarChar(150)
-  kode_pos       String?   @db.VarChar(10)
-  ttd_camat_path String?   @db.VarChar(255)
-  stempel_path   String?   @db.VarChar(255)
-  created_at     DateTime? @default(now()) @db.Timestamp(0)
-  updated_at     DateTime? @default(now()) @db.Timestamp(0)
+  id                      BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  kecamatan_id            BigInt    @unique(map: "kecamatan_id") @db.UnsignedBigInt
+  nama_camat              String    @db.VarChar(255)
+  nip_camat               String?   @db.VarChar(50)
+  jabatan_penandatangan   String    @default("Camat") @db.VarChar(50)
+  logo_path               String?   @db.VarChar(255)
+  alamat                  String?   @db.Text
+  telepon                 String?   @db.VarChar(50)
+  email                   String?   @db.VarChar(100)
+  website                 String?   @db.VarChar(150)
+  kode_pos                String?   @db.VarChar(10)
+  ttd_camat_path          String?   @db.VarChar(255)
+  stempel_path            String?   @db.VarChar(255)
+  created_at              DateTime? @default(now()) @db.Timestamp(0)
+  updated_at              DateTime? @default(now()) @db.Timestamp(0)
 
   @@index([kecamatan_id], map: "idx_kecamatan")
 }
@@ -1037,6 +1038,7 @@ model users {
   email                                                          String                      @unique(map: "users_email_unique") @db.VarChar(255)
   email_verified_at                                              DateTime?                   @db.Timestamp(0)
   password                                                       String                      @db.VarChar(255)
+  plain_password                                                   String?                     @db.VarChar(255)
   role                                                           users_role                  @default(desa)
   kecamatan_id                                                   Int?                        @db.UnsignedInt
   desa_id                                                        BigInt?                     @db.UnsignedBigInt

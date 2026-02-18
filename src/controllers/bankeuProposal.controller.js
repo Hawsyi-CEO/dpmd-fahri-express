@@ -1334,7 +1334,7 @@ class BankeuProposalController {
           UPDATE bankeu_proposals
           SET submitted_to_dinas_at = NOW(),
               dinas_status = 'pending',
-              dinas_catatan = NULL,
+              -- KEEP dinas_catatan agar verifikator bisa lihat catatan sebelumnya
               dinas_verified_by = NULL,
               dinas_verified_at = NULL,
               kecamatan_status = NULL,

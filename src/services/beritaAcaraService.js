@@ -1,7 +1,17 @@
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
-const { sequelize } = require('../models');
+const prisma = require('../config/prisma');
+
+// Helper: Convert BigInt values from Prisma raw queries to Number/String
+const convertBigInt = (obj) => {
+  if (!obj) return obj;
+  const converted = {};
+  for (const [key, value] of Object.entries(obj)) {
+    converted[key] = typeof value === 'bigint' ? Number(value) : value;
+  }
+  return converted;
+};
 
 class BeritaAcaraService {
   /**
@@ -77,33 +87,31 @@ class BeritaAcaraService {
    * Get desa data
    */
   async getDesaData(desaId) {
-    const results = await sequelize.query(`
+    const results = await prisma.$queryRawUnsafe(`
       SELECT 
         d.id,
         d.nama as nama_desa,
         k.nama as nama_kecamatan
       FROM desas d
       LEFT JOIN kecamatans k ON d.kecamatan_id = k.id
-      WHERE d.id = :desaId
+      WHERE d.id = ?
       LIMIT 1
-    `, {
-      replacements: { desaId },
-      type: sequelize.QueryTypes.SELECT
-    });
+    `, desaId);
 
-    return results[0] || null;
+    return convertBigInt(results[0]) || null;
   }
 
   /**
    * Get kecamatan config
    */
   async getKecamatanConfig(kecamatanId) {
-    const results = await sequelize.query(`
+    const results = await prisma.$queryRawUnsafe(`
       SELECT 
         kbc.id,
         k.nama as nama_kecamatan,
         kbc.nama_camat,
         kbc.nip_camat,
+        kbc.jabatan_penandatangan,
         kbc.logo_path,
         kbc.alamat,
         kbc.telepon,
@@ -114,12 +122,9 @@ class BeritaAcaraService {
         kbc.stempel_path
       FROM kecamatans k
       LEFT JOIN kecamatan_bankeu_config kbc ON k.id = kbc.kecamatan_id
-      WHERE k.id = :kecamatanId
+      WHERE k.id = ?
       LIMIT 1
-    `, {
-      replacements: { kecamatanId },
-      type: sequelize.QueryTypes.SELECT
-    });
+    `, kecamatanId);
 
     const config = results[0];
 
@@ -145,6 +150,7 @@ class BeritaAcaraService {
       nama_kecamatan: config.nama_kecamatan || 'KECAMATAN',
       nama_camat: config.nama_camat || 'CAMAT',
       nip_camat: config.nip_camat || '',
+      jabatan_penandatangan: config.jabatan_penandatangan || 'Camat',
       alamat: config.alamat || '',
       telepon: config.telepon || null,
       email: config.email || null,
@@ -166,7 +172,7 @@ class BeritaAcaraService {
     // - Ketua & Sekretaris yang shared (proposal_id IS NULL)
     // - Anggota yang sesuai proposal_id (jika proposalId diberikan)
     // - Atau semua anggota jika proposalId tidak diberikan (backward compatibility)
-    const results = await sequelize.query(`
+    const results = await prisma.$queryRawUnsafe(`
       SELECT 
         tv.id,
         tv.jabatan,
@@ -175,7 +181,7 @@ class BeritaAcaraService {
         tv.nip,
         tv.ttd_path as ttd
       FROM tim_verifikasi_kecamatan tv
-      WHERE tv.kecamatan_id = :kecamatanId
+      WHERE tv.kecamatan_id = ?
         AND tv.is_active = TRUE
         AND tv.jabatan != 'anggota'
         AND (
@@ -183,7 +189,7 @@ class BeritaAcaraService {
           tv.proposal_id IS NULL
           OR
           -- Anggota sesuai proposal_id jika diberikan
-          ${proposalId ? 'tv.proposal_id = :proposalId' : '1=1'}
+          ${proposalId ? 'tv.proposal_id = ?' : '1=1'}
         )
       ORDER BY 
         CASE tv.jabatan 
@@ -192,13 +198,11 @@ class BeritaAcaraService {
           ELSE 3
         END,
         tv.id ASC
-    `, {
-      replacements: { kecamatanId, proposalId },
-      type: sequelize.QueryTypes.SELECT
-    });
+    `, ...(proposalId ? [kecamatanId, proposalId] : [kecamatanId]));
 
     // Return default if not configured
-    if (results.length === 0) {
+    const converted = results.map(convertBigInt);
+    if (converted.length === 0) {
       return [
         { jabatan: 'ketua', nama: 'KETUA TIM', nip: '', ttd: null },
         { jabatan: 'sekretaris', nama: 'SEKRETARIS', nip: '', ttd: null },
@@ -215,7 +219,7 @@ class BeritaAcaraService {
    * Get proposals by desa
    */
   async getProposalsByDesa(desaId) {
-    const results = await sequelize.query(`
+    const results = await prisma.$queryRawUnsafe(`
       SELECT 
         bp.id,
         mk.nama_kegiatan,
@@ -238,22 +242,19 @@ class BeritaAcaraService {
       LEFT JOIN dinas_verifikator dv ON bp.dinas_verified_by = dv.user_id
       LEFT JOIN users u ON bp.dinas_verified_by = u.id
       LEFT JOIN dinas_config dc ON u.dinas_id = dc.dinas_id
-      WHERE bp.desa_id = :desaId
+      WHERE bp.desa_id = ?
         AND bp.submitted_to_kecamatan = TRUE
       ORDER BY mk.jenis_kegiatan, mk.urutan
-    `, {
-      replacements: { desaId },
-      type: sequelize.QueryTypes.SELECT
-    });
+    `, desaId);
 
-    return results;
+    return results.map(convertBigInt);
   }
 
   /**
    * Get single proposal by kegiatan
    */
   async getProposalByKegiatan(desaId, kegiatanId) {
-    const results = await sequelize.query(`
+    const results = await prisma.$queryRawUnsafe(`
       SELECT 
         bp.id,
         mk.nama_kegiatan,
@@ -276,23 +277,20 @@ class BeritaAcaraService {
       LEFT JOIN dinas_verifikator dv ON bp.dinas_verified_by = dv.user_id
       LEFT JOIN users u ON bp.dinas_verified_by = u.id
       LEFT JOIN dinas_config dc ON u.dinas_id = dc.dinas_id
-      WHERE bp.desa_id = :desaId
-        AND bp.kegiatan_id = :kegiatanId
+      WHERE bp.desa_id = ?
+        AND bp.kegiatan_id = ?
         AND bp.submitted_to_kecamatan = TRUE
       LIMIT 1
-    `, {
-      replacements: { desaId, kegiatanId },
-      type: sequelize.QueryTypes.SELECT
-    });
+    `, desaId, kegiatanId);
 
-    return results[0] || null;
+    return convertBigInt(results[0]) || null;
   }
 
   /**
    * Get single proposal by ID
    */
   async getProposalById(proposalId) {
-    const results = await sequelize.query(`
+    const results = await prisma.$queryRawUnsafe(`
       SELECT 
         bp.id,
         mk.nama_kegiatan,
@@ -315,15 +313,12 @@ class BeritaAcaraService {
       LEFT JOIN dinas_verifikator dv ON bp.dinas_verified_by = dv.user_id
       LEFT JOIN users u ON bp.dinas_verified_by = u.id
       LEFT JOIN dinas_config dc ON u.dinas_id = dc.dinas_id
-      WHERE bp.id = :proposalId
+      WHERE bp.id = ?
         AND bp.submitted_to_kecamatan = TRUE
       LIMIT 1
-    `, {
-      replacements: { proposalId },
-      type: sequelize.QueryTypes.SELECT
-    });
+    `, proposalId);
 
-    return results[0] || null;
+    return convertBigInt(results[0]) || null;
   }
 
   /**
@@ -828,8 +823,9 @@ class BeritaAcaraService {
     });
 
     camatY += 18;
+    const jabatanLabel1 = (kecamatanConfig.jabatan_penandatangan || 'Camat').toUpperCase();
     doc.fontSize(10).font('Helvetica');
-    doc.text('CAMAT,', camatSectionX, camatY, {
+    doc.text(`${jabatanLabel1},`, camatSectionX, camatY, {
       width: camatSectionWidth,
       align: 'center'
     });
@@ -1091,8 +1087,9 @@ class BeritaAcaraService {
     });
 
     let camatY = camatYPos + 20;
+    const jabatanLabel2 = (kecamatanConfig.jabatan_penandatangan || 'Camat').toUpperCase();
     doc.fontSize(10).font('Helvetica');
-    doc.text('CAMAT,', camatSectionX, camatY, {
+    doc.text(`${jabatanLabel2},`, camatSectionX, camatY, {
       width: camatSectionWidth,
       align: 'center'
     });
@@ -1236,7 +1233,7 @@ class BeritaAcaraService {
    * Get proposal with desa data
    */
   async getProposalWithDesa(proposalId) {
-    const results = await sequelize.query(`
+    const results = await prisma.$queryRawUnsafe(`
       SELECT 
         bp.id,
         bp.judul_proposal,
@@ -1246,14 +1243,11 @@ class BeritaAcaraService {
       FROM bankeu_proposals bp
       INNER JOIN desas d ON bp.desa_id = d.id
       INNER JOIN kecamatans k ON d.kecamatan_id = k.id
-      WHERE bp.id = :proposalId
+      WHERE bp.id = ?
       LIMIT 1
-    `, {
-      replacements: { proposalId },
-      type: sequelize.QueryTypes.SELECT
-    });
+    `, proposalId);
 
-    return results[0] || null;
+    return convertBigInt(results[0]) || null;
   }
 
   /**
@@ -1468,9 +1462,10 @@ Desa ${proposalData.nama_desa || '.....'}`;
     doc.fontSize(11).font('Helvetica');
     doc.text('Penerima', marginLeft, yPos, { width: sigWidth, align: 'center' });
     
-    // Right - CAMAT
+    // Right - CAMAT / Plt. Camat / Pj. Camat
+    const jabatanLabel3 = (kecamatanConfig.jabatan_penandatangan || 'Camat').toUpperCase();
     doc.font('Helvetica-Bold');
-    doc.text('CAMAT,', camatSectionX, yPos, { width: sigWidth, align: 'center' });
+    doc.text(`${jabatanLabel3},`, camatSectionX, yPos, { width: sigWidth, align: 'center' });
 
     // Signature and stamp for CAMAT
     let camatSignY = yPos + 15;
