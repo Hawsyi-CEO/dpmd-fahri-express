@@ -1022,6 +1022,42 @@ const getDinasList = async (req, res) => {
   }
 };
 
+/**
+ * Get verification history (activity logs) for a proposal
+ */
+const getProposalVerificationHistory = async (req, res) => {
+  try {
+    const { proposalId } = req.params;
+
+    const activities = await prisma.activity_logs.findMany({
+      where: {
+        entity_type: 'bankeu_proposal',
+        entity_id: BigInt(proposalId),
+        module: 'bankeu',
+        action: { in: ['approve', 'reject', 'revision'] }
+      },
+      orderBy: { created_at: 'desc' },
+      take: 20
+    });
+
+    const serialized = activities.map(a => ({
+      id: a.id.toString(),
+      user_name: a.user_name,
+      user_role: a.user_role,
+      action: a.action,
+      description: a.description,
+      old_value: a.old_value ? JSON.parse(a.old_value) : null,
+      new_value: a.new_value ? JSON.parse(a.new_value) : null,
+      created_at: a.created_at
+    }));
+
+    return res.json({ success: true, data: serialized });
+  } catch (error) {
+    console.error('Error fetching proposal history:', error);
+    return res.status(500).json({ success: false, message: 'Gagal mengambil riwayat verifikasi' });
+  }
+};
+
 module.exports = {
   getDinasProposals,
   getDinasProposalDetail,
@@ -1029,5 +1065,6 @@ module.exports = {
   submitVerification,
   getQuestionnaire,
   getDinasStatistics,
-  getDinasList
+  getDinasList,
+  getProposalVerificationHistory
 };

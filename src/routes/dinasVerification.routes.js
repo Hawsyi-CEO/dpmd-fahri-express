@@ -19,6 +19,9 @@ router.get('/statistics', dinasVerificationController.getDinasStatistics);
 // Get proposal detail
 router.get('/proposals/:proposalId', dinasVerificationController.getDinasProposalDetail);
 
+// Get proposal verification history (activity logs)
+router.get('/proposals/:proposalId/history', dinasVerificationController.getProposalVerificationHistory);
+
 // Questionnaire routes
 router.get('/proposals/:proposalId/questionnaire', dinasVerificationController.getQuestionnaire);
 router.post('/proposals/:proposalId/questionnaire/save', dinasVerificationController.saveQuestionnaire);
