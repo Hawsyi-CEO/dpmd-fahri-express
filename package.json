@@ -7,10 +7,11 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "test": "jest",
-    "db:generate": "node scripts/generate-from-db.js",
-    "db:migrate": "node scripts/run-migrations.js",
+    "db:generate": "npx prisma generate",
+    "db:push": "npx prisma db push",
     "db:seed": "node scripts/run-seeders.js",
-    "db:setup": "npm run db:migrate && npm run db:seed"
+    "db:setup": "npm run db:push && npm run db:generate && npm run db:seed",
+    "postinstall": "npx prisma generate"
   },
   "keywords": [
     "express",
