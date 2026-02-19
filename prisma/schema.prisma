@@ -154,6 +154,9 @@ model bankeu_proposals {
   verified_at                                         DateTime?                            @db.Timestamp(0)
   berita_acara_path                                   String?                              @db.VarChar(255)
   berita_acara_generated_at                           DateTime?                            @db.Timestamp(0)
+  troubleshoot_catatan                                String?                              @db.Text
+  troubleshoot_by                                     BigInt?                              @db.UnsignedBigInt
+  troubleshoot_at                                     DateTime?                            @db.Timestamp(0)
   created_by                                          BigInt                               @db.UnsignedBigInt
   created_at                                          DateTime?                            @default(now()) @db.Timestamp(0)
   updated_at                                          DateTime?                            @default(now()) @db.Timestamp(0)
@@ -164,6 +167,7 @@ model bankeu_proposals {
   users_bankeu_proposals_created_byTousers            users                                @relation("bankeu_proposals_created_byTousers", fields: [created_by], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_bankeu_proposals_created_by")
   desas                                               desas                                @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_bankeu_proposals_desa")
   users_bankeu_proposals_verified_byTousers           users?                               @relation("bankeu_proposals_verified_byTousers", fields: [verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_proposals_verified_by")
+  users_bankeu_proposals_troubleshoot_byTousers       users?                               @relation("bankeu_proposals_troubleshoot_byTousers", fields: [troubleshoot_by], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_bankeu_troubleshoot_by")
   bankeu_verification_questionnaires                  bankeu_verification_questionnaires[]
 
   @@index([created_by], map: "idx_created_by")
@@ -177,6 +181,7 @@ model bankeu_proposals {
   @@index([status], map: "idx_status")
   @@index([submitted_to_dpmd], map: "idx_submitted_to_dpmd")
   @@index([submitted_to_kecamatan], map: "idx_submitted_to_kecamatan")
+  @@index([troubleshoot_by], map: "idx_troubleshoot_by")
   @@index([verified_by], map: "idx_verified_by")
 }
 
@@ -1056,6 +1061,7 @@ model users {
   bankeu_proposals_bankeu_proposals_kecamatan_verified_byTousers bankeu_proposals[]          @relation("bankeu_proposals_kecamatan_verified_byTousers")
   bankeu_proposals_bankeu_proposals_created_byTousers            bankeu_proposals[]          @relation("bankeu_proposals_created_byTousers")
   bankeu_proposals_bankeu_proposals_verified_byTousers           bankeu_proposals[]          @relation("bankeu_proposals_verified_byTousers")
+  bankeu_proposals_bankeu_proposals_troubleshoot_byTousers       bankeu_proposals[]          @relation("bankeu_proposals_troubleshoot_byTousers")
   desa_bankeu_surat                                              desa_bankeu_surat[]
   disposisi_disposisi_dari_user_idTousers                        disposisi[]                 @relation("disposisi_dari_user_idTousers")
   disposisi_disposisi_ke_user_idTousers                          disposisi[]                 @relation("disposisi_ke_user_idTousers")

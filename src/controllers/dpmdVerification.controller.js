@@ -821,7 +821,7 @@ class DPMDVerificationController {
           status: 'revision',
           // Clear dinas verification
           dinas_status: null,
-          dinas_catatan: `[TROUBLESHOOT oleh ${req.user.name}] ${catatan}`,
+          dinas_catatan: null,
           dinas_verified_by: null,
           dinas_verified_at: null,
           dinas_reviewed_file: null,
@@ -843,6 +843,10 @@ class DPMDVerificationController {
           // Clear berita acara & surat pengantar
           berita_acara_path: null,
           berita_acara_generated_at: null,
+          // Save troubleshoot info
+          troubleshoot_catatan: `[${req.user.name} - ${userRole.toUpperCase()}] ${catatan}`,
+          troubleshoot_by: BigInt(userId),
+          troubleshoot_at: new Date(),
           // Keep file_proposal, surat_permohonan, surat_pengantar (desa docs)
           updated_at: new Date()
         }

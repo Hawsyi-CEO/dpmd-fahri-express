@@ -144,12 +144,16 @@ class BankeuProposalController {
           bp.verified_at,
           bp.berita_acara_path,
           bp.berita_acara_generated_at,
+          bp.troubleshoot_catatan,
+          bp.troubleshoot_by,
+          bp.troubleshoot_at,
           bp.created_at,
           bp.updated_at,
           u_verified.name as verified_by_name,
           u_dinas.name as dinas_verified_by_name,
           u_kecamatan.name as kecamatan_verified_by_name,
           u_dpmd.name as dpmd_verified_by_name,
+          u_troubleshoot.name as troubleshoot_by_name,
           d.nama as desa_nama,
           d.kecamatan_id,
           k.nama as kecamatan_nama
@@ -158,6 +162,7 @@ class BankeuProposalController {
         LEFT JOIN users u_dinas ON bp.dinas_verified_by = u_dinas.id
         LEFT JOIN users u_kecamatan ON bp.kecamatan_verified_by = u_kecamatan.id
         LEFT JOIN users u_dpmd ON bp.dpmd_verified_by = u_dpmd.id
+        LEFT JOIN users u_troubleshoot ON bp.troubleshoot_by = u_troubleshoot.id
         LEFT JOIN desas d ON bp.desa_id = d.id
         LEFT JOIN kecamatans k ON d.kecamatan_id = k.id
         ${whereClause}
