@@ -87,107 +87,138 @@ class BankeuProposalController {
   async getProposalsByDesa(req, res) {
     try {
       const userId = req.user.id;
-      const { tahun } = req.query; // Get tahun from query params
+      const { tahun } = req.query;
 
       // Get desa_id from user
-      const [users] = await sequelize.query(`
-        SELECT desa_id FROM users WHERE id = ?
-      `, { replacements: [userId] });
+      const user = await prisma.users.findUnique({
+        where: { id: BigInt(userId) },
+        select: { desa_id: true }
+      });
 
-      if (!users || users.length === 0 || !users[0].desa_id) {
+      if (!user || !user.desa_id) {
         return res.status(403).json({
           success: false,
           message: 'User tidak terkait dengan desa'
         });
       }
 
-      const desaId = users[0].desa_id;
+      const desaId = user.desa_id;
 
-      // Build WHERE clause
-      let whereClause = 'WHERE bp.desa_id = ?';
-      let replacements = [desaId];
-      
+      // Build where clause
+      const where = { desa_id: desaId };
       if (tahun) {
-        whereClause += ' AND bp.tahun_anggaran = ?';
-        replacements.push(parseInt(tahun));
+        where.tahun_anggaran = parseInt(tahun);
       }
 
-      const [proposals] = await sequelize.query(`
-        SELECT 
-          bp.id,
-          bp.kegiatan_id,
-          bp.tahun_anggaran,
-          bp.judul_proposal,
-          bp.nama_kegiatan_spesifik,
-          bp.volume,
-          bp.lokasi,
-          bp.deskripsi,
-          bp.file_proposal,
-          bp.surat_pengantar,
-          bp.surat_permohonan,
-          bp.file_size,
-          bp.anggaran_usulan,
-          bp.status,
-          bp.submitted_to_kecamatan,
-          bp.submitted_at,
-          bp.submitted_to_dinas_at,
-          bp.dinas_status,
-          bp.dinas_catatan,
-          bp.dinas_verified_at,
-          bp.kecamatan_status,
-          bp.kecamatan_catatan,
-          bp.kecamatan_verified_at,
-          bp.dpmd_status,
-          bp.dpmd_catatan,
-          bp.dpmd_verified_at,
-          bp.catatan_verifikasi,
-          bp.verified_at,
-          bp.berita_acara_path,
-          bp.berita_acara_generated_at,
-          bp.troubleshoot_catatan,
-          bp.troubleshoot_by,
-          bp.troubleshoot_at,
-          bp.created_at,
-          bp.updated_at,
-          u_verified.name as verified_by_name,
-          u_dinas.name as dinas_verified_by_name,
-          u_kecamatan.name as kecamatan_verified_by_name,
-          u_dpmd.name as dpmd_verified_by_name,
-          u_troubleshoot.name as troubleshoot_by_name,
-          d.nama as desa_nama,
-          d.kecamatan_id,
-          k.nama as kecamatan_nama
-        FROM bankeu_proposals bp
-        LEFT JOIN users u_verified ON bp.verified_by = u_verified.id
-        LEFT JOIN users u_dinas ON bp.dinas_verified_by = u_dinas.id
-        LEFT JOIN users u_kecamatan ON bp.kecamatan_verified_by = u_kecamatan.id
-        LEFT JOIN users u_dpmd ON bp.dpmd_verified_by = u_dpmd.id
-        LEFT JOIN users u_troubleshoot ON bp.troubleshoot_by = u_troubleshoot.id
-        LEFT JOIN desas d ON bp.desa_id = d.id
-        LEFT JOIN kecamatans k ON d.kecamatan_id = k.id
-        ${whereClause}
-        ORDER BY bp.created_at DESC
-      `, { replacements });
+      const proposals = await prisma.bankeu_proposals.findMany({
+        where,
+        include: {
+          users_bankeu_proposals_verified_byTousers: {
+            select: { id: true, name: true }
+          },
+          users_bankeu_proposals_dpmd_verified_byTousers: {
+            select: { id: true, name: true }
+          },
+          users_bankeu_proposals_kecamatan_verified_byTousers: {
+            select: { id: true, name: true }
+          },
+          users_bankeu_proposals_troubleshoot_byTousers: {
+            select: { id: true, name: true }
+          },
+          desas: {
+            select: {
+              nama: true,
+              kecamatan_id: true,
+              kecamatans: {
+                select: { nama: true }
+              }
+            }
+          },
+          bankeu_proposal_kegiatan: {
+            include: {
+              bankeu_master_kegiatan: {
+                select: {
+                  id: true,
+                  jenis_kegiatan: true,
+                  nama_kegiatan: true,
+                  urutan: true
+                }
+              }
+            }
+          }
+        },
+        orderBy: { created_at: 'desc' }
+      });
 
-      // Get kegiatan for each proposal
-      for (const proposal of proposals) {
-        const [kegiatan] = await sequelize.query(`
-          SELECT 
-            bmk.id,
-            bmk.jenis_kegiatan,
-            bmk.nama_kegiatan
-          FROM bankeu_proposal_kegiatan bpk
-          JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
-          WHERE bpk.proposal_id = ?
-          ORDER BY bmk.jenis_kegiatan, bmk.urutan
-        `, { replacements: [proposal.id] });
+      // Also get dinas_verified_by name (separate query since it's an Int FK, not BigInt relation)
+      const dinasVerifierIds = [...new Set(proposals.map(p => p.dinas_verified_by).filter(Boolean))];
+      const dinasVerifiers = dinasVerifierIds.length > 0 
+        ? await prisma.users.findMany({
+            where: { id: { in: dinasVerifierIds.map(id => BigInt(id)) } },
+            select: { id: true, name: true }
+          })
+        : [];
+      const dinasVerifierMap = Object.fromEntries(dinasVerifiers.map(u => [Number(u.id), u.name]));
 
-        proposal.kegiatan_list = kegiatan;
-      }
+      // Transform to flat format matching frontend expectations
+      const data = proposals.map(p => ({
+        id: Number(p.id),
+        kegiatan_id: p.kegiatan_id ? Number(p.kegiatan_id) : null,
+        tahun_anggaran: p.tahun_anggaran,
+        judul_proposal: p.judul_proposal,
+        nama_kegiatan_spesifik: p.nama_kegiatan_spesifik,
+        volume: p.volume,
+        lokasi: p.lokasi,
+        deskripsi: p.deskripsi,
+        file_proposal: p.file_proposal,
+        surat_pengantar: p.surat_pengantar,
+        surat_permohonan: p.surat_permohonan,
+        file_size: p.file_size,
+        anggaran_usulan: p.anggaran_usulan ? Number(p.anggaran_usulan) : null,
+        status: p.status,
+        submitted_to_kecamatan: p.submitted_to_kecamatan,
+        submitted_at: p.submitted_at,
+        submitted_to_dinas_at: p.submitted_to_dinas_at,
+        dinas_status: p.dinas_status,
+        dinas_catatan: p.dinas_catatan,
+        dinas_verified_at: p.dinas_verified_at,
+        kecamatan_status: p.kecamatan_status,
+        kecamatan_catatan: p.kecamatan_catatan,
+        kecamatan_verified_at: p.kecamatan_verified_at,
+        dpmd_status: p.dpmd_status,
+        dpmd_catatan: p.dpmd_catatan,
+        dpmd_verified_at: p.dpmd_verified_at,
+        catatan_verifikasi: p.catatan_verifikasi,
+        verified_at: p.verified_at,
+        berita_acara_path: p.berita_acara_path,
+        berita_acara_generated_at: p.berita_acara_generated_at,
+        troubleshoot_catatan: p.troubleshoot_catatan,
+        troubleshoot_by: p.troubleshoot_by ? Number(p.troubleshoot_by) : null,
+        troubleshoot_at: p.troubleshoot_at,
+        created_at: p.created_at,
+        updated_at: p.updated_at,
+        // Flattened relation names
+        verified_by_name: p.users_bankeu_proposals_verified_byTousers?.name || null,
+        dinas_verified_by_name: dinasVerifierMap[p.dinas_verified_by] || null,
+        kecamatan_verified_by_name: p.users_bankeu_proposals_kecamatan_verified_byTousers?.name || null,
+        dpmd_verified_by_name: p.users_bankeu_proposals_dpmd_verified_byTousers?.name || null,
+        troubleshoot_by_name: p.users_bankeu_proposals_troubleshoot_byTousers?.name || null,
+        desa_nama: p.desas?.nama || null,
+        kecamatan_id: p.desas?.kecamatan_id ? Number(p.desas.kecamatan_id) : null,
+        kecamatan_nama: p.desas?.kecamatans?.nama || null,
+        // Flatten kegiatan list
+        kegiatan_list: p.bankeu_proposal_kegiatan
+          .sort((a, b) => (a.bankeu_master_kegiatan?.urutan || 0) - (b.bankeu_master_kegiatan?.urutan || 0))
+          .map(bpk => ({
+          id: bpk.bankeu_master_kegiatan ? Number(bpk.bankeu_master_kegiatan.id) : null,
+          jenis_kegiatan: bpk.bankeu_master_kegiatan?.jenis_kegiatan || null,
+          nama_kegiatan: bpk.bankeu_master_kegiatan?.nama_kegiatan || null
+        }))
+      }));
 
       res.json({
         success: true,
-        data: proposals
+        data
       });
     } catch (error) {
       logger.error('Error fetching proposals:', error);
