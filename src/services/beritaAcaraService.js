@@ -876,13 +876,24 @@ class BeritaAcaraService {
       camatY += 50;
     }
     
-    doc.fontSize(10).font('Helvetica');
-    doc.text(`( ${kecamatanConfig.nama_camat || '......................................'} )`, camatSectionX, camatY, {
+    // Render nama camat - auto-shrink font jika nama panjang
+    const namaCamat1 = kecamatanConfig.nama_camat || '......................................';
+    const namaText1 = `( ${namaCamat1} )`;
+    let namaFontSize1 = 10;
+    doc.fontSize(namaFontSize1).font('Helvetica');
+    // Shrink font jika nama terlalu panjang untuk 1 baris
+    while (doc.widthOfString(namaText1) > camatSectionWidth - 10 && namaFontSize1 > 7) {
+      namaFontSize1 -= 0.5;
+      doc.fontSize(namaFontSize1);
+    }
+    const namaHeight1 = doc.heightOfString(namaText1, { width: camatSectionWidth, align: 'center' });
+    doc.text(namaText1, camatSectionX, camatY, {
       align: 'center',
       width: camatSectionWidth
     });
     
-    camatY += 15;
+    camatY += namaHeight1 + 4;
+    doc.fontSize(namaFontSize1).font('Helvetica');
     doc.text(`NIP: ${kecamatanConfig.nip_camat || '.......................'}`, camatSectionX, camatY, {
       align: 'center',
       width: camatSectionWidth
@@ -1157,13 +1168,23 @@ class BeritaAcaraService {
       camatY += 60;
     }
     
-    doc.fontSize(10).font('Helvetica');
-    doc.text(`( ${kecamatanConfig.nama_camat || '......................................'} )`, camatSectionX, camatY, {
+    // Render nama camat - auto-shrink font jika nama panjang
+    const namaCamat2 = kecamatanConfig.nama_camat || '......................................';
+    const namaText2 = `( ${namaCamat2} )`;
+    let namaFontSize2 = 10;
+    doc.fontSize(namaFontSize2).font('Helvetica');
+    while (doc.widthOfString(namaText2) > camatSectionWidth - 10 && namaFontSize2 > 7) {
+      namaFontSize2 -= 0.5;
+      doc.fontSize(namaFontSize2);
+    }
+    const namaHeight2 = doc.heightOfString(namaText2, { width: camatSectionWidth, align: 'center' });
+    doc.text(namaText2, camatSectionX, camatY, {
       align: 'center',
       width: camatSectionWidth
     });
     
-    camatY += 15;
+    camatY += namaHeight2 + 4;
+    doc.fontSize(namaFontSize2).font('Helvetica');
     doc.text(`NIP: ${kecamatanConfig.nip_camat || '.......................'}`, camatSectionX, camatY, {
       align: 'center',
       width: camatSectionWidth
@@ -1514,14 +1535,24 @@ Desa ${proposalData.nama_desa || '.....'}`;
     doc.font('Helvetica');
     doc.text('( ...................................... )', marginLeft, yPos, { width: sigWidth, align: 'center' });
     
-    // Camat name
-    doc.text(`( ${kecamatanConfig.nama_camat || '......................................'} )`, camatSectionX, yPos, { 
+    // Camat name - auto-shrink font jika nama panjang
+    const namaCamat3 = kecamatanConfig.nama_camat || '......................................';
+    const namaText3 = `( ${namaCamat3} )`;
+    let namaFontSize3 = 11;
+    doc.fontSize(namaFontSize3).font('Helvetica');
+    while (doc.widthOfString(namaText3) > sigWidth - 10 && namaFontSize3 > 7.5) {
+      namaFontSize3 -= 0.5;
+      doc.fontSize(namaFontSize3);
+    }
+    const namaHeight3 = doc.heightOfString(namaText3, { width: sigWidth, align: 'center' });
+    doc.text(namaText3, camatSectionX, yPos, { 
       width: sigWidth, 
       align: 'center' 
     });
 
-    // NIP
-    yPos += 15;
+    // NIP - posisi dinamis berdasarkan tinggi nama
+    yPos += namaHeight3 + 4;
+    doc.fontSize(namaFontSize3).font('Helvetica');
     if (kecamatanConfig.nip_camat) {
       doc.text(`NIP. ${kecamatanConfig.nip_camat}`, camatSectionX, yPos, { 
         width: sigWidth, 
