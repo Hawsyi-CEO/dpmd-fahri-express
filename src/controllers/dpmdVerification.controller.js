@@ -744,6 +744,171 @@ class DPMDVerificationController {
   }
 
   /**
+   * Troubleshoot Revision - Force return proposal to Desa
+   * Used by SPKED pegawai when proposal is stuck at any stage
+   * (e.g., dinas terkait not responding, kecamatan pending too long)
+   * ONLY for revision, NOT approval
+   * PATCH /api/dpmd/bankeu/proposals/:id/troubleshoot-revision
+   */
+  async troubleshootRevision(req, res) {
+    try {
+      const { id } = req.params;
+      const { catatan } = req.body;
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      // Only SPKED staff roles can troubleshoot
+      const allowedRoles = ['pegawai', 'kepala_bidang', 'ketua_tim', 'kepala_dinas', 'superadmin'];
+      if (!allowedRoles.includes(userRole)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Hanya pegawai SPKED yang dapat melakukan troubleshoot revisi'
+        });
+      }
+
+      if (!catatan || catatan.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Catatan/alasan troubleshoot wajib diisi'
+        });
+      }
+
+      // Find the proposal
+      const proposal = await prisma.bankeu_proposals.findUnique({
+        where: { id: BigInt(id) },
+        include: {
+          desas: {
+            include: { kecamatans: true }
+          }
+        }
+      });
+
+      if (!proposal) {
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal tidak ditemukan'
+        });
+      }
+
+      // Don't allow troubleshoot on already-approved proposals
+      if (proposal.dpmd_status === 'approved' || proposal.status === 'verified') {
+        return res.status(400).json({
+          success: false,
+          message: 'Proposal yang sudah disetujui (verified) tidak dapat di-troubleshoot'
+        });
+      }
+
+      // Determine current stage for logging
+      let currentStage = 'di_desa';
+      if (proposal.submitted_to_dpmd) {
+        currentStage = 'di_dpmd';
+      } else if (proposal.dinas_status === 'approved' && !proposal.submitted_to_dpmd) {
+        currentStage = 'di_kecamatan';
+      } else if (proposal.submitted_to_dinas_at) {
+        currentStage = 'di_dinas';
+      }
+
+      const desaName = proposal.desas?.nama || `Desa ID ${proposal.desa_id}`;
+      const kecamatanName = proposal.desas?.kecamatans?.nama || '';
+
+      logger.info(`🔧 TROUBLESHOOT REVISION - Proposal #${id} (${desaName}), stage: ${currentStage}, by: ${req.user.name} (${userRole})`);
+
+      // Reset ALL statuses back to Desa
+      await prisma.bankeu_proposals.update({
+        where: { id: BigInt(id) },
+        data: {
+          // Reset to revision status
+          status: 'revision',
+          // Clear dinas verification
+          dinas_status: null,
+          dinas_catatan: `[TROUBLESHOOT oleh ${req.user.name}] ${catatan}`,
+          dinas_verified_by: null,
+          dinas_verified_at: null,
+          dinas_reviewed_file: null,
+          dinas_reviewed_at: null,
+          submitted_to_dinas_at: null,
+          // Clear kecamatan verification
+          kecamatan_status: null,
+          kecamatan_catatan: null,
+          kecamatan_verified_by: null,
+          kecamatan_verified_at: null,
+          submitted_to_kecamatan: false,
+          // Clear DPMD verification
+          dpmd_status: null,
+          dpmd_catatan: null,
+          dpmd_verified_by: null,
+          dpmd_verified_at: null,
+          submitted_to_dpmd: false,
+          submitted_to_dpmd_at: null,
+          // Clear berita acara & surat pengantar
+          berita_acara_path: null,
+          berita_acara_generated_at: null,
+          // Keep file_proposal, surat_permohonan, surat_pengantar (desa docs)
+          updated_at: new Date()
+        }
+      });
+
+      // Delete related questionnaires since all stages are reset
+      await prisma.bankeu_verification_questionnaires.deleteMany({
+        where: { proposal_id: BigInt(id) }
+      });
+
+      logger.info(`✅ TROUBLESHOOT SUCCESS - Proposal #${id} returned to Desa from stage: ${currentStage}`);
+
+      // Activity Log
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: userRole,
+        bidangId: 3,
+        module: 'bankeu',
+        action: 'troubleshoot_revision',
+        entityType: 'bankeu_proposal',
+        entityId: parseInt(id),
+        entityName: `Proposal #${id} - ${desaName}`,
+        description: `[TROUBLESHOOT] ${req.user.name} (${userRole}) memaksa revisi proposal #${id} (${desaName}, ${kecamatanName}) dari tahap ${currentStage}. Alasan: ${catatan}`,
+        oldValue: {
+          status: proposal.status,
+          dinas_status: proposal.dinas_status,
+          kecamatan_status: proposal.kecamatan_status,
+          dpmd_status: proposal.dpmd_status,
+          current_stage: currentStage
+        },
+        newValue: {
+          status: 'revision',
+          dinas_status: null,
+          kecamatan_status: null,
+          dpmd_status: null,
+          returned_to: 'desa',
+          troubleshoot_reason: catatan
+        },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
+      return res.json({
+        success: true,
+        message: `Proposal #${id} (${desaName}) berhasil di-revisi dari tahap ${currentStage === 'di_dinas' ? 'Dinas Terkait' : currentStage === 'di_kecamatan' ? 'Kecamatan' : currentStage === 'di_dpmd' ? 'DPMD' : 'Desa'}. Proposal dikembalikan ke Desa untuk direvisi.`,
+        data: {
+          id: Number(id),
+          desa_name: desaName,
+          previous_stage: currentStage,
+          returned_to: 'desa',
+          status: 'revision'
+        }
+      });
+
+    } catch (error) {
+      logger.error('Error troubleshoot revision:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Gagal melakukan troubleshoot revisi',
+        error: error.message
+      });
+    }
+  }
+
+  /**
    * Get all proposals for tracking view (ALL stages)
    * Shows proposals regardless of dpmd_status or submitted_to_dpmd
    * GET /api/dpmd/bankeu/tracking
