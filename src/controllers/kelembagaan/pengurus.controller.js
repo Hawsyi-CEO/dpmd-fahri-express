@@ -7,6 +7,75 @@
 const { prisma, ACTIVITY_TYPES, ENTITY_TYPES, logKelembagaanActivity, validateDesaAccess } = require('./base.controller');
 const { v4: uuidv4 } = require('uuid');
 
+/**
+ * Helper function to get kelembagaan display name
+ * Menyesuaikan dengan format yang digunakan di kelembagaan controllers
+ */
+async function getKelembagaanDisplayName(type, id) {
+  try {
+    let record = null;
+    
+    // Query based on type using Prisma client
+    switch (type) {
+      case 'rw':
+        record = await prisma.rws.findUnique({
+          where: { id: String(id) },
+          select: { nomor: true }
+        });
+        return record ? `RW ${record.nomor}` : null;
+        
+      case 'rt':
+        record = await prisma.rts.findUnique({
+          where: { id: String(id) },
+          select: { nomor: true }
+        });
+        return record ? `RT ${record.nomor}` : null;
+        
+      case 'posyandu':
+        record = await prisma.posyandus.findUnique({
+          where: { id: String(id) },
+          select: { nama: true }
+        });
+        return record ? record.nama : null;
+        
+      case 'karang_taruna':
+        record = await prisma.karang_tarunas.findUnique({
+          where: { id: String(id) },
+          select: { nama: true }
+        });
+        return record ? record.nama : null;
+        
+      case 'lpm':
+        record = await prisma.lpms.findUnique({
+          where: { id: String(id) },
+          select: { nama: true }
+        });
+        return record ? record.nama : null;
+        
+      case 'pkk':
+        record = await prisma.pkks.findUnique({
+          where: { id: String(id) },
+          select: { nama: true }
+        });
+        return record ? record.nama : null;
+        
+      case 'satlinmas':
+        record = await prisma.satlinmases.findUnique({
+          where: { id: String(id) },
+          select: { nama: true }
+        });
+        return record ? record.nama : null;
+        
+      default:
+        return null;
+    }
+  } catch (error) {
+    console.error('Error getting kelembagaan display name:', error);
+    console.error('Type:', type, 'ID:', id);
+    return null;
+  }
+}
+
 class PengurusController {
   /**
    * List pengurus for desa user
@@ -129,11 +198,14 @@ class PengurusController {
         }
       });
 
+      // Get kelembagaan display name for logging
+      const kelembagaanDisplayName = await getKelembagaanDisplayName(pengurusable_type, pengurusable_id);
+
       // Log activity
       await logKelembagaanActivity({
         kelembagaanType: pengurusable_type,
         kelembagaanId: pengurusable_id,
-        kelembagaanNama: `${pengurusable_type} - ${pengurusable_id}`,
+        kelembagaanNama: kelembagaanDisplayName || `${pengurusable_type.toUpperCase()}`,
         desaId: desaId,
         activityType: ACTIVITY_TYPES.CREATE,
         entityType: ENTITY_TYPES.PENGURUS,
@@ -189,11 +261,14 @@ class PengurusController {
         }
       });
 
+      // Get kelembagaan display name for logging
+      const kelembagaanDisplayName = await getKelembagaanDisplayName(updated.pengurusable_type, updated.pengurusable_id);
+
       // Log activity
       await logKelembagaanActivity({
         kelembagaanType: updated.pengurusable_type,
         kelembagaanId: updated.pengurusable_id,
-        kelembagaanNama: `${updated.pengurusable_type} - ${updated.pengurusable_id}`,
+        kelembagaanNama: kelembagaanDisplayName || `${updated.pengurusable_type.toUpperCase()}`,
         desaId: updated.desa_id,
         activityType: ACTIVITY_TYPES.UPDATE,
         entityType: ENTITY_TYPES.PENGURUS,
@@ -241,11 +316,14 @@ class PengurusController {
         where: { id: String(req.params.id) }
       });
 
+      // Get kelembagaan display name for logging
+      const kelembagaanDisplayName = await getKelembagaanDisplayName(existing.pengurusable_type, existing.pengurusable_id);
+
       // Log activity
       await logKelembagaanActivity({
         kelembagaanType: existing.pengurusable_type,
         kelembagaanId: existing.pengurusable_id,
-        kelembagaanNama: `${existing.pengurusable_type} - ${existing.pengurusable_id}`,
+        kelembagaanNama: kelembagaanDisplayName || `${existing.pengurusable_type.toUpperCase()}`,
         desaId: existing.desa_id,
         activityType: 'delete',
         entityType: ENTITY_TYPES.PENGURUS,
@@ -299,11 +377,14 @@ class PengurusController {
         data: { status }
       });
 
+      // Get kelembagaan display name for logging
+      const kelembagaanDisplayName = await getKelembagaanDisplayName(updated.pengurusable_type, updated.pengurusable_id);
+
       // Log activity
       await logKelembagaanActivity({
         kelembagaanType: updated.pengurusable_type,
         kelembagaanId: updated.pengurusable_id,
-        kelembagaanNama: `${updated.pengurusable_type} - ${updated.pengurusable_id}`,
+        kelembagaanNama: kelembagaanDisplayName || `${updated.pengurusable_type.toUpperCase()}`,
         desaId: updated.desa_id,
         activityType: 'update_status',
         entityType: ENTITY_TYPES.PENGURUS,
@@ -456,11 +537,14 @@ class PengurusController {
         data: { status_verifikasi }
       });
 
+      // Get kelembagaan display name for logging
+      const kelembagaanDisplayName = await getKelembagaanDisplayName(updated.pengurusable_type, updated.pengurusable_id);
+
       // Log activity
       await logKelembagaanActivity({
         kelembagaanType: updated.pengurusable_type,
         kelembagaanId: updated.pengurusable_id,
-        kelembagaanNama: `${updated.pengurusable_type} - ${updated.pengurusable_id}`,
+        kelembagaanNama: kelembagaanDisplayName || `${updated.pengurusable_type.toUpperCase()}`,
         desaId: updated.desa_id,
         activityType: ACTIVITY_TYPES.VERIFY_PENGURUS,
         entityType: ENTITY_TYPES.PENGURUS,
