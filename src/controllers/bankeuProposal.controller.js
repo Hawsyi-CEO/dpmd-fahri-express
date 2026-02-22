@@ -876,7 +876,7 @@ class BankeuProposalController {
 
       // Get proposal data
       const [proposals] = await sequelize.query(`
-        SELECT file_proposal, berita_acara_path, status, desa_id
+        SELECT file_proposal, berita_acara_path, status, desa_id, submitted_to_kecamatan, submitted_to_dinas_at
         FROM bankeu_proposals
         WHERE id = ?
       `, { replacements: [id] });
@@ -903,6 +903,15 @@ class BankeuProposalController {
         return res.status(400).json({
           success: false,
           message: 'Proposal yang sudah diverifikasi tidak dapat dihapus'
+        });
+      }
+
+      // Don't allow deletion if proposal has been submitted and received revision/rejection
+      // Desa hanya bisa upload ulang, tidak bisa hapus
+      if (proposal.submitted_to_kecamatan || proposal.submitted_to_dinas_at) {
+        return res.status(400).json({
+          success: false,
+          message: 'Proposal yang sudah dikirim tidak dapat dihapus. Silakan upload ulang file proposal.'
         });
       }
 
