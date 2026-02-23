@@ -51,6 +51,19 @@ class DPMDVerificationController {
               } : true
             }
           },
+          bankeu_proposal_kegiatan: {
+            include: {
+              bankeu_master_kegiatan: {
+                select: {
+                  id: true,
+                  nama_kegiatan: true,
+                  dinas_terkait: true,
+                  jenis_kegiatan: true,
+                  urutan: true
+                }
+              }
+            }
+          },
           users_bankeu_proposals_created_byTousers: {
             select: {
               id: true,
@@ -76,13 +89,47 @@ class DPMDVerificationController {
         }
       });
 
+      // Build kegiatan map for fallback (old kegiatan_id FK)
+      const allKegiatan = await prisma.bankeu_master_kegiatan.findMany({
+        select: { id: true, nama_kegiatan: true, dinas_terkait: true }
+      });
+      const kegiatanMap = {};
+      allKegiatan.forEach(k => { kegiatanMap[Number(k.id)] = k; });
+
       // Get kegiatan info and surat desa for each proposal
       const proposalsWithKegiatan = await Promise.all(
         proposals.map(async (proposal) => {
-          const kegiatan = await prisma.bankeu_master_kegiatan.findUnique({
-            where: { id: proposal.kegiatan_id }
-          });
+          // Resolve kegiatan: pivot table first, then direct FK fallback
+          let kegiatanData = null;
           
+          if (proposal.bankeu_proposal_kegiatan?.length > 0) {
+            const pivotKeg = proposal.bankeu_proposal_kegiatan[0]?.bankeu_master_kegiatan;
+            if (pivotKeg) {
+              kegiatanData = {
+                ...pivotKeg,
+                id: Number(pivotKeg.id)
+              };
+            }
+          }
+          
+          // Fallback to direct kegiatan_id FK
+          if (!kegiatanData && proposal.kegiatan_id) {
+            const directKeg = kegiatanMap[Number(proposal.kegiatan_id)];
+            if (directKeg) {
+              kegiatanData = { ...directKeg, id: Number(directKeg.id) };
+            }
+          }
+          
+          // Build kegiatan_list (all kegiatan from pivot)
+          const kegiatanList = proposal.bankeu_proposal_kegiatan
+            ?.sort((a, b) => (a.bankeu_master_kegiatan?.urutan || 0) - (b.bankeu_master_kegiatan?.urutan || 0))
+            .map(bpk => ({
+              id: bpk.bankeu_master_kegiatan ? Number(bpk.bankeu_master_kegiatan.id) : null,
+              jenis_kegiatan: bpk.bankeu_master_kegiatan?.jenis_kegiatan || null,
+              nama_kegiatan: bpk.bankeu_master_kegiatan?.nama_kegiatan || null,
+              dinas_terkait: bpk.bankeu_master_kegiatan?.dinas_terkait || null
+            })) || [];
+
           // Get surat pengantar & permohonan from desa
           const suratDesa = await prisma.desa_bankeu_surat.findFirst({
             where: {
@@ -93,7 +140,12 @@ class DPMDVerificationController {
           
           return {
             ...proposal,
-            bankeu_master_kegiatan: kegiatan,
+            id: Number(proposal.id),
+            desa_id: Number(proposal.desa_id),
+            kegiatan_id: proposal.kegiatan_id ? Number(proposal.kegiatan_id) : null,
+            anggaran_usulan: Number(proposal.anggaran_usulan),
+            bankeu_master_kegiatan: kegiatanData,
+            kegiatan_list: kegiatanList,
             surat_pengantar_desa: suratDesa?.surat_pengantar || null,
             surat_permohonan_desa: suratDesa?.surat_permohonan || null
           };

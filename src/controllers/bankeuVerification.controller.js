@@ -699,13 +699,15 @@ class BankeuVerificationController {
           });
         }
 
-        // Check if all proposals have berita acara
+        // Check if all APPROVED proposals have berita acara
+        // Hanya cek proposal yang approved karena hanya mereka yang akan dikirim ke DPMD
         const [missingBeritaAcara] = await sequelize.query(`
           SELECT COUNT(*) as total
           FROM bankeu_proposals bp
           INNER JOIN desas d ON bp.desa_id = d.id
           WHERE bp.desa_id = ? AND d.kecamatan_id = ? 
             AND bp.submitted_to_kecamatan = TRUE
+            AND bp.kecamatan_status = 'approved'
             AND (bp.berita_acara_path IS NULL OR bp.berita_acara_path = '')
         `, { replacements: [desaId, kecamatanId] });
 
@@ -716,13 +718,15 @@ class BankeuVerificationController {
           });
         }
 
-        // Check if all proposals have surat pengantar kecamatan
+        // Check if all APPROVED proposals have surat pengantar kecamatan
+        // Hanya cek proposal yang approved karena hanya mereka yang akan dikirim ke DPMD
         const [missingSuratPengantar] = await sequelize.query(`
           SELECT COUNT(*) as total
           FROM bankeu_proposals bp
           INNER JOIN desas d ON bp.desa_id = d.id
           WHERE bp.desa_id = ? AND d.kecamatan_id = ? 
             AND bp.submitted_to_kecamatan = TRUE
+            AND bp.kecamatan_status = 'approved'
             AND (bp.surat_pengantar IS NULL OR bp.surat_pengantar = '')
         `, { replacements: [desaId, kecamatanId] });
 
