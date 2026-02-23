@@ -597,7 +597,7 @@ class BankeuQuestionnaireController {
       // Build status for each member
       const memberStatus = timMembers.map(member => {
         const questionnaire = questionnaires.find(q => q.tim_verifikasi_id === member.id);
-        const hasData = !!(member.nama && member.nip && member.jabatan_label);
+        const hasData = !!(member.nama && member.jabatan_label);
         const hasTTD = !!member.ttd_path;
         const hasQuestionnaire = !!questionnaire;
         const questionnaireSubmitted = questionnaire?.status === 'submitted';
