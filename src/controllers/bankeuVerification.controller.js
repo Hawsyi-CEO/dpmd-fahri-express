@@ -614,10 +614,11 @@ class BankeuVerificationController {
   async submitReview(req, res) {
     try {
       const { desaId } = req.params;
-      const { action } = req.body; // 'submit' or 'return'
+      const { action, tahun } = req.body; // 'submit' or 'return', tahun = tahun_anggaran
       const userId = req.user.id;
+      const tahunAnggaran = parseInt(tahun) || new Date().getFullYear();
 
-      logger.info(`🚀 SUBMIT REVIEW REQUEST - Desa: ${desaId}, Action: ${action}, User: ${userId}`);
+      logger.info(`🚀 SUBMIT REVIEW REQUEST - Desa: ${desaId}, Action: ${action}, Tahun: ${tahunAnggaran}, User: ${userId}`);
 
       if (!['submit', 'return'].includes(action)) {
         return res.status(400).json({
@@ -658,9 +659,10 @@ class BankeuVerificationController {
         FROM bankeu_proposals bp
         INNER JOIN desas d ON bp.desa_id = d.id
         WHERE bp.desa_id = ? AND d.kecamatan_id = ? 
+          AND bp.tahun_anggaran = ?
           AND bp.submitted_to_kecamatan = TRUE
           AND (bp.kecamatan_status = 'pending' OR bp.kecamatan_status IS NULL)
-      `, { replacements: [desaId, kecamatanId] });
+      `, { replacements: [desaId, kecamatanId, tahunAnggaran] });
 
       if (pendingCount[0].total > 0) {
         return res.status(400).json({
@@ -674,8 +676,8 @@ class BankeuVerificationController {
         SELECT COUNT(*) as total
         FROM bankeu_proposals bp
         INNER JOIN desas d ON bp.desa_id = d.id
-        WHERE bp.desa_id = ? AND d.kecamatan_id = ? AND bp.submitted_to_kecamatan = TRUE
-      `, { replacements: [desaId, kecamatanId] });
+        WHERE bp.desa_id = ? AND d.kecamatan_id = ? AND bp.tahun_anggaran = ? AND bp.submitted_to_kecamatan = TRUE
+      `, { replacements: [desaId, kecamatanId, tahunAnggaran] });
 
       if (totalCount[0].total === 0) {
         return res.status(400).json({
@@ -706,10 +708,11 @@ class BankeuVerificationController {
           FROM bankeu_proposals bp
           INNER JOIN desas d ON bp.desa_id = d.id
           WHERE bp.desa_id = ? AND d.kecamatan_id = ? 
+            AND bp.tahun_anggaran = ?
             AND bp.submitted_to_kecamatan = TRUE
             AND bp.kecamatan_status = 'approved'
             AND (bp.berita_acara_path IS NULL OR bp.berita_acara_path = '')
-        `, { replacements: [desaId, kecamatanId] });
+        `, { replacements: [desaId, kecamatanId, tahunAnggaran] });
 
         if (missingBeritaAcara[0].total > 0) {
           return res.status(400).json({
@@ -725,10 +728,11 @@ class BankeuVerificationController {
           FROM bankeu_proposals bp
           INNER JOIN desas d ON bp.desa_id = d.id
           WHERE bp.desa_id = ? AND d.kecamatan_id = ? 
+            AND bp.tahun_anggaran = ?
             AND bp.submitted_to_kecamatan = TRUE
             AND bp.kecamatan_status = 'approved'
             AND (bp.surat_pengantar IS NULL OR bp.surat_pengantar = '')
-        `, { replacements: [desaId, kecamatanId] });
+        `, { replacements: [desaId, kecamatanId, tahunAnggaran] });
 
         if (missingSuratPengantar[0].total > 0) {
           return res.status(400).json({
@@ -741,8 +745,8 @@ class BankeuVerificationController {
         const [suratDesa] = await sequelize.query(`
           SELECT surat_pengantar, surat_permohonan
           FROM desa_bankeu_surat
-          WHERE desa_id = ? AND tahun = YEAR(CURDATE())
-        `, { replacements: [desaId] });
+          WHERE desa_id = ? AND tahun = ?
+        `, { replacements: [desaId, tahunAnggaran] });
 
         if (!suratDesa || suratDesa.length === 0 || !suratDesa[0].surat_pengantar) {
           return res.status(400).json({
@@ -767,8 +771,8 @@ class BankeuVerificationController {
           UPDATE bankeu_proposals bp
           INNER JOIN desas d ON bp.desa_id = d.id
           SET bp.submitted_to_kecamatan = FALSE, bp.submitted_at = NULL
-          WHERE bp.desa_id = ? AND d.kecamatan_id = ?
-        `, { replacements: [desaId, kecamatanId] });
+          WHERE bp.desa_id = ? AND d.kecamatan_id = ? AND bp.tahun_anggaran = ?
+        `, { replacements: [desaId, kecamatanId, tahunAnggaran] });
         
         logger.info(`🔙 ${totalCount[0].total} proposals returned to desa ${desaId} by user ${userId}`);
 
@@ -796,8 +800,8 @@ class BankeuVerificationController {
             bp.submitted_to_dpmd = TRUE, 
             bp.submitted_to_dpmd_at = NOW(),
             bp.dpmd_status = 'pending'
-          WHERE bp.desa_id = ? AND d.kecamatan_id = ? AND bp.kecamatan_status = 'approved'
-        `, { replacements: [desaId, kecamatanId] });
+          WHERE bp.desa_id = ? AND d.kecamatan_id = ? AND bp.tahun_anggaran = ? AND bp.kecamatan_status = 'approved'
+        `, { replacements: [desaId, kecamatanId, tahunAnggaran] });
         
         logger.info(`✅ ${totalCount[0].total} proposals submitted to DPMD from desa ${desaId} by user ${userId}`);
 
