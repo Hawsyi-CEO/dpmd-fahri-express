@@ -1292,15 +1292,19 @@ class BankeuProposalController {
 
       // Get all revision proposals to detect origin
       // Proposal yang SUDAH UPLOAD ULANG: status='pending' tapi punya dinas_status/kecamatan_status/dpmd_status
-      // DAN belum dikirim ulang (submitted_to_dinas_at IS NULL AND submitted_to_kecamatan = FALSE)
+      // DAN belum dikirim ulang (submitted_to_kecamatan = FALSE)
+      // NOTE: submitted_to_dinas_at tidak di-null lagi saat kecamatan revisi, 
+      // jadi deteksi hanya pakai submitted_to_kecamatan + status rejection
       const [proposals] = await sequelize.query(`
-        SELECT id, dinas_status, kecamatan_status, dpmd_status, status
+        SELECT id, dinas_status, kecamatan_status, dpmd_status, status, submitted_to_dinas_at
         FROM bankeu_proposals
         WHERE desa_id = ? 
           AND status = 'pending'
-          AND submitted_to_dinas_at IS NULL
           AND submitted_to_kecamatan = FALSE
-          AND (dinas_status IS NOT NULL OR kecamatan_status IS NOT NULL OR dpmd_status IS NOT NULL)
+          AND (
+            (submitted_to_dinas_at IS NULL AND (dinas_status IS NOT NULL OR dpmd_status IS NOT NULL))
+            OR kecamatan_status IN ('rejected', 'revision')
+          )
           ${tahunFilter}
       `, { replacements: baseReplacements });
 
@@ -1364,7 +1368,6 @@ class BankeuProposalController {
               updated_at = NOW()
           WHERE desa_id = ? 
             AND status = 'pending'
-            AND submitted_to_dinas_at IS NULL
             AND submitted_to_kecamatan = FALSE
             AND kecamatan_status IN ('rejected', 'revision')
             AND (dinas_status IS NULL OR dinas_status NOT IN ('rejected', 'revision'))

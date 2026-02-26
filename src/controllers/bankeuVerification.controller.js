@@ -36,6 +36,7 @@ class BankeuVerificationController {
       // NEW FLOW 2026-02-02: Show proposals that have been submitted to Kecamatan
       // Filter: submitted_to_kecamatan = TRUE (approved by Dinas)
       let whereClause = `WHERE d.kecamatan_id = ? 
+        AND d.status_pemerintahan = 'desa'
         AND bp.submitted_to_kecamatan = TRUE`;
       const replacements = [kecamatanId];
 
@@ -197,6 +198,8 @@ class BankeuVerificationController {
       // NEW FLOW 2026-01-30: Desa → Dinas → Kecamatan → DPMD
       // Reject Kecamatan → RETURN to DESA (Desa upload ulang → Kecamatan langsung)
       // Reset submitted flags dan keep status untuk tracking
+      // IMPORTANT: JANGAN null submitted_to_dinas_at agar proposal tetap terlihat
+      // di halaman Dinas Terkait / Verifikator Dinas untuk tracking progress
       if (action === 'rejected' || action === 'revision') {
         logger.info(`⬅️ Kecamatan returning proposal ${id} to DESA`);
         
@@ -208,7 +211,6 @@ class BankeuVerificationController {
             kecamatan_verified_by = ?,
             kecamatan_verified_at = NOW(),
             submitted_to_kecamatan = FALSE,
-            submitted_to_dinas_at = NULL,
             status = ?
           WHERE id = ?
         `, {
@@ -482,6 +484,7 @@ class BankeuVerificationController {
         INNER JOIN desas d ON bp.desa_id = d.id
         INNER JOIN bankeu_master_kegiatan bmk ON bp.kegiatan_id = bmk.id
         WHERE d.kecamatan_id = ?
+        AND d.status_pemerintahan = 'desa'
         AND bp.submitted_to_kecamatan = TRUE
         ${tahunFilter ? 'AND bp.tahun_anggaran = ?' : ''}
       `, { replacements: tahunFilter ? [kecamatanId, tahunFilter] : [kecamatanId] });
