@@ -78,7 +78,7 @@ class SchedulerService {
    */
   async triggerMorningReminder() {
     console.log('🔧 Manual trigger: Morning reminder');
-    return await pushNotificationService.sendTodayReminder();
+    return await pushNotificationService.sendTodayScheduleReminder();
   }
 
   /**
@@ -86,7 +86,7 @@ class SchedulerService {
    */
   async triggerEveningReminder() {
     console.log('🔧 Manual trigger: Evening reminder');
-    return await pushNotificationService.sendTomorrowReminder();
+    return await pushNotificationService.sendTomorrowScheduleReminder();
   }
 }
 
