@@ -3,6 +3,7 @@ const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
 const fs = require('fs');
 const path = require('path');
+const ActivityLogger = require('../utils/activityLogger');
 
 class InformasiController {
   
@@ -157,6 +158,23 @@ class InformasiController {
 
       logger.info(`[Informasi] Created successfully with id: ${informasi.id}`);
 
+      // Activity Log
+      await ActivityLogger.log({
+        userId: req.user?.id,
+        userName: req.user?.name || 'System',
+        userRole: req.user?.role || 'admin',
+        bidangId: 2, // Sekretariat
+        module: 'informasi',
+        action: 'create',
+        entityType: 'informasi',
+        entityId: informasi.id,
+        entityName: judul,
+        description: `${req.user?.name || 'Admin'} menambahkan informasi baru: ${judul}`,
+        newValue: { judul, link, is_active: informasi.is_active },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
       return res.status(201).json({
         success: true,
         message: 'Informasi berhasil ditambahkan',
@@ -228,6 +246,24 @@ class InformasiController {
 
       logger.info(`[Informasi] Updated successfully id: ${id}`);
 
+      // Activity Log
+      await ActivityLogger.log({
+        userId: req.user?.id,
+        userName: req.user?.name || 'System',
+        userRole: req.user?.role || 'admin',
+        bidangId: 2, // Sekretariat
+        module: 'informasi',
+        action: 'update',
+        entityType: 'informasi',
+        entityId: parseInt(id),
+        entityName: updated.judul,
+        description: `${req.user?.name || 'Admin'} memperbarui informasi: ${updated.judul}`,
+        oldValue: { judul: existing.judul, is_active: existing.is_active },
+        newValue: { judul: updated.judul, is_active: updated.is_active },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
       return res.json({
         success: true,
         message: 'Informasi berhasil diperbarui',
@@ -276,6 +312,23 @@ class InformasiController {
 
       logger.info(`[Informasi] Deleted successfully id: ${id}`);
 
+      // Activity Log
+      await ActivityLogger.log({
+        userId: req.user?.id,
+        userName: req.user?.name || 'System',
+        userRole: req.user?.role || 'admin',
+        bidangId: 2, // Sekretariat
+        module: 'informasi',
+        action: 'delete',
+        entityType: 'informasi',
+        entityId: parseInt(id),
+        entityName: existing.judul,
+        description: `${req.user?.name || 'Admin'} menghapus informasi: ${existing.judul}`,
+        oldValue: { judul: existing.judul, is_active: existing.is_active },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
       return res.json({
         success: true,
         message: 'Informasi berhasil dihapus'
@@ -311,6 +364,24 @@ class InformasiController {
       });
 
       logger.info(`[Informasi] Toggled active status id ${id} to ${updated.is_active}`);
+
+      // Activity Log
+      await ActivityLogger.log({
+        userId: req.user?.id,
+        userName: req.user?.name || 'System',
+        userRole: req.user?.role || 'admin',
+        bidangId: 2, // Sekretariat
+        module: 'informasi',
+        action: 'update',
+        entityType: 'informasi',
+        entityId: parseInt(id),
+        entityName: updated.judul,
+        description: `${req.user?.name || 'Admin'} ${updated.is_active ? 'mengaktifkan' : 'menonaktifkan'} informasi: ${updated.judul}`,
+        oldValue: { is_active: existing.is_active },
+        newValue: { is_active: updated.is_active },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
 
       return res.json({
         success: true,

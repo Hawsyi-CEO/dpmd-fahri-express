@@ -3,6 +3,7 @@ const Berita = require('../models/Berita');
 const { Op } = require('sequelize');
 const fs = require('fs');
 const path = require('path');
+const ActivityLogger = require('../utils/activityLogger');
 
 // Helper function to generate slug
 const generateSlug = (text) => {
@@ -250,6 +251,23 @@ exports.createBerita = async (req, res) => {
 
     console.log('✅ [CreateBerita] Berita created successfully:', berita.id_berita);
 
+    // Activity Log
+    await ActivityLogger.log({
+      userId: req.user?.id,
+      userName: req.user?.name || penulis || 'Admin',
+      userRole: req.user?.role || 'admin',
+      bidangId: 2, // Sekretariat/Humas
+      module: 'berita',
+      action: 'create',
+      entityType: 'berita',
+      entityId: berita.id_berita,
+      entityName: judul,
+      description: `${req.user?.name || penulis || 'Admin'} membuat berita baru: ${judul}`,
+      newValue: { judul, status, kategori },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
+    });
+
     res.status(201).json({
       status: 'success',
       message: 'Berita berhasil dibuat',
@@ -339,6 +357,23 @@ exports.updateBerita = async (req, res) => {
 
     await berita.save();
 
+    // Activity Log
+    await ActivityLogger.log({
+      userId: req.user?.id,
+      userName: req.user?.name || 'Admin',
+      userRole: req.user?.role || 'admin',
+      bidangId: 2, // Sekretariat/Humas
+      module: 'berita',
+      action: 'update',
+      entityType: 'berita',
+      entityId: berita.id_berita,
+      entityName: berita.judul,
+      description: `${req.user?.name || 'Admin'} memperbarui berita: ${berita.judul}`,
+      newValue: { judul: berita.judul, status: berita.status, kategori: berita.kategori },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
+    });
+
     res.status(200).json({
       status: 'success',
       message: 'Berita berhasil diupdate',
@@ -385,7 +420,28 @@ exports.deleteBerita = async (req, res) => {
       }
     }
 
+    // Store berita info before delete for activity log
+    const beritaJudul = berita.judul;
+    const beritaId = berita.id_berita;
+
     await berita.destroy();
+
+    // Activity Log
+    await ActivityLogger.log({
+      userId: req.user?.id,
+      userName: req.user?.name || 'Admin',
+      userRole: req.user?.role || 'admin',
+      bidangId: 2, // Sekretariat/Humas
+      module: 'berita',
+      action: 'delete',
+      entityType: 'berita',
+      entityId: beritaId,
+      entityName: beritaJudul,
+      description: `${req.user?.name || 'Admin'} menghapus berita: ${beritaJudul}`,
+      oldValue: { judul: beritaJudul },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
+    });
 
     res.status(200).json({
       status: 'success',
