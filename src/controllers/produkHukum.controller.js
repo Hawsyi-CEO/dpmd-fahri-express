@@ -5,6 +5,7 @@
  */
 
 const prisma = require('../config/prisma');
+const ActivityLogger = require('../utils/activityLogger');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs').promises;
@@ -205,6 +206,23 @@ class ProdukHukumController {
         }
       });
 
+      // Log activity
+      await ActivityLogger.log({
+        userId: user.id,
+        userName: user.nama || user.email,
+        userRole: user.role,
+        bidangId: 6, // Pemdes
+        module: 'produk_hukum',
+        action: 'create',
+        entityType: 'produk_hukum',
+        entityId: null, // UUID not BigInt
+        entityName: judul,
+        description: `${user.nama || user.email} membuat produk hukum baru: ${judul} (${nomor})`,
+        newValue: { judul, nomor, tahun, jenis, status_peraturan },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
       return res.status(201).json({
         success: true,
         message: 'Produk Hukum berhasil ditambahkan',
@@ -373,6 +391,24 @@ class ProdukHukumController {
         data: updateData
       });
 
+      // Log activity
+      await ActivityLogger.log({
+        userId: req.user.id,
+        userName: req.user.nama || req.user.email,
+        userRole: req.user.role,
+        bidangId: 6, // Pemdes
+        module: 'produk_hukum',
+        action: 'update',
+        entityType: 'produk_hukum',
+        entityId: null,
+        entityName: judul,
+        description: `${req.user.nama || req.user.email} mengupdate produk hukum: ${judul}`,
+        oldValue: { judul: produkHukum.judul, nomor: produkHukum.nomor },
+        newValue: { judul, nomor, tahun, jenis, status_peraturan },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
       return res.json({
         success: true,
         message: 'Produk Hukum berhasil diupdate',
@@ -429,6 +465,23 @@ class ProdukHukumController {
       // Delete from database
       await prisma.produk_hukums.delete({
         where: { id }
+      });
+
+      // Log activity
+      await ActivityLogger.log({
+        userId: req.user.id,
+        userName: req.user.nama || req.user.email,
+        userRole: req.user.role,
+        bidangId: 6, // Pemdes
+        module: 'produk_hukum',
+        action: 'delete',
+        entityType: 'produk_hukum',
+        entityId: null,
+        entityName: produkHukum.judul,
+        description: `${req.user.nama || req.user.email} menghapus produk hukum: ${produkHukum.judul}`,
+        oldValue: { judul: produkHukum.judul, nomor: produkHukum.nomor },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
       });
 
       return res.json({

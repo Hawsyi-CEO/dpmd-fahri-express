@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const PushNotificationService = require('../services/pushNotificationService');
+const ActivityLogger = require('../utils/activityLogger');
 
 /**
  * Helper function: Get role hierarchy level (Simple role-based)
@@ -160,6 +161,23 @@ exports.createDisposisi = async (req, res, next) => {
       console.error('═══════════════════════════════════════\n');
       // Don't fail the request if notification fails
     }
+
+    // Log activity
+    await ActivityLogger.log({
+      userId: req.user.id,
+      userName: req.user.nama || req.user.name || req.user.email,
+      userRole: req.user.role,
+      bidangId: 2, // Sekretariat
+      module: 'disposisi',
+      action: 'create',
+      entityType: 'disposisi',
+      entityId: Number(disposisi.id),
+      entityName: disposisi.surat_masuk?.perihal || `Disposisi #${disposisi.id}`,
+      description: `${req.user.nama || req.user.name || req.user.email} membuat disposisi ke ${keUser.name}: ${disposisi.surat_masuk?.perihal || 'Surat'}`,
+      newValue: { instruksi, catatan, ke_user: keUser.name },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
+    });
 
     res.status(201).json({
       success: true,
@@ -453,6 +471,24 @@ exports.markAsRead = async (req, res, next) => {
       },
     });
 
+    // Log activity
+    await ActivityLogger.log({
+      userId: req.user.id,
+      userName: req.user.nama || req.user.name || req.user.email,
+      userRole: req.user.role,
+      bidangId: 2, // Sekretariat
+      module: 'disposisi',
+      action: 'read',
+      entityType: 'disposisi',
+      entityId: Number(updated.id),
+      entityName: `Disposisi #${updated.id}`,
+      description: `${req.user.nama || req.user.name || req.user.email} membaca disposisi #${updated.id}`,
+      oldValue: { status: disposisi.status },
+      newValue: { status: 'dibaca' },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
+    });
+
     res.json({
       success: true,
       message: 'Disposisi ditandai sudah dibaca',
@@ -500,6 +536,24 @@ exports.updateStatus = async (req, res, next) => {
     const updated = await prisma.disposisi.update({
       where: { id: BigInt(id) },
       data: updateData,
+    });
+
+    // Log activity
+    await ActivityLogger.log({
+      userId: req.user.id,
+      userName: req.user.nama || req.user.name || req.user.email,
+      userRole: req.user.role,
+      bidangId: 2, // Sekretariat
+      module: 'disposisi',
+      action: status === 'selesai' ? 'complete' : 'update',
+      entityType: 'disposisi',
+      entityId: Number(updated.id),
+      entityName: `Disposisi #${updated.id}`,
+      description: `${req.user.nama || req.user.name || req.user.email} ${status === 'selesai' ? 'menyelesaikan' : 'mengubah status'} disposisi #${updated.id} menjadi ${status}`,
+      oldValue: { status: disposisi.status },
+      newValue: { status },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
     });
 
     res.json({
@@ -778,6 +832,23 @@ exports.createSuratMasuk = async (req, res, next) => {
     });
 
     console.log('✅ [SURAT MASUK] Created:', suratMasuk.id.toString());
+
+    // Log activity for surat masuk creation
+    await ActivityLogger.log({
+      userId: req.user.id,
+      userName: req.user.nama || req.user.name || req.user.email,
+      userRole: req.user.role,
+      bidangId: 2, // Sekretariat
+      module: 'surat_masuk',
+      action: 'create',
+      entityType: 'surat_masuk',
+      entityId: Number(suratMasuk.id),
+      entityName: perihal_surat,
+      description: `${req.user.nama || req.user.name || req.user.email} menginput surat masuk: ${perihal_surat} (No: ${nomor_surat})`,
+      newValue: { nomor_surat, pengirim: asal_surat, perihal: perihal_surat },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
+    });
 
     // Auto-create disposisi to Kepala Dinas
     // Find user with role 'kepala_dinas'
