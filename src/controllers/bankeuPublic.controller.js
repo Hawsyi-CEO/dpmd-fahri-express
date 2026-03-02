@@ -193,7 +193,47 @@ class BankeuPublicController {
         };
       });
 
-      logger.info(`[PUBLIC] Tracking summary: ${proposals.length} proposals for tahun ${tahun}`);
+      // ─── ANGGARAN PER PROGRAM (hanya proposal yang sudah sampai DPMD = stage 'selesai') ───
+      const programAgg = {};
+      publicProposals.forEach(p => {
+        if (p.stage !== 'selesai') return; // Hanya yang sudah di DPMD
+        const programKey = p.kegiatan || '-';
+        const dinasKey = p.dinas_terkait || '-';
+        const compositeKey = `${programKey}|||${dinasKey}`;
+
+        if (!programAgg[compositeKey]) {
+          programAgg[compositeKey] = {
+            nama_program: programKey,
+            dinas_terkait: dinasKey,
+            total_anggaran: 0,
+            jumlah_proposal: 0,
+            desa_set: new Set()
+          };
+        }
+        programAgg[compositeKey].total_anggaran += (p.anggaran || 0);
+        programAgg[compositeKey].jumlah_proposal += 1;
+        if (p.desa && p.desa !== 'Lainnya') {
+          programAgg[compositeKey].desa_set.add(p.desa);
+        }
+      });
+
+      const anggaranPerProgram = Object.values(programAgg)
+        .map(item => ({
+          nama_program: item.nama_program,
+          dinas_terkait: item.dinas_terkait,
+          total_anggaran: item.total_anggaran,
+          jumlah_proposal: item.jumlah_proposal,
+          jumlah_desa: item.desa_set.size
+        }))
+        .sort((a, b) => b.total_anggaran - a.total_anggaran);
+
+      const totalAnggaranFinal = anggaranPerProgram.reduce((s, p) => s + p.total_anggaran, 0);
+      const totalDesaFinal = new Set(
+        publicProposals.filter(p => p.stage === 'selesai' && p.desa && p.desa !== 'Lainnya').map(p => p.desa)
+      ).size;
+      const totalProposalFinal = publicProposals.filter(p => p.stage === 'selesai').length;
+
+      logger.info(`[PUBLIC] Tracking summary: ${proposals.length} proposals for tahun ${tahun}, ${anggaranPerProgram.length} programs at DPMD`);
 
       return res.json({
         success: true,
@@ -201,6 +241,12 @@ class BankeuPublicController {
         proposals: publicProposals,
         kecamatan: kecamatanAgg,
         desa_partisipasi: desaPartisipasi,
+        anggaran_per_program: {
+          programs: anggaranPerProgram,
+          total_anggaran_final: totalAnggaranFinal,
+          total_desa_final: totalDesaFinal,
+          total_proposal_final: totalProposalFinal
+        },
         tahun_anggaran: tahun
       });
 

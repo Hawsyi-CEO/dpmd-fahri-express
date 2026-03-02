@@ -117,7 +117,9 @@ class BidangController {
           };
           
         case 4: // Kekayaan Keuangan Desa (KKD - ADD, DD, BHPRD)
-          const totalDesa = await prisma.desas.count();
+          const totalDesa = await prisma.desas.count({
+            where: { status_pemerintahan: 'desa' }
+          });
           
           return {
             total_desa: totalDesa,

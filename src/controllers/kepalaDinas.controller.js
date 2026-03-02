@@ -17,8 +17,10 @@ class KepalaDinasController {
     try {
       logger.info('Getting Kepala Dinas dashboard statistics');
 
-      // Get Total Desa from desas table
-      const totalDesa = await prisma.desas.count();
+      // Get Total Desa from desas table (only desa, not kelurahan)
+      const totalDesa = await prisma.desas.count({
+        where: { status_pemerintahan: 'desa' }
+      });
       logger.info('Total desa:', totalDesa);
 
       // Get Total Pegawai from pegawai table
