@@ -59,7 +59,10 @@ class PushNotificationService {
 					}
 				},
 				include: {
-					push_subscriptions: true
+					push_subscriptions: {
+						orderBy: { created_at: 'desc' },
+						take: 1 // Only get the latest subscription per user
+					}
 				}
 			});
 
@@ -68,47 +71,49 @@ class PushNotificationService {
 			const sendPromises = [];
 
 			for (const user of users) {
-				for (const subscription of user.push_subscriptions) {
-					try {
-						// subscription.subscription could be string (JSON) or object (from Prisma)
-						const pushSubscription = typeof subscription.subscription === 'string' 
-							? JSON.parse(subscription.subscription)
-							: subscription.subscription;
-						
-						// Generate role-specific URL if path is provided
-						const notificationData = { ...notification.data };
-						if (notification.path) {
-							notificationData.url = this.getRoleBasedUrl(user.role, notification.path);
-						}
-						
-						const payload = JSON.stringify({
-							title: notification.title,
-							body: notification.body,
-							icon: notification.icon || '/logo-192.png',
-							badge: notification.badge || '/logo-96.png',
-							data: notificationData,
-							actions: notification.actions || []
+				// Only use the first (latest) subscription per user to avoid duplicates
+				const subscription = user.push_subscriptions[0];
+				if (!subscription) continue;
+
+				try {
+					// subscription.subscription could be string (JSON) or object (from Prisma)
+					const pushSubscription = typeof subscription.subscription === 'string' 
+						? JSON.parse(subscription.subscription)
+						: subscription.subscription;
+					
+					// Generate role-specific URL if path is provided
+					const notificationData = { ...notification.data };
+					if (notification.path) {
+						notificationData.url = this.getRoleBasedUrl(user.role, notification.path);
+					}
+					
+					const payload = JSON.stringify({
+						title: notification.title,
+						body: notification.body,
+						icon: notification.icon || '/logo-192.png',
+						badge: notification.badge || '/logo-96.png',
+						data: notificationData,
+						actions: notification.actions || []
+					});
+
+					const promise = webpush.sendNotification(pushSubscription, payload)
+						.then(() => {
+							console.log(`✅ Notification sent to user ${user.name} (${user.email})`);
+						})
+						.catch((error) => {
+							console.error(`❌ Failed to send to user ${user.name}:`, error.message);
+							
+							// If subscription is invalid, remove it
+							if (error.statusCode === 410 || error.statusCode === 404) {
+								return prisma.push_subscriptions.delete({
+									where: { id: subscription.id }
+								});
+							}
 						});
 
-						const promise = webpush.sendNotification(pushSubscription, payload)
-							.then(() => {
-								console.log(`✅ Notification sent to user ${user.name} (${user.email})`);
-							})
-							.catch((error) => {
-								console.error(`❌ Failed to send to user ${user.name}:`, error.message);
-								
-								// If subscription is invalid, remove it
-								if (error.statusCode === 410 || error.statusCode === 404) {
-									return prisma.push_subscriptions.delete({
-										where: { id: subscription.id }
-									});
-								}
-							});
-
-						sendPromises.push(promise);
-					} catch (error) {
-						console.error(`Error processing subscription for user ${user.name}:`, error.message);
-					}
+					sendPromises.push(promise);
+				} catch (error) {
+					console.error(`Error processing subscription for user ${user.name}:`, error.message);
 				}
 			}
 

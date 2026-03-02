@@ -36,6 +36,7 @@ class PushNotificationService {
   }
   /**
    * Send push notification ke user tertentu
+   * Hanya kirim ke 1 subscription terbaru untuk menghindari duplikat
    */
   static async sendToUser(userId, payload) {
     try {
@@ -46,21 +47,27 @@ class PushNotificationService {
         return { success: false, message: 'No subscriptions found' };
       }
 
-      const results = await Promise.allSettled(
-        subscriptions.map(sub => this.sendNotification(sub, payload))
-      );
-
-      const successful = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
-
-      logger.info(`Push notification sent to user ${userId}: ${successful} successful, ${failed} failed`);
-
-      return {
-        success: true,
-        sent: successful,
-        failed: failed,
-        total: subscriptions.length
-      };
+      // Only use the first (latest) subscription to avoid duplicate notifications
+      const latestSubscription = subscriptions[0];
+      
+      try {
+        await this.sendNotification(latestSubscription, payload);
+        logger.info(`Push notification sent to user ${userId}: 1 successful`);
+        return {
+          success: true,
+          sent: 1,
+          failed: 0,
+          total: 1
+        };
+      } catch (error) {
+        logger.error(`Failed to send push to user ${userId}:`, error);
+        return {
+          success: false,
+          sent: 0,
+          failed: 1,
+          total: 1
+        };
+      }
     } catch (error) {
       logger.error('Error sending push to user:', error);
       throw error;
@@ -69,6 +76,7 @@ class PushNotificationService {
 
   /**
    * Send push notification ke multiple users
+   * Hanya kirim 1 notifikasi per user untuk menghindari duplikat
    */
   static async sendToMultipleUsers(userIds, payload) {
     try {
@@ -78,12 +86,24 @@ class PushNotificationService {
         title: payload.title
       });
 
-      const subscriptions = await PushSubscription.getSubscriptionsByUsers(userIds);
+      const allSubscriptions = await PushSubscription.getSubscriptionsByUsers(userIds);
       
-      console.log('📋 [PUSH] Found subscriptions:', {
-        count: subscriptions.length,
-        userIds: userIds,
-        endpoints: subscriptions.map(s => s.endpoint.substring(0, 50) + '...')
+      // Deduplicate: keep only the latest subscription per user
+      const userSubscriptionMap = new Map();
+      for (const sub of allSubscriptions) {
+        const userId = sub.userId;
+        if (!userSubscriptionMap.has(userId)) {
+          userSubscriptionMap.set(userId, sub);
+        }
+        // Since getSubscriptionsByUsers doesn't guarantee order, 
+        // we rely on the model to return newest first or we keep the first one we see
+      }
+      const subscriptions = Array.from(userSubscriptionMap.values());
+      
+      console.log('📋 [PUSH] Found subscriptions (deduplicated):', {
+        originalCount: allSubscriptions.length,
+        deduplicatedCount: subscriptions.length,
+        userIds: userIds
       });
 
       if (subscriptions.length === 0) {
@@ -121,15 +141,26 @@ class PushNotificationService {
 
   /**
    * Send push notification ke semua users
+   * Hanya kirim 1 notifikasi per user untuk menghindari duplikat
    */
   static async sendToAll(payload) {
     try {
-      const subscriptions = await PushSubscription.getAllSubscriptions();
+      const allSubscriptions = await PushSubscription.getAllSubscriptions();
       
-      if (subscriptions.length === 0) {
+      if (allSubscriptions.length === 0) {
         logger.warn('No push subscriptions found');
         return { success: false, message: 'No subscriptions found' };
       }
+
+      // Deduplicate: keep only one subscription per user
+      const userSubscriptionMap = new Map();
+      for (const sub of allSubscriptions) {
+        const userId = sub.userId;
+        if (!userSubscriptionMap.has(userId)) {
+          userSubscriptionMap.set(userId, sub);
+        }
+      }
+      const subscriptions = Array.from(userSubscriptionMap.values());
 
       const results = await Promise.allSettled(
         subscriptions.map(sub => this.sendNotification(sub, payload))
@@ -138,7 +169,7 @@ class PushNotificationService {
       const successful = results.filter(r => r.status === 'fulfilled').length;
       const failed = results.filter(r => r.status === 'rejected').length;
 
-      logger.info(`Broadcast push notification: ${successful} successful, ${failed} failed`);
+      logger.info(`Broadcast push notification: ${successful} successful, ${failed} failed (${allSubscriptions.length} total subscriptions deduplicated to ${subscriptions.length})`);
 
       return {
         success: true,

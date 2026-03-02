@@ -272,6 +272,7 @@ app.use('/api/kepala-dinas', kepalaDinasRoutes); // Kepala Dinas dashboard
 app.use('/api/jadwal-kegiatan', require('./routes/jadwalKegiatan.routes')); // Jadwal Kegiatan routes
 app.use('/api/perjadin', perjadinRoutes); // Perjadin (Perjalanan Dinas) routes
 app.use('/api/berita', require('./routes/berita.routes')); // Berita routes
+app.use('/api/informasi', require('./routes/informasi.routes')); // Informasi banner routes (Sekretariat)
 app.use('/api/activity-logs', require('./routes/activityLog.routes')); // Global Activity Logs (Superadmin)
 app.use('/api/kelembagaan', kelembagaanRoutes); // Kelembagaan routes (admin/global)
 app.use('/api/kelembagaan/activity-logs', require('./routes/kelembagaanActivityLogs.routes')); // Activity logs

@@ -4,14 +4,14 @@ const prisma = new PrismaClient();
 class PushSubscription {
   /**
    * Simpan atau update push subscription
+   * Hanya simpan 1 subscription per user (hapus semua subscription lama)
    */
   static async saveSubscription(userId, subscription) {
     try {
-      // Delete existing subscription with same endpoint
+      // Delete ALL existing subscriptions for this user (keep only 1 subscription per user)
       await prisma.push_subscriptions.deleteMany({
         where: {
-          user_id: BigInt(userId),
-          endpoint: subscription.endpoint
+          user_id: BigInt(userId)
         }
       });
 

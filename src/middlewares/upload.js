@@ -424,6 +424,34 @@ const storageContohProposal = multer.diskStorage({
   }
 });
 
+// Storage configuration for INFORMASI (banner images)
+const storageInformasi = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const dir = 'storage/uploads/informasi';
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: function (req, file, cb) {
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    const nameWithoutExt = path.basename(file.originalname, ext);
+    const sanitizedName = nameWithoutExt.replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `${timestamp}_${sanitizedName}${ext}`;
+    
+    cb(null, filename);
+  }
+});
+
+const uploadInformasi = multer({
+  storage: storageInformasi,
+  fileFilter: imageFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB for images
+  }
+});
+
 const contohProposalFileFilter = (req, file, cb) => {
   const allowedTypes = [
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
@@ -460,6 +488,7 @@ module.exports = {
   uploadAparaturDesa,
   uploadPengurus,
   uploadProfilDesa,
+  uploadInformasi,
   bankeuProposal: uploadBankeuProposal.single('file'),
   contohProposalUpload: uploadContohProposal.single('file')
 };
