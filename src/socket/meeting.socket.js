@@ -318,12 +318,15 @@ function initSocketServer(httpServer) {
 
     // Create WebRTC transport
     socket.on('create-transport', async (data, callback) => {
+      console.log(`[Socket] create-transport received from ${socket.peerId}, direction: ${data?.direction}, roomId: ${socket.roomId}`);
       try {
         const { direction } = data; // 'send' or 'recv'
         const peerId = socket.user.id;
         const roomId = socket.roomId;
 
+        console.log(`[Socket] Creating ${direction} transport for peer ${peerId} in room ${roomId}`);
         const transport = await mediasoupService.createWebRtcTransport(roomId, peerId, direction);
+        console.log(`[Socket] Transport created: ${transport.id}`);
 
         safeCallback(callback, { success: true, transport });
       } catch (error) {
@@ -334,12 +337,15 @@ function initSocketServer(httpServer) {
 
     // Connect transport
     socket.on('connect-transport', async (data, callback) => {
+      console.log(`[Socket] connect-transport received from ${socket.peerId}, transportId: ${data?.transportId}`);
       try {
         const { transportId, dtlsParameters } = data;
         const peerId = socket.user.id;
         const roomId = socket.roomId;
 
+        console.log(`[Socket] Connecting transport ${transportId} for peer ${peerId}`);
         await mediasoupService.connectTransport(roomId, peerId, transportId, dtlsParameters);
+        console.log(`[Socket] Transport ${transportId} connected successfully`);
 
         safeCallback(callback, { success: true });
       } catch (error) {
@@ -350,11 +356,13 @@ function initSocketServer(httpServer) {
 
     // Produce media (start sending video/audio)
     socket.on('produce', async (data, callback) => {
+      console.log(`[Socket] produce received from ${socket.peerId}, kind: ${data?.kind}`);
       try {
         const { transportId, kind, rtpParameters, appData } = data;
         const peerId = socket.user.id;
         const roomId = socket.roomId;
 
+        console.log(`[Socket] Producing ${kind} for peer ${peerId} in room ${roomId}`);
         const producer = await mediasoupService.produce(
           roomId,
           peerId,
