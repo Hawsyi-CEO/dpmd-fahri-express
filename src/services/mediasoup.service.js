@@ -19,6 +19,19 @@ class MediasoupService {
   async init() {
     const numWorkers = require('os').cpus().length;
     console.log(`[Mediasoup] Creating ${numWorkers} workers...`);
+    
+    // Check MEDIASOUP_ANNOUNCED_IP configuration
+    const announcedIp = process.env.MEDIASOUP_ANNOUNCED_IP || '127.0.0.1';
+    if (announcedIp === '127.0.0.1' && process.env.NODE_ENV === 'production') {
+      console.warn('======================================================================');
+      console.warn('[Mediasoup] WARNING: MEDIASOUP_ANNOUNCED_IP is set to 127.0.0.1');
+      console.warn('[Mediasoup] Video meetings will NOT work between different devices!');
+      console.warn('[Mediasoup] Please set MEDIASOUP_ANNOUNCED_IP to your server\'s public IP');
+      console.warn('[Mediasoup] Get your IP with: curl ifconfig.me');
+      console.warn('======================================================================');
+    } else {
+      console.log(`[Mediasoup] Announced IP: ${announcedIp}`);
+    }
 
     for (let i = 0; i < numWorkers; i++) {
       const worker = await mediasoup.createWorker({
