@@ -262,6 +262,7 @@ function initSocketServer(httpServer) {
 
         // Get existing producers (from other peers)
         const producers = mediasoupService.getProducers(roomId, peerId);
+        console.log(`[Socket] Existing producers for ${userName}: ${producers.length} producers`, producers.map(p => ({ producerId: p.producerId, peerId: p.peerId, kind: p.kind })));
 
         // Get active socket peer IDs from the socket room
         const activeSocketIds = [];
@@ -389,11 +390,13 @@ function initSocketServer(httpServer) {
 
     // Consume media (start receiving video/audio from another peer)
     socket.on('consume', async (data, callback) => {
+      console.log(`[Socket] consume received from ${socket.peerId}, producerId: ${data?.producerId}`);
       try {
         const { transportId, producerId, rtpCapabilities } = data;
         const peerId = socket.user.id;
         const roomId = socket.roomId;
 
+        console.log(`[Socket] Consuming producer ${producerId} for peer ${peerId} in room ${roomId}`);
         const consumer = await mediasoupService.consume(
           roomId,
           peerId,
@@ -401,6 +404,7 @@ function initSocketServer(httpServer) {
           producerId,
           rtpCapabilities
         );
+        console.log(`[Socket] Consumer created: ${consumer.id}, kind: ${consumer.kind}`);
 
         safeCallback(callback, { success: true, consumer });
       } catch (error) {
