@@ -328,8 +328,11 @@ class MediasoupService {
 
   /**
    * Remove peer from room
+   * @param {string} roomId - Room ID
+   * @param {string} peerId - Peer ID
+   * @param {boolean} autoDeleteRoom - Whether to delete room if empty (default: true)
    */
-  removePeer(roomId, peerId) {
+  removePeer(roomId, peerId, autoDeleteRoom = true) {
     const room = this.getRoom(roomId);
     if (!room) return;
 
@@ -344,8 +347,8 @@ class MediasoupService {
     room.peers.delete(peerId);
     console.log(`[Mediasoup] Peer ${peerId} removed from room ${roomId}`);
 
-    // If room is empty, close it
-    if (room.peers.size === 0) {
+    // If room is empty and autoDeleteRoom is true, close it
+    if (autoDeleteRoom && room.peers.size === 0) {
       room.router.close();
       this.rooms.delete(roomId);
       console.log(`[Mediasoup] Room ${roomId} closed (empty)`);
@@ -378,7 +381,8 @@ class MediasoupService {
 
     for (const peerId of stalePeerIds) {
       console.log(`[Mediasoup] Removing stale peer ${peerId} from room ${roomId}`);
-      this.removePeer(roomId, peerId);
+      // Don't auto-delete room during cleanup - room should stay alive for new joiners
+      this.removePeer(roomId, peerId, false);
     }
 
     return stalePeerIds.length;
