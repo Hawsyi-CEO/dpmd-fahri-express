@@ -353,19 +353,24 @@ class BeritaAcaraHelper {
         type: sequelize.QueryTypes.SELECT
       });
 
-      // Check minimum requirements (ketua + sekretaris)
+      // Check minimum requirements (ketua is required, sekretaris is optional)
       const hasKetua = timMembers.some(t => t.posisi === 'ketua');
-      const hasSekretaris = timMembers.some(t => t.posisi === 'sekretaris');
 
       if (!hasKetua) {
         errors.push('Ketua Tim Verifikasi belum dikonfigurasi');
       }
-      if (!hasSekretaris) {
-        errors.push('Sekretaris Tim Verifikasi belum dikonfigurasi');
-      }
 
-      // Check each member
+      // Check each member (skip sekretaris validation if not configured)
       for (const member of timMembers) {
+        // Skip sekretaris validation if not filled (sekretaris is optional)
+        const isSekretaris = member.posisi === 'sekretaris';
+        const hasAnyData = member.nama || member.jabatan || member.ttd_path;
+        
+        // If sekretaris has no data at all, skip validation entirely
+        if (isSekretaris && !hasAnyData) {
+          continue;
+        }
+
         const memberStatus = {
           posisi: member.posisi,
           nama: member.nama || 'Belum diisi',
@@ -386,6 +391,7 @@ class BeritaAcaraHelper {
 
         memberStatus.has_questionnaire = !!questionnaire;
 
+        // For sekretaris with partial data, still validate completely
         if (!memberStatus.has_data) {
           errors.push(`${this.getPosisiLabel(member.posisi)}: Data belum lengkap`);
         }

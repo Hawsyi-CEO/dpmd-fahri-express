@@ -78,6 +78,11 @@ module.exports = {
         announcedIp: process.env.MEDIASOUP_ANNOUNCED_IP || '127.0.0.1'
       }
     ],
+    // Enable both UDP and TCP for better connectivity
+    enableUdp: true,
+    enableTcp: true,
+    preferUdp: true,
+    // Bitrate settings
     initialAvailableOutgoingBitrate: 1000000,
     minimumAvailableOutgoingBitrate: 600000,
     maxSctpMessageSize: 262144,
