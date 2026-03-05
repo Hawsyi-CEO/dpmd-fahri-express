@@ -116,7 +116,7 @@ const getDinasProposals = async (req, res) => {
         LEFT JOIN dinas_verifikator dv ON u_verifier.id = dv.user_id AND u_verifier.dinas_id = dv.dinas_id
         LEFT JOIN dinas_config dc ON u_verifier.dinas_id = dc.dinas_id
         WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
-          AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IN ('rejected', 'revision') OR bp.kecamatan_status IN ('rejected', 'revision'))
+          AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IS NOT NULL OR bp.kecamatan_status IN ('rejected', 'revision'))
           AND d.status_pemerintahan = 'desa'
           AND bp.desa_id IN (${Prisma.join(accessibleDesaIds)})
           AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
@@ -179,7 +179,7 @@ const getDinasProposals = async (req, res) => {
           LEFT JOIN dinas_verifikator dv ON u_verifier.id = dv.user_id AND u_verifier.dinas_id = dv.dinas_id
           LEFT JOIN dinas_config dc ON u_verifier.dinas_id = dc.dinas_id
           WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
-            AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IN ('rejected', 'revision') OR bp.kecamatan_status IN ('rejected', 'revision'))
+            AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IS NOT NULL OR bp.kecamatan_status IN ('rejected', 'revision'))
             AND d.status_pemerintahan = 'desa'
             AND bp.desa_id NOT IN (${Prisma.join(excludedDesaIds)})
             AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
@@ -210,7 +210,7 @@ const getDinasProposals = async (req, res) => {
           LEFT JOIN dinas_verifikator dv ON u_verifier.id = dv.user_id AND u_verifier.dinas_id = dv.dinas_id
           LEFT JOIN dinas_config dc ON u_verifier.dinas_id = dc.dinas_id
           WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
-            AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IN ('rejected', 'revision') OR bp.kecamatan_status IN ('rejected', 'revision'))
+            AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IS NOT NULL OR bp.kecamatan_status IN ('rejected', 'revision'))
             AND d.status_pemerintahan = 'desa'
             AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
           ORDER BY bp.created_at DESC
@@ -965,7 +965,7 @@ const getDinasStatistics = async (req, res) => {
         INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
         INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
         WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
-          AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IN ('rejected', 'revision') OR bp.kecamatan_status IN ('rejected', 'revision'))
+          AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IS NOT NULL OR bp.kecamatan_status IN ('rejected', 'revision'))
           AND d.status_pemerintahan = 'desa'
           AND bp.desa_id IN (${Prisma.join(accessibleDesaIds)})
           AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
@@ -1005,7 +1005,7 @@ const getDinasStatistics = async (req, res) => {
           INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
           INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
           WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
-            AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IN ('rejected', 'revision') OR bp.kecamatan_status IN ('rejected', 'revision'))
+            AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IS NOT NULL OR bp.kecamatan_status IN ('rejected', 'revision'))
             AND d.status_pemerintahan = 'desa'
             AND bp.desa_id NOT IN (${Prisma.join(excludedDesaIds)})
             AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
@@ -1025,7 +1025,7 @@ const getDinasStatistics = async (req, res) => {
           INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
           INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
           WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
-            AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IN ('rejected', 'revision') OR bp.kecamatan_status IN ('rejected', 'revision'))
+            AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IS NOT NULL OR bp.kecamatan_status IN ('rejected', 'revision'))
             AND d.status_pemerintahan = 'desa'
             AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
         `;
