@@ -547,29 +547,17 @@ class BankeuProposalController {
         updates.push('file_proposal = ?', 'file_size = ?');
         replacements.push(filePath, fileSize);
 
-        // Move old file to reference folder (for comparison) instead of deleting
+        // Delete old file from bankeu folder (keep reference copy from Dinas approval)
+        // NOTE: dinas_reviewed_file sudah di-set saat Dinas approve (dinasVerification.controller.js)
+        // File referensi sudah ada di bankeu_reference/, jadi file lama di bankeu/ bisa dihapus
         const oldFilePath = proposal.file_proposal;
         if (oldFilePath) {
           const fullOldPath = path.join(__dirname, '../../storage/uploads/bankeu', oldFilePath);
-          const referenceDir = path.join(__dirname, '../../storage/uploads/bankeu_reference');
-          const fullNewPath = path.join(referenceDir, oldFilePath);
-          
-          // Ensure reference directory exists
-          if (!fs.existsSync(referenceDir)) {
-            fs.mkdirSync(referenceDir, { recursive: true });
-          }
           
           if (fs.existsSync(fullOldPath)) {
-            // Move file to reference folder
-            fs.renameSync(fullOldPath, fullNewPath);
-            logger.info(`📦 Moved old file to reference: ${oldFilePath}`);
-            
-            // Save old file to dinas_reviewed_file for comparison purpose
-            // Note: Field ini dual-purpose:
-            // 1. Untuk file yang sudah direview Dinas (original purpose)
-            // 2. Untuk file referensi lama ketika Kecamatan reject dan Desa upload ulang
-            updates.push('dinas_reviewed_file = ?', 'dinas_reviewed_at = NOW()');
-            replacements.push(oldFilePath);
+            // Delete old file (reference copy already exists from Dinas approval)
+            fs.unlinkSync(fullOldPath);
+            logger.info(`🗑️ Deleted old file: ${oldFilePath} (reference copy preserved from Dinas approval)`);
           }
         }
       }
@@ -771,36 +759,23 @@ class BankeuProposalController {
       const fileSize = req.file.size;
       const oldFilePath = proposal.file_proposal;
 
-      // Move old file to reference folder (preserve for history) instead of deleting
-      // FIX 2026-03-09: Also update dinas_reviewed_file to track old file for comparison
-      let oldFileMoved = false;
+      // Delete old file from bankeu folder (keep reference copy from Dinas approval)
+      // NOTE: dinas_reviewed_file sudah di-set saat Dinas approve (dinasVerification.controller.js)
+      // File referensi sudah ada di bankeu_reference/, jadi file lama di bankeu/ bisa dihapus
       if (oldFilePath) {
         const fullPath = path.join(__dirname, '../../storage/uploads/bankeu', oldFilePath);
-        const referenceDir = path.join(__dirname, '../../storage/uploads/bankeu_reference');
-        const referencePath = path.join(referenceDir, oldFilePath);
-        
-        if (!fs.existsSync(referenceDir)) {
-          fs.mkdirSync(referenceDir, { recursive: true });
-        }
         
         if (fs.existsSync(fullPath)) {
-          fs.renameSync(fullPath, referencePath);
-          logger.info(`📦 Moved old file to reference: ${oldFilePath}`);
-          oldFileMoved = true;
+          // Delete old file (reference copy already exists from Dinas approval)
+          fs.unlinkSync(fullPath);
+          logger.info(`🗑️ Deleted old file: ${oldFilePath} (reference copy preserved from Dinas approval)`);
         }
       }
 
       // Update proposal - only file and optionally anggaran
-      // FIX 2026-03-09: Include dinas_reviewed_file to enable comparison in frontend
+      // NOTE: JANGAN update dinas_reviewed_file - itu sudah di-set saat Dinas approve
       const updateFields = ['file_proposal = ?', 'file_size = ?', 'updated_at = NOW()'];
       const updateValues = [filePath, fileSize];
-      
-      // Track old file for comparison (same as updateProposal logic)
-      if (oldFileMoved && oldFilePath) {
-        updateFields.push('dinas_reviewed_file = ?', 'dinas_reviewed_at = NOW()');
-        updateValues.push(oldFilePath);
-        logger.info(`📝 Updated dinas_reviewed_file to: ${oldFilePath} for comparison tracking`);
-      }
 
       // If proposal was returned (revision/rejected), set status back to pending
       if (isReturnedFromKecamatan) {

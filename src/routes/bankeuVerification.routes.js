@@ -45,6 +45,9 @@ router.get('/proposals', bankeuVerificationController.getProposalsByKecamatan);
 // Verify (approve/reject) proposal
 router.patch('/proposals/:id/verify', bankeuVerificationController.verifyProposal);
 
+// Cancel approval - Batalkan persetujuan proposal yang belum dikirim ke DPMD
+router.patch('/proposals/:id/cancel-approval', bankeuVerificationController.cancelApproval);
+
 // Get proposal verification history (reuse from dinas controller - same activity_logs table)
 router.get('/proposals/:proposalId/history', dinasVerificationController.getProposalVerificationHistory);
 

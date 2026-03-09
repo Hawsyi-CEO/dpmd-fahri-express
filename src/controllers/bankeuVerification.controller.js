@@ -341,6 +341,120 @@ class BankeuVerificationController {
   }
 
   /**
+   * Cancel approval - Batalkan persetujuan proposal yang BELUM dikirim ke DPMD
+   * PATCH /api/kecamatan/bankeu/proposals/:id/cancel-approval
+   * Kondisi: kecamatan_status = 'approved' AND submitted_to_dpmd = FALSE
+   */
+  async cancelApproval(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const { catatan } = req.body;
+
+      logger.info(`🔄 KECAMATAN CANCEL APPROVAL - ID: ${id}, User: ${userId}`);
+
+      // Get kecamatan_id from user
+      const [users] = await sequelize.query(`
+        SELECT kecamatan_id, name FROM users WHERE id = ?
+      `, { replacements: [userId] });
+
+      if (!users || users.length === 0 || !users[0].kecamatan_id) {
+        return res.status(403).json({
+          success: false,
+          message: 'User tidak terkait dengan kecamatan'
+        });
+      }
+
+      const kecamatanId = users[0].kecamatan_id;
+
+      // Get proposal
+      const [proposals] = await sequelize.query(`
+        SELECT bp.*, d.nama as desa_nama, d.kecamatan_id, k.nama as kecamatan_nama
+        FROM bankeu_proposals bp
+        INNER JOIN desas d ON bp.desa_id = d.id
+        INNER JOIN kecamatans k ON d.kecamatan_id = k.id
+        WHERE bp.id = ? AND d.kecamatan_id = ?
+      `, { replacements: [id, kecamatanId] });
+
+      if (!proposals || proposals.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal tidak ditemukan atau tidak termasuk dalam kecamatan Anda'
+        });
+      }
+
+      const proposal = proposals[0];
+
+      // Validasi: Hanya bisa batalkan jika sudah approved TAPI belum dikirim ke DPMD
+      if (proposal.kecamatan_status !== 'approved') {
+        return res.status(400).json({
+          success: false,
+          message: 'Hanya proposal yang sudah disetujui yang dapat dibatalkan'
+        });
+      }
+
+      if (proposal.submitted_to_dpmd) {
+        return res.status(400).json({
+          success: false,
+          message: 'Proposal sudah dikirim ke DPMD dan tidak dapat dibatalkan'
+        });
+      }
+
+      // Reset kecamatan_status ke pending sehingga bisa di-review ulang
+      await sequelize.query(`
+        UPDATE bankeu_proposals
+        SET 
+          kecamatan_status = 'pending',
+          kecamatan_catatan = ?,
+          kecamatan_verified_by = NULL,
+          kecamatan_verified_at = NULL,
+          berita_acara_path = NULL,
+          berita_acara_generated_at = NULL,
+          surat_pengantar = NULL
+        WHERE id = ?
+      `, {
+        replacements: [catatan || 'Persetujuan dibatalkan oleh Kecamatan', id]
+      });
+
+      logger.info(`✅ Proposal ${id} persetujuan dibatalkan - kembali ke status pending`);
+
+      // Activity Log
+      ActivityLogger.log({
+        userId: userId,
+        userName: users[0].name || `User ${userId}`,
+        userRole: req.user.role,
+        bidangId: 3,
+        module: 'bankeu',
+        action: 'cancel_approval',
+        entityType: 'bankeu_proposal',
+        entityId: parseInt(id),
+        entityName: proposal.judul_proposal || `Proposal #${id}`,
+        description: `Kecamatan ${proposal.kecamatan_nama} (${users[0].name || 'User'}) membatalkan persetujuan proposal #${id} dari Desa ${proposal.desa_nama}`,
+        oldValue: { kecamatan_status: 'approved' },
+        newValue: { kecamatan_status: 'pending', catatan: catatan || null },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
+      res.json({
+        success: true,
+        message: 'Persetujuan proposal berhasil dibatalkan. Anda dapat melakukan verifikasi ulang.',
+        data: {
+          id,
+          kecamatan_status: 'pending'
+        }
+      });
+    } catch (error) {
+      logger.error('Error canceling approval:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Gagal membatalkan persetujuan proposal',
+        error: error.message
+      });
+    }
+  }
+
+  /**
    * Generate Berita Acara PDF
    */
   static async generateBeritaAcara(proposal, verifierName, userId) {
