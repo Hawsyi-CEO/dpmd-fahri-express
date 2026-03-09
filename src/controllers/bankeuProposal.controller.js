@@ -179,6 +179,8 @@ class BankeuProposalController {
         submitted_to_kecamatan: p.submitted_to_kecamatan,
         submitted_at: p.submitted_at,
         submitted_to_dinas_at: p.submitted_to_dinas_at,
+        submitted_to_dpmd: p.submitted_to_dpmd,
+        submitted_to_dpmd_at: p.submitted_to_dpmd_at,
         dinas_status: p.dinas_status,
         dinas_catatan: p.dinas_catatan,
         dinas_verified_at: p.dinas_verified_at,
