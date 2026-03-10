@@ -184,6 +184,8 @@ class ProdukHukumController {
 
       // Convert jenis from "Peraturan Desa" format to "Peraturan_Desa" (Prisma enum format)
       const jenisEnum = jenis.replace(/\s+/g, '_');
+      // Convert singkatan_jenis (e.g., "SK KADES" -> "SK_KADES")
+      const singkatanJenisEnum = singkatan_jenis.replace(/\s+/g, '_');
 
       // Create produk hukum
       const produkHukum = await prisma.produk_hukums.create({
@@ -194,7 +196,7 @@ class ProdukHukumController {
           nomor,
           tahun: parseInt(tahun),
           jenis: jenisEnum,  // Use converted enum value
-          singkatan_jenis,
+          singkatan_jenis: singkatanJenisEnum,
           tempat_penetapan,
           tanggal_penetapan: new Date(tanggal_penetapan),
           status_peraturan,
@@ -334,7 +336,7 @@ class ProdukHukumController {
         nomor,
         tahun: parseInt(tahun),
         jenis: jenis.replace(/\s+/g, '_'),  // Convert "Peraturan Desa" to "Peraturan_Desa"
-        singkatan_jenis,
+        singkatan_jenis: singkatan_jenis.replace(/\s+/g, '_'),  // Convert "SK KADES" to "SK_KADES"
         tempat_penetapan,
         tanggal_penetapan: new Date(tanggal_penetapan),
         status_peraturan,
