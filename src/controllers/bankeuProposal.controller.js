@@ -440,8 +440,9 @@ class BankeuProposalController {
       const desaId = users[0].desa_id;
 
       // Get existing proposal
+      // FIX 2026-03-11: Tambahkan troubleshoot_catatan untuk deteksi troubleshoot case
       const [proposals] = await sequelize.query(`
-        SELECT file_proposal, status, desa_id, submitted_to_kecamatan, submitted_to_dinas_at, dinas_status, kecamatan_status
+        SELECT file_proposal, status, desa_id, submitted_to_kecamatan, submitted_to_dinas_at, dinas_status, kecamatan_status, troubleshoot_catatan
         FROM bankeu_proposals
         WHERE id = ?
       `, { replacements: [id] });
@@ -476,16 +477,19 @@ class BankeuProposalController {
 
       // Allow update if:
       // 1. Kecamatan status is revision/rejected (returned from kecamatan), OR
-      // 2. Dinas status is revision/rejected (returned from dinas)
+      // 2. Dinas status is revision/rejected (returned from dinas), OR
+      // 3. Troubleshoot case from DPMD (all status null but troubleshoot_catatan set)
       // AND submitted_to_kecamatan must be FALSE (returned to desa)
-      const isKecamatanRejected = proposal.kecamatan_status === 'revision' || proposal.kecamatan_status === 'rejected' || 
-                                   proposal.status === 'revision' || proposal.status === 'rejected';
+      // FIX 2026-03-11: Handle troubleshoot case from DPMD
+      const isTroubleshoot = !!proposal.troubleshoot_catatan && (proposal.status === 'revision' || proposal.status === 'rejected');
+      const isKecamatanRejected = (proposal.kecamatan_status === 'revision' || proposal.kecamatan_status === 'rejected') ||
+                                   ((proposal.status === 'revision' || proposal.status === 'rejected') && !isTroubleshoot);
       const isDinasRejected = proposal.dinas_status === 'revision' || proposal.dinas_status === 'rejected';
       const isReturnedToDesa = !proposal.submitted_to_kecamatan;
       
-      logger.info(`🔍 Validation check - Kec rejected: ${isKecamatanRejected}, Dinas rejected: ${isDinasRejected}, Returned: ${isReturnedToDesa}`);
+      logger.info(`🔍 Validation check - Kec rejected: ${isKecamatanRejected}, Dinas rejected: ${isDinasRejected}, Troubleshoot: ${isTroubleshoot}, Returned: ${isReturnedToDesa}`);
       
-      if (!isReturnedToDesa || (!isKecamatanRejected && !isDinasRejected)) {
+      if (!isReturnedToDesa || (!isKecamatanRejected && !isDinasRejected && !isTroubleshoot)) {
         // Delete uploaded file if exists
         if (req.file && req.file.path) {
           fs.unlinkSync(req.file.path);
@@ -498,10 +502,11 @@ class BankeuProposalController {
         });
       }
 
-      // Detect: If returned from Kecamatan, need to send back to Kecamatan
-      // If returned from Dinas, need to send to Dinas
-      const returnedFromKecamatan = isKecamatanRejected;
-      logger.info(`📍 Return detection - From Kecamatan: ${returnedFromKecamatan}, From Dinas: ${isDinasRejected && !returnedFromKecamatan}`);
+      // Detect: If returned from Kecamatan (NOT troubleshoot), need to send back to Kecamatan
+      // If returned from Dinas OR troubleshoot DPMD, need to send to Dinas
+      // FIX 2026-03-11: Troubleshoot cases go to Dinas (reset dari awal)
+      const returnedFromKecamatan = isKecamatanRejected && !isTroubleshoot && !isDinasRejected;
+      logger.info(`📍 Return detection - From Kecamatan: ${returnedFromKecamatan}, From Dinas/Troubleshoot: ${(isDinasRejected || isTroubleshoot) && !returnedFromKecamatan}`);
 
       // Build update query
       const updates = [];
@@ -1295,14 +1300,15 @@ class BankeuProposalController {
       // DAN belum dikirim ulang (submitted_to_kecamatan = FALSE)
       // NOTE: submitted_to_dinas_at tidak di-null lagi saat kecamatan revisi, 
       // jadi deteksi hanya pakai submitted_to_kecamatan + status rejection
+      // FIX 2026-03-11: Tambahkan troubleshoot_catatan untuk mendeteksi proposal yg di-troubleshoot DPMD
       const [proposals] = await sequelize.query(`
-        SELECT id, dinas_status, kecamatan_status, dpmd_status, status, submitted_to_dinas_at
+        SELECT id, dinas_status, kecamatan_status, dpmd_status, status, submitted_to_dinas_at, troubleshoot_catatan
         FROM bankeu_proposals
         WHERE desa_id = ? 
           AND status = 'pending'
           AND submitted_to_kecamatan = FALSE
           AND (
-            (submitted_to_dinas_at IS NULL AND (dinas_status IS NOT NULL OR dpmd_status IS NOT NULL))
+            (submitted_to_dinas_at IS NULL AND (dinas_status IS NOT NULL OR dpmd_status IS NOT NULL OR troubleshoot_catatan IS NOT NULL))
             OR kecamatan_status IN ('rejected', 'revision')
           )
           ${tahunFilter}
@@ -1375,8 +1381,9 @@ class BankeuProposalController {
             ${tahunFilter}
         `;
       } else {
-        // REJECT DARI DINAS atau DPMD → Kirim ke Dinas (flow normal dari awal)
-        // IMPORTANT: Hanya update proposal yang dari Dinas atau DPMD (ada dinas_status/dpmd_status rejection)
+        // REJECT DARI DINAS atau DPMD atau TROUBLESHOOT → Kirim ke Dinas (flow normal dari awal)
+        // IMPORTANT: Hanya update proposal yang dari Dinas atau DPMD atau troubleshoot
+        // FIX 2026-03-11: Tambahkan troubleshoot_catatan untuk troubleshooted proposals
         destinationLabel = fromDPMD ? 'Dinas Terkait (dari DPMD)' : 'Dinas Terkait';
         updateQuery = `
           UPDATE bankeu_proposals
@@ -1404,6 +1411,7 @@ class BankeuProposalController {
             AND (
               dinas_status IN ('rejected', 'revision') 
               OR dpmd_status IS NOT NULL
+              OR troubleshoot_catatan IS NOT NULL
             )
             ${tahunFilter}
         `;

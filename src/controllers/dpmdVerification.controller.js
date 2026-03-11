@@ -1117,7 +1117,9 @@ class DPMDVerificationController {
 
   /**
    * Reopen submission for a specific desa
-   * Reset submitted_to_dinas_at to allow desa to upload new proposals
+   * FIX 2026-03-11: TIDAK me-reset proposal yang sudah dikirim ke dinas
+   * Proposal yang sudah ada di flow verifikasi (Dinas/Kec/DPMD) tetap utuh
+   * Fitur ini hanya menandai bahwa desa boleh menambah proposal baru
    * PATCH /api/dpmd/bankeu/desa/:desaId/reopen-submission
    */
   async reopenDesaSubmission(req, res) {
@@ -1141,53 +1143,35 @@ class DPMDVerificationController {
         });
       }
 
-      // Find all proposals from this desa that have been submitted to dinas
-      const proposals = await prisma.bankeu_proposals.findMany({
+      // Count current proposals (for info only, NOT for reset)
+      const proposalCount = await prisma.bankeu_proposals.count({
         where: {
           desa_id: BigInt(desaId),
           submitted_to_dinas_at: { not: null }
         }
       });
 
-      if (proposals.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Tidak ada proposal yang perlu dibuka kembali. Desa ini belum pernah mengirim proposal ke dinas.'
-        });
-      }
+      logger.info(`✅ DPMD reopened submission for desa ${desa.nama} (ID: ${desaId}). ${proposalCount} existing proposals PRESERVED (not reset).`);
 
-      // Reset submitted_to_dinas_at for all proposals
-      // This will make isSubmitted = false in frontend desa, showing the upload button again
-      const updateResult = await prisma.bankeu_proposals.updateMany({
-        where: {
-          desa_id: BigInt(desaId),
-          submitted_to_dinas_at: { not: null }
-        },
-        data: {
-          submitted_to_dinas_at: null,
-          updated_at: new Date()
-        }
-      });
-
-      logger.info(`✅ DPMD reopened submission for desa ${desa.nama} (ID: ${desaId}), ${updateResult.count} proposals affected`);
-
-      // Activity Log - CRITICAL: Track reopen action
+      // Activity Log - Track reopen action
+      // FIX 2026-03-11: Tidak ada proposal yang di-reset, hanya log bahwa desa boleh upload baru
       ActivityLogger.log({
         userId: userId,
         userName: req.user.name || `User ${userId}`,
         userRole: req.user.role,
         bidangId: 3,
         module: 'bankeu',
-        action: 'update',
+        action: 'reopen_submission',
         entityType: 'bankeu_reopen_submission',
         entityName: `Desa ${desa.nama}`,
-        description: `DPMD/SPKED (${req.user.name || 'User'}) membuka kembali upload proposal untuk Desa ${desa.nama} (ID: ${desaId}). ${updateResult.count} proposal di-reset.${catatan ? ' Catatan: ' + catatan : ''}`,
-        oldValue: { 
+        description: `DPMD/SPKED (${req.user.name || 'User'}) membuka akses upload proposal baru untuk Desa ${desa.nama} (ID: ${desaId}). ${proposalCount} proposal existing TIDAK terpengaruh.${catatan ? ' Catatan: ' + catatan : ''}`,
+        newValue: { 
           desa_id: parseInt(desaId), 
           desa_nama: desa.nama,
           kecamatan: desa.kecamatans?.nama || null,
-          proposal_count: proposals.length,
-          catatan: catatan || null 
+          existing_proposals: proposalCount,
+          catatan: catatan || null,
+          reopened_at: new Date().toISOString()
         },
         ipAddress: ActivityLogger.getIpFromRequest(req),
         userAgent: ActivityLogger.getUserAgentFromRequest(req)
@@ -1195,11 +1179,11 @@ class DPMDVerificationController {
 
       return res.json({
         success: true,
-        message: `Upload proposal untuk Desa ${desa.nama} berhasil dibuka kembali. ${updateResult.count} proposal di-reset.`,
+        message: `Akses upload proposal baru untuk Desa ${desa.nama} berhasil dibuka. ${proposalCount > 0 ? `${proposalCount} proposal yang sudah berjalan TIDAK terpengaruh.` : 'Desa dapat mengupload proposal baru.'}`,
         data: {
           desa_id: parseInt(desaId),
           desa_nama: desa.nama,
-          proposals_affected: updateResult.count
+          existing_proposals_preserved: proposalCount
         }
       });
 
@@ -1207,7 +1191,7 @@ class DPMDVerificationController {
       logger.error('Error reopening desa submission:', error);
       return res.status(500).json({
         success: false,
-        message: 'Gagal membuka kembali upload proposal desa',
+        message: 'Gagal membuka akses upload proposal desa',
         error: error.message
       });
     }
