@@ -27,18 +27,17 @@ class PushNotificationService {
 	 * @param {string} path - Relative path (e.g., 'jadwal-kegiatan')
 	 */
 	getRoleBasedUrl(role, path) {
+		// Semua DPMD staff menggunakan prefix /dpmd
+		const dpmfStaffRoles = ['superadmin', 'kepala_dinas', 'sekretaris_dinas', 'kepala_bidang', 'ketua_tim', 'pegawai'];
+		if (dpmfStaffRoles.includes(role)) {
+			return `/dpmd/${path}`;
+		}
 		const roleRouteMap = {
-			'superadmin': '/admin',
-			'kepala_dinas': '/kepala-dinas',
-			'sekretaris_dinas': '/sekretaris-dinas',
-			'kepala_bidang': '/kepala-bidang',
-			'ketua_tim': '/ketua-tim',
-			'pegawai': '/pegawai',
 			'kecamatan': '/kecamatan',
+			'desa': '/desa',
 			'bankeu': '/bankeu'
 		};
-		
-		const rolePrefix = roleRouteMap[role] || '/pegawai';
+		const rolePrefix = roleRouteMap[role] || '/dpmd';
 		return `${rolePrefix}/${path}`;
 	}
 
@@ -167,8 +166,8 @@ class PushNotificationService {
 				body: `Ada ${todaySchedules.length} kegiatan hari ini. Tap untuk melihat detail.`,
 				icon: '/logo-192.png',
 				badge: '/logo-96.png',
+				path: 'jadwal-kegiatan',
 				data: {
-					url: '/jadwal-kegiatan',
 					type: 'today_schedule',
 					schedules: todaySchedules
 				},
@@ -232,8 +231,8 @@ class PushNotificationService {
 				body: `Ada ${tomorrowSchedules.length} kegiatan besok. Tap untuk melihat detail.`,
 				icon: '/logo-192.png',
 				badge: '/logo-96.png',
+				path: 'jadwal-kegiatan',
 				data: {
-					url: '/jadwal-kegiatan',
 					type: 'tomorrow_schedule',
 					schedules: tomorrowSchedules
 				},
@@ -356,8 +355,8 @@ class PushNotificationService {
 				body: `${jadwal.judul} akan dimulai dalam 1 jam di ${jadwal.lokasi || 'lokasi belum ditentukan'}`,
 				icon: '/logo-192.png',
 				badge: '/logo-96.png',
+				path: 'jadwal-kegiatan',
 				data: {
-					url: '/jadwal-kegiatan',
 					type: 'upcoming_jadwal',
 					jadwal_id: jadwal.id,
 					prioritas: jadwal.prioritas

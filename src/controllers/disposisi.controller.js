@@ -783,8 +783,10 @@ exports.createSuratMasuk = async (req, res, next) => {
       bidang_id: bidang_id ? bidang_id.toString() : null,
     });
 
-    // Validate: Only pegawai from sekretariat (bidang_id = 2) can input
-    if (user_role !== 'pegawai' || !bidang_id || BigInt(bidang_id) !== BigInt(2)) {
+    // Validate: Only sekretariat staff (bidang_id = 2) or superadmin can input
+    const isSuperadmin = user_role === 'superadmin';
+    const isSekretariat = bidang_id && BigInt(bidang_id) === BigInt(2);
+    if (!isSuperadmin && !isSekretariat) {
       return res.status(403).json({
         success: false,
         message: 'Hanya pegawai sekretariat yang dapat menginput surat masuk',
