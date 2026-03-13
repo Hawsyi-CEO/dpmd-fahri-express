@@ -1,4 +1,5 @@
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -184,6 +185,23 @@ app.use('/uploads', (req, res, next) => {
   next();
 }, express.static(path.join(__dirname, '../storage/uploads')));
 
+// Serve bankeu proposal files with fallback to bankeu_reference/ (for old/revised files)
+app.get('/storage/uploads/bankeu/resolve/:filename', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  const filename = req.params.filename;
+  const primaryPath = path.join(__dirname, '../storage/uploads/bankeu', filename);
+  const fallbackPath = path.join(__dirname, '../storage/uploads/bankeu_reference', filename);
+  
+  if (fs.existsSync(primaryPath)) {
+    return res.sendFile(primaryPath);
+  } else if (fs.existsSync(fallbackPath)) {
+    return res.sendFile(fallbackPath);
+  } else {
+    return res.status(404).json({ success: false, message: 'File tidak ditemukan' });
+  }
+});
+
 // Serve public files (bankeu2025.json, etc)
 app.use('/public', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -255,13 +273,16 @@ app.use('/api/kepala-dinas', kepalaDinasRoutes); // Kepala Dinas dashboard
 app.use('/api/jadwal-kegiatan', require('./routes/jadwalKegiatan.routes')); // Jadwal Kegiatan routes
 app.use('/api/perjadin', perjadinRoutes); // Perjadin (Perjalanan Dinas) routes
 app.use('/api/berita', require('./routes/berita.routes')); // Berita routes
+app.use('/api/informasi', require('./routes/informasi.routes')); // Informasi banner routes (Sekretariat)
 app.use('/api/activity-logs', require('./routes/activityLog.routes')); // Global Activity Logs (Superadmin)
 app.use('/api/kelembagaan', kelembagaanRoutes); // Kelembagaan routes (admin/global)
 app.use('/api/kelembagaan/activity-logs', require('./routes/kelembagaanActivityLogs.routes')); // Activity logs
+app.use('/api/activity-logs', require('./routes/activityLogs.routes')); // General activity logs (bankeu, etc.)
 app.use('/api/admin', kelembagaanRoutes); // Admin alias for kelembagaan
 app.use('/api/produk-hukum', produkHukumRoutes); // Produk Hukum routes
 app.use('/api/bankeu-t1', bankeuT1Routes); // Bantuan Keuangan Tahap 1
 app.use('/api/bankeu-t2', bankeuT2Routes); // Bantuan Keuangan Tahap 2
+app.use('/api/public/bankeu', require('./routes/bankeuPublic.routes')); // Public bankeu transparency (no auth)
 app.use('/api/add', addRoutes); // ADD (Alokasi Dana Desa) routes
 app.use('/api/dd', ddRoutes); // DD (Dana Desa) routes
 app.use('/api/dd-earmarked-t1', ddEarmarkedT1Routes); // DD Earmarked Tahap 1
@@ -277,6 +298,9 @@ app.use('/api/bhprd-t3', bhprdT3Routes); // BHPRD Tahap 3
 // External API Proxy routes (DPMD Bogorkab)
 app.use('/api/external', externalApiRoutes);
 
+// Video Meeting routes
+app.use('/api/video-meetings', require('./routes/videoMeeting.routes'));
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
@@ -290,12 +314,39 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 3001;
 
-app.listen(PORT, () => {
-  logger.info(`🚀 Server running on port ${PORT}`);
-  logger.info(`📝 Environment: ${process.env.NODE_ENV}`);
-  logger.info(`🔗 CORS enabled for: ${process.env.CORS_ORIGIN}`);
-  
-  // Initialize scheduler for push notifications
-  schedulerService.init();
-});
+// Create HTTP server
+const server = http.createServer(app);
+
+// Initialize Socket.io for video meetings
+const { initSocketServer } = require('./socket/meeting.socket');
+const mediasoupService = require('./services/mediasoup.service');
+
+// Start server
+async function startServer() {
+  try {
+    // Initialize mediasoup workers
+    await mediasoupService.init();
+    logger.info('📹 Mediasoup workers initialized');
+
+    // Initialize Socket.io signaling server
+    initSocketServer(server);
+    logger.info('🔌 Socket.io signaling server initialized');
+
+    server.listen(PORT, () => {
+      logger.info(`🚀 Server running on port ${PORT}`);
+      logger.info(`📝 Environment: ${process.env.NODE_ENV}`);
+      logger.info(`🔗 CORS enabled for: ${process.env.CORS_ORIGIN}`);
+      logger.info(`📹 Video Meeting: WebRTC + mediasoup ready`);
+      
+      // Initialize scheduler for push notifications
+      schedulerService.init();
+    });
+  } catch (error) {
+    logger.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
+
 module.exports = app;

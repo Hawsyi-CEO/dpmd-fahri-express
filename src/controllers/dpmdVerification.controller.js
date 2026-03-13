@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
+const ActivityLogger = require('../utils/activityLogger');
 const fs = require('fs');
 const path = require('path');
 
@@ -17,7 +18,7 @@ class DPMDVerificationController {
    */
   async getProposals(req, res) {
     try {
-      const { status, kecamatan_id, desa_id } = req.query;
+      const { status, kecamatan_id, desa_id, tahun_anggaran } = req.query;
 
       // Build query filters
       const whereClause = {
@@ -25,6 +26,11 @@ class DPMDVerificationController {
         kecamatan_status: 'approved', // Only show if Kecamatan approved
         dinas_status: 'approved' // Only show if Dinas approved
       };
+
+      // Filter by tahun_anggaran if provided
+      if (tahun_anggaran) {
+        whereClause.tahun_anggaran = parseInt(tahun_anggaran);
+      }
 
       if (status) {
         whereClause.dpmd_status = status;
@@ -43,6 +49,19 @@ class DPMDVerificationController {
               kecamatans: kecamatan_id ? {
                 where: { id: parseInt(kecamatan_id) }
               } : true
+            }
+          },
+          bankeu_proposal_kegiatan: {
+            include: {
+              bankeu_master_kegiatan: {
+                select: {
+                  id: true,
+                  nama_kegiatan: true,
+                  dinas_terkait: true,
+                  jenis_kegiatan: true,
+                  urutan: true
+                }
+              }
             }
           },
           users_bankeu_proposals_created_byTousers: {
@@ -70,13 +89,47 @@ class DPMDVerificationController {
         }
       });
 
+      // Build kegiatan map for fallback (old kegiatan_id FK)
+      const allKegiatan = await prisma.bankeu_master_kegiatan.findMany({
+        select: { id: true, nama_kegiatan: true, dinas_terkait: true }
+      });
+      const kegiatanMap = {};
+      allKegiatan.forEach(k => { kegiatanMap[Number(k.id)] = k; });
+
       // Get kegiatan info and surat desa for each proposal
       const proposalsWithKegiatan = await Promise.all(
         proposals.map(async (proposal) => {
-          const kegiatan = await prisma.bankeu_master_kegiatan.findUnique({
-            where: { id: proposal.kegiatan_id }
-          });
+          // Resolve kegiatan: pivot table first, then direct FK fallback
+          let kegiatanData = null;
           
+          if (proposal.bankeu_proposal_kegiatan?.length > 0) {
+            const pivotKeg = proposal.bankeu_proposal_kegiatan[0]?.bankeu_master_kegiatan;
+            if (pivotKeg) {
+              kegiatanData = {
+                ...pivotKeg,
+                id: Number(pivotKeg.id)
+              };
+            }
+          }
+          
+          // Fallback to direct kegiatan_id FK
+          if (!kegiatanData && proposal.kegiatan_id) {
+            const directKeg = kegiatanMap[Number(proposal.kegiatan_id)];
+            if (directKeg) {
+              kegiatanData = { ...directKeg, id: Number(directKeg.id) };
+            }
+          }
+          
+          // Build kegiatan_list (all kegiatan from pivot)
+          const kegiatanList = proposal.bankeu_proposal_kegiatan
+            ?.sort((a, b) => (a.bankeu_master_kegiatan?.urutan || 0) - (b.bankeu_master_kegiatan?.urutan || 0))
+            .map(bpk => ({
+              id: bpk.bankeu_master_kegiatan ? Number(bpk.bankeu_master_kegiatan.id) : null,
+              jenis_kegiatan: bpk.bankeu_master_kegiatan?.jenis_kegiatan || null,
+              nama_kegiatan: bpk.bankeu_master_kegiatan?.nama_kegiatan || null,
+              dinas_terkait: bpk.bankeu_master_kegiatan?.dinas_terkait || null
+            })) || [];
+
           // Get surat pengantar & permohonan from desa
           const suratDesa = await prisma.desa_bankeu_surat.findFirst({
             where: {
@@ -87,7 +140,12 @@ class DPMDVerificationController {
           
           return {
             ...proposal,
-            bankeu_master_kegiatan: kegiatan,
+            id: Number(proposal.id),
+            desa_id: Number(proposal.desa_id),
+            kegiatan_id: proposal.kegiatan_id ? Number(proposal.kegiatan_id) : null,
+            anggaran_usulan: Number(proposal.anggaran_usulan),
+            bankeu_master_kegiatan: kegiatanData,
+            kegiatan_list: kegiatanList,
             surat_pengantar_desa: suratDesa?.surat_pengantar || null,
             surat_permohonan_desa: suratDesa?.surat_permohonan || null
           };
@@ -198,10 +256,10 @@ class DPMDVerificationController {
       logger.info(`🔍 DPMD VERIFY - ID: ${id}, Action: ${action}, User: ${userId}`);
 
       // Validate action
-      if (!['approved', 'rejected', 'revision'].includes(action)) {
+      if (!['approved', 'rejected', 'revision', 'revisi_dokumen_kecamatan'].includes(action)) {
         return res.status(400).json({
           success: false,
-          message: 'Action tidak valid. Gunakan: approved, rejected, atau revision'
+          message: 'Action tidak valid. Gunakan: approved, rejected, revision, atau revisi_dokumen_kecamatan'
         });
       }
 
@@ -222,6 +280,62 @@ class DPMDVerificationController {
         return res.status(400).json({
           success: false,
           message: 'Proposal belum disetujui oleh Kecamatan'
+        });
+      }
+
+      // REVISI DOKUMEN KECAMATAN: Only send back to kecamatan to regenerate BA/SP
+      // Keeps kecamatan_status = 'approved', only resets dpmd submission and clears BA/SP paths
+      if (action === 'revisi_dokumen_kecamatan') {
+        logger.info(`📄 DPMD requesting BA/SP revision for proposal ${id} → back to Kecamatan`);
+
+        await prisma.bankeu_proposals.update({
+          where: { id: BigInt(id) },
+          data: {
+            dpmd_status: 'revision',
+            dpmd_catatan: catatan || 'Revisi Surat Pengantar dan/atau Berita Acara Kecamatan',
+            dpmd_verified_by: BigInt(userId),
+            dpmd_verified_at: new Date(),
+            // Return to Kecamatan - only reset DPMD submission
+            submitted_to_dpmd: false,
+            submitted_to_dpmd_at: null,
+            // Clear BA & SP paths so kecamatan must regenerate
+            berita_acara_path: null,
+            berita_acara_generated_at: null,
+            surat_pengantar: null,
+            // Keep kecamatan_status = 'approved' so kecamatan can directly regenerate
+            // Keep dinas_status intact
+            // Keep status as-is (not resetting to desa)
+          }
+        });
+
+        logger.info(`✅ DPMD returned proposal ${id} to Kecamatan for BA/SP revision`);
+
+        // Activity Log
+        ActivityLogger.log({
+          userId: userId,
+          userName: req.user.name || `User ${userId}`,
+          userRole: req.user.role,
+          bidangId: 3,
+          module: 'bankeu',
+          action: 'revision',
+          entityType: 'bankeu_proposal',
+          entityId: parseInt(id),
+          entityName: `Proposal #${id}`,
+          description: `DPMD/SPKED (${req.user.name || 'User'}) meminta revisi dokumen Kecamatan untuk proposal #${id} (Desa ID: ${proposal.desa_id})`,
+          newValue: { dpmd_status: 'revision', revision_type: 'dokumen_kecamatan', catatan: catatan || null },
+          ipAddress: ActivityLogger.getIpFromRequest(req),
+          userAgent: ActivityLogger.getUserAgentFromRequest(req)
+        });
+
+        return res.json({
+          success: true,
+          message: 'Proposal dikembalikan ke Kecamatan untuk revisi Surat Pengantar dan Berita Acara',
+          data: {
+            id,
+            dpmd_status: 'revision',
+            returned_to: 'kecamatan',
+            revision_type: 'dokumen_kecamatan'
+          }
         });
       }
 
@@ -255,6 +369,24 @@ class DPMDVerificationController {
 
         logger.info(`✅ DPMD returned proposal ${id} to DESA with status ${action}`);
 
+        // Activity Log
+        ActivityLogger.log({
+          userId: userId,
+          userName: req.user.name || `User ${userId}`,
+          userRole: req.user.role,
+          bidangId: 3,
+          module: 'bankeu',
+          action: action === 'rejected' ? 'reject' : 'revision',
+          entityType: 'bankeu_proposal',
+          entityId: parseInt(id),
+          entityName: `Proposal #${id}`,
+          description: `DPMD/SPKED (${req.user.name || 'User'}) ${action === 'rejected' ? 'menolak' : 'meminta revisi'} proposal #${id} (Desa ID: ${proposal.desa_id})`,
+          oldValue: { dpmd_status: proposal.dpmd_status, status: proposal.status },
+          newValue: { dpmd_status: action, catatan: catatan || null, returned_to: 'desa' },
+          ipAddress: ActivityLogger.getIpFromRequest(req),
+          userAgent: ActivityLogger.getUserAgentFromRequest(req)
+        });
+
         return res.json({
           success: true,
           message: `Proposal dikembalikan ke Desa untuk ${action === 'rejected' ? 'diperbaiki' : 'direvisi'}`,
@@ -279,6 +411,23 @@ class DPMDVerificationController {
       });
 
       logger.info(`✅ DPMD FINAL APPROVED proposal ${id}`);
+
+      // Activity Log
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        bidangId: 3,
+        module: 'bankeu',
+        action: 'approve',
+        entityType: 'bankeu_proposal',
+        entityId: parseInt(id),
+        entityName: `Proposal #${id}`,
+        description: `DPMD/SPKED (${req.user.name || 'User'}) FINAL APPROVED proposal #${id} (Desa ID: ${proposal.desa_id})`,
+        newValue: { dpmd_status: 'approved', status: 'verified' },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
 
       res.json({
         success: true,
@@ -306,10 +455,14 @@ class DPMDVerificationController {
    */
   async getStatistics(req, res) {
     try {
+      const { tahun_anggaran } = req.query;
+      const tahunFilter = tahun_anggaran ? { tahun_anggaran: parseInt(tahun_anggaran) } : {};
+
       const totalProposals = await prisma.bankeu_proposals.count({
         where: {
           submitted_to_dpmd: true,
-          kecamatan_status: 'approved'
+          kecamatan_status: 'approved',
+          ...tahunFilter
         }
       });
 
@@ -317,6 +470,7 @@ class DPMDVerificationController {
         where: {
           submitted_to_dpmd: true,
           kecamatan_status: 'approved',
+          ...tahunFilter,
           OR: [
             { dpmd_status: null },
             { dpmd_status: 'pending' }
@@ -326,7 +480,8 @@ class DPMDVerificationController {
 
       const approved = await prisma.bankeu_proposals.count({
         where: {
-          dpmd_status: 'approved'
+          dpmd_status: 'approved',
+          ...tahunFilter
         }
       });
 
@@ -334,7 +489,8 @@ class DPMDVerificationController {
         where: {
           dpmd_status: {
             in: ['rejected', 'revision']
-          }
+          },
+          ...tahunFilter
         }
       });
 
@@ -418,6 +574,23 @@ class DPMDVerificationController {
       });
 
       logger.info(`✅ DPMD deleted proposal ${id} (${proposal.judul_proposal}) from desa ${proposal.desas?.nama}`);
+
+      // Activity Log - CRITICAL: Track siapa yang hapus
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        bidangId: 3,
+        module: 'bankeu',
+        action: 'delete',
+        entityType: 'bankeu_proposal',
+        entityId: parseInt(id),
+        entityName: proposal.judul_proposal || `Proposal #${id}`,
+        description: `DPMD/SPKED (${req.user.name || 'User'}) MENGHAPUS proposal #${id} "${proposal.judul_proposal}" dari Desa ${proposal.desas?.nama || 'Unknown'} (ID: ${proposal.desa_id})`,
+        oldValue: { judul_proposal: proposal.judul_proposal, desa_id: Number(proposal.desa_id), status: proposal.status, dpmd_status: proposal.dpmd_status },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
 
       return res.json({
         success: true,
@@ -506,6 +679,22 @@ class DPMDVerificationController {
 
       logger.info(`✅ DPMD bulk deleted ${proposals.length} proposals from desa ${desaName} (ID: ${desaId}), all stages: ${deleteAll}`);
 
+      // Activity Log - CRITICAL: Track bulk delete
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        bidangId: 3,
+        module: 'bankeu',
+        action: 'delete',
+        entityType: 'bankeu_proposal',
+        entityName: `${proposals.length} proposal Desa ${desaName}`,
+        description: `DPMD/SPKED (${req.user.name || 'User'}) BULK DELETE ${proposals.length} proposal dari Desa ${desaName} (ID: ${desaId}, all stages: ${deleteAll})`,
+        oldValue: { count: proposals.length, desa_id: parseInt(desaId), desa_nama: desaName, all_stages: deleteAll, proposal_ids: proposals.map(p => Number(p.id)) },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
       return res.json({
         success: true,
         message: `${proposals.length} proposal dari Desa ${desaName} berhasil dihapus`
@@ -575,6 +764,22 @@ class DPMDVerificationController {
 
       logger.info(`✅ DPMD deleted ${deleted.count} surat from desa ${desaName} (ID: ${desaId})`);
 
+      // Activity Log
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        bidangId: 3,
+        module: 'bankeu',
+        action: 'delete',
+        entityType: 'desa_bankeu_surat',
+        entityName: `Surat Desa ${desaName}`,
+        description: `DPMD/SPKED (${req.user.name || 'User'}) menghapus ${deleted.count} surat dari Desa ${desaName} (ID: ${desaId})`,
+        oldValue: { count: deleted.count, desa_id: parseInt(desaId), desa_nama: desaName },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
       return res.json({
         success: true,
         message: `${deleted.count} surat dari Desa ${desaName} berhasil dihapus`
@@ -585,6 +790,175 @@ class DPMDVerificationController {
       return res.status(500).json({
         success: false,
         message: 'Gagal menghapus surat desa',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Troubleshoot Revision - Force return proposal to Desa
+   * Used by SPKED pegawai when proposal is stuck at any stage
+   * (e.g., dinas terkait not responding, kecamatan pending too long)
+   * ONLY for revision, NOT approval
+   * PATCH /api/dpmd/bankeu/proposals/:id/troubleshoot-revision
+   */
+  async troubleshootRevision(req, res) {
+    try {
+      const { id } = req.params;
+      const { catatan } = req.body;
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      // Only SPKED staff roles can troubleshoot
+      const allowedRoles = ['pegawai', 'kepala_bidang', 'ketua_tim', 'kepala_dinas', 'superadmin'];
+      if (!allowedRoles.includes(userRole)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Hanya pegawai SPKED yang dapat melakukan troubleshoot revisi'
+        });
+      }
+
+      if (!catatan || catatan.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Catatan/alasan troubleshoot wajib diisi'
+        });
+      }
+
+      // Find the proposal
+      const proposal = await prisma.bankeu_proposals.findUnique({
+        where: { id: BigInt(id) },
+        include: {
+          desas: {
+            include: { kecamatans: true }
+          }
+        }
+      });
+
+      if (!proposal) {
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal tidak ditemukan'
+        });
+      }
+
+      // Don't allow troubleshoot on already-approved proposals
+      if (proposal.dpmd_status === 'approved' || proposal.status === 'verified') {
+        return res.status(400).json({
+          success: false,
+          message: 'Proposal yang sudah disetujui (verified) tidak dapat di-troubleshoot'
+        });
+      }
+
+      // Determine current stage for logging
+      let currentStage = 'di_desa';
+      if (proposal.submitted_to_dpmd) {
+        currentStage = 'di_dpmd';
+      } else if (proposal.dinas_status === 'approved' && !proposal.submitted_to_dpmd) {
+        currentStage = 'di_kecamatan';
+      } else if (proposal.submitted_to_dinas_at) {
+        currentStage = 'di_dinas';
+      }
+
+      const desaName = proposal.desas?.nama || `Desa ID ${proposal.desa_id}`;
+      const kecamatanName = proposal.desas?.kecamatans?.nama || '';
+
+      logger.info(`🔧 TROUBLESHOOT REVISION - Proposal #${id} (${desaName}), stage: ${currentStage}, by: ${req.user.name} (${userRole})`);
+
+      // Reset ALL statuses back to Desa
+      await prisma.bankeu_proposals.update({
+        where: { id: BigInt(id) },
+        data: {
+          // Reset to revision status
+          status: 'revision',
+          // Clear dinas verification
+          dinas_status: null,
+          dinas_catatan: null,
+          dinas_verified_by: null,
+          dinas_verified_at: null,
+          dinas_reviewed_file: null,
+          dinas_reviewed_at: null,
+          submitted_to_dinas_at: null,
+          // Clear kecamatan verification
+          kecamatan_status: null,
+          kecamatan_catatan: null,
+          kecamatan_verified_by: null,
+          kecamatan_verified_at: null,
+          submitted_to_kecamatan: false,
+          // Clear DPMD verification
+          dpmd_status: null,
+          dpmd_catatan: null,
+          dpmd_verified_by: null,
+          dpmd_verified_at: null,
+          submitted_to_dpmd: false,
+          submitted_to_dpmd_at: null,
+          // Clear berita acara & surat pengantar
+          berita_acara_path: null,
+          berita_acara_generated_at: null,
+          // Save troubleshoot info
+          troubleshoot_catatan: `[${req.user.name} - ${userRole.toUpperCase()}] ${catatan}`,
+          troubleshoot_by: BigInt(userId),
+          troubleshoot_at: new Date(),
+          // Keep file_proposal, surat_permohonan, surat_pengantar (desa docs)
+          updated_at: new Date()
+        }
+      });
+
+      // Delete related questionnaires since all stages are reset
+      await prisma.bankeu_verification_questionnaires.deleteMany({
+        where: { proposal_id: BigInt(id) }
+      });
+
+      logger.info(`✅ TROUBLESHOOT SUCCESS - Proposal #${id} returned to Desa from stage: ${currentStage}`);
+
+      // Activity Log
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: userRole,
+        bidangId: 3,
+        module: 'bankeu',
+        action: 'troubleshoot_revision',
+        entityType: 'bankeu_proposal',
+        entityId: parseInt(id),
+        entityName: `Proposal #${id} - ${desaName}`,
+        description: `[TROUBLESHOOT] ${req.user.name} (${userRole}) memaksa revisi proposal #${id} (${desaName}, ${kecamatanName}) dari tahap ${currentStage}. Alasan: ${catatan}`,
+        oldValue: {
+          status: proposal.status,
+          dinas_status: proposal.dinas_status,
+          kecamatan_status: proposal.kecamatan_status,
+          dpmd_status: proposal.dpmd_status,
+          current_stage: currentStage
+        },
+        newValue: {
+          status: 'revision',
+          dinas_status: null,
+          kecamatan_status: null,
+          dpmd_status: null,
+          returned_to: 'desa',
+          troubleshoot_reason: catatan
+        },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
+      return res.json({
+        success: true,
+        message: `Proposal #${id} (${desaName}) berhasil di-revisi dari tahap ${currentStage === 'di_dinas' ? 'Dinas Terkait' : currentStage === 'di_kecamatan' ? 'Kecamatan' : currentStage === 'di_dpmd' ? 'DPMD' : 'Desa'}. Proposal dikembalikan ke Desa untuk direvisi.`,
+        data: {
+          id: Number(id),
+          desa_name: desaName,
+          previous_stage: currentStage,
+          returned_to: 'desa',
+          status: 'revision'
+        }
+      });
+
+    } catch (error) {
+      logger.error('Error troubleshoot revision:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Gagal melakukan troubleshoot revisi',
         error: error.message
       });
     }
@@ -613,6 +987,19 @@ class DPMDVerificationController {
               kecamatans: true
             }
           },
+          bankeu_proposal_kegiatan: {
+            include: {
+              bankeu_master_kegiatan: {
+                select: {
+                  id: true,
+                  nama_kegiatan: true,
+                  dinas_terkait: true,
+                  jenis_kegiatan: true,
+                  urutan: true
+                }
+              }
+            }
+          },
           users_bankeu_proposals_created_byTousers: {
             select: {
               id: true,
@@ -632,12 +1019,49 @@ class DPMDVerificationController {
         }
       });
 
-      // Get kegiatan info for each proposal
+      // Get kegiatan info - build map from master table for fallback
+      const allKegiatan = await prisma.bankeu_master_kegiatan.findMany({
+        select: { id: true, nama_kegiatan: true, dinas_terkait: true }
+      });
+      const kegiatanMap = {};
+      allKegiatan.forEach(k => { kegiatanMap[Number(k.id)] = k; });
+
       const proposalsWithKegiatan = await Promise.all(
         proposals.map(async (proposal) => {
-          const kegiatan = await prisma.bankeu_master_kegiatan.findUnique({
-            where: { id: proposal.kegiatan_id }
-          });
+          // Resolve kegiatan: pivot table first, then direct FK fallback
+          let kegiatanData = null;
+          
+          if (proposal.bankeu_proposal_kegiatan?.length > 0) {
+            // Use first kegiatan from pivot table (many-to-many)
+            const pivotKeg = proposal.bankeu_proposal_kegiatan[0]?.bankeu_master_kegiatan;
+            if (pivotKeg) {
+              kegiatanData = {
+                ...pivotKeg,
+                id: Number(pivotKeg.id)
+              };
+            }
+          }
+          
+          // Fallback to direct kegiatan_id FK
+          if (!kegiatanData && proposal.kegiatan_id) {
+            const directKeg = kegiatanMap[Number(proposal.kegiatan_id)];
+            if (directKeg) {
+              kegiatanData = {
+                ...directKeg,
+                id: Number(directKeg.id)
+              };
+            }
+          }
+          
+          // Build kegiatan_list (all kegiatan from pivot)
+          const kegiatanList = proposal.bankeu_proposal_kegiatan
+            ?.sort((a, b) => (a.bankeu_master_kegiatan?.urutan || 0) - (b.bankeu_master_kegiatan?.urutan || 0))
+            .map(bpk => ({
+              id: bpk.bankeu_master_kegiatan ? Number(bpk.bankeu_master_kegiatan.id) : null,
+              jenis_kegiatan: bpk.bankeu_master_kegiatan?.jenis_kegiatan || null,
+              nama_kegiatan: bpk.bankeu_master_kegiatan?.nama_kegiatan || null,
+              dinas_terkait: bpk.bankeu_master_kegiatan?.dinas_terkait || null
+            })) || [];
           
           // Get desa surat info
           const desaSurat = await prisma.desa_bankeu_surat.findFirst({
@@ -648,27 +1072,25 @@ class DPMDVerificationController {
             ...proposal,
             id: Number(proposal.id),
             desa_id: Number(proposal.desa_id),
-            kegiatan_id: Number(proposal.kegiatan_id),
+            kegiatan_id: proposal.kegiatan_id ? Number(proposal.kegiatan_id) : null,
             anggaran_usulan: Number(proposal.anggaran_usulan),
-            bankeu_master_kegiatan: kegiatan ? {
-              ...kegiatan,
-              id: Number(kegiatan.id)
-            } : null,
+            bankeu_master_kegiatan: kegiatanData,
+            kegiatan_list: kegiatanList,
             surat_pengantar_desa: desaSurat?.surat_pengantar || null,
             surat_permohonan_desa: desaSurat?.surat_permohonan || null
           };
         })
       );
 
-      // Calculate tracking summary
+      // Calculate tracking summary - diselaraskan dgn frontend getProposalStage()
       const trackingSummary = {
         total: proposals.length,
-        di_desa: proposals.filter(p => !p.submitted_to_dinas_at).length,
-        di_dinas: proposals.filter(p => p.submitted_to_dinas_at && (!p.dinas_status || p.dinas_status === 'pending')).length,
+        di_desa: proposals.filter(p => !p.submitted_to_dinas_at && !p.dinas_status && !p.dpmd_status).length,
+        di_dinas: proposals.filter(p => (p.submitted_to_dinas_at || p.dinas_status) && p.dinas_status !== 'approved' && !p.dpmd_status).length,
         dinas_approved: proposals.filter(p => p.dinas_status === 'approved' && (!p.kecamatan_status || p.kecamatan_status === 'pending')).length,
         di_kecamatan: proposals.filter(p => p.dinas_status === 'approved' && p.submitted_to_kecamatan).length,
         kecamatan_approved: proposals.filter(p => p.kecamatan_status === 'approved').length,
-        di_dpmd: proposals.filter(p => p.submitted_to_dpmd).length,
+        di_dpmd: proposals.filter(p => p.submitted_to_dpmd || p.dpmd_status).length,
         dpmd_approved: proposals.filter(p => p.dpmd_status === 'approved').length,
         dpmd_rejected: proposals.filter(p => p.dpmd_status === 'rejected').length,
         revision: proposals.filter(p => p.dinas_status === 'revision' || p.kecamatan_status === 'revision' || p.dpmd_status === 'revision').length
@@ -688,6 +1110,88 @@ class DPMDVerificationController {
       return res.status(500).json({
         success: false,
         message: 'Gagal mengambil data tracking proposal',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Reopen submission for a specific desa
+   * FIX 2026-03-11: TIDAK me-reset proposal yang sudah dikirim ke dinas
+   * Proposal yang sudah ada di flow verifikasi (Dinas/Kec/DPMD) tetap utuh
+   * Fitur ini hanya menandai bahwa desa boleh menambah proposal baru
+   * PATCH /api/dpmd/bankeu/desa/:desaId/reopen-submission
+   */
+  async reopenDesaSubmission(req, res) {
+    try {
+      const { desaId } = req.params;
+      const { catatan } = req.body;
+      const userId = req.user.id;
+
+      logger.info(`🔓 DPMD REOPEN SUBMISSION - Desa ID: ${desaId}, User: ${userId}`);
+
+      // Get desa info
+      const desa = await prisma.desas.findUnique({
+        where: { id: BigInt(desaId) },
+        include: { kecamatans: true }
+      });
+
+      if (!desa) {
+        return res.status(404).json({
+          success: false,
+          message: 'Desa tidak ditemukan'
+        });
+      }
+
+      // Count current proposals (for info only, NOT for reset)
+      const proposalCount = await prisma.bankeu_proposals.count({
+        where: {
+          desa_id: BigInt(desaId),
+          submitted_to_dinas_at: { not: null }
+        }
+      });
+
+      logger.info(`✅ DPMD reopened submission for desa ${desa.nama} (ID: ${desaId}). ${proposalCount} existing proposals PRESERVED (not reset).`);
+
+      // Activity Log - Track reopen action
+      // FIX 2026-03-11: Tidak ada proposal yang di-reset, hanya log bahwa desa boleh upload baru
+      ActivityLogger.log({
+        userId: userId,
+        userName: req.user.name || `User ${userId}`,
+        userRole: req.user.role,
+        bidangId: 3,
+        module: 'bankeu',
+        action: 'reopen_submission',
+        entityType: 'bankeu_reopen_submission',
+        entityName: `Desa ${desa.nama}`,
+        description: `DPMD/SPKED (${req.user.name || 'User'}) membuka akses upload proposal baru untuk Desa ${desa.nama} (ID: ${desaId}). ${proposalCount} proposal existing TIDAK terpengaruh.${catatan ? ' Catatan: ' + catatan : ''}`,
+        newValue: { 
+          desa_id: parseInt(desaId), 
+          desa_nama: desa.nama,
+          kecamatan: desa.kecamatans?.nama || null,
+          existing_proposals: proposalCount,
+          catatan: catatan || null,
+          reopened_at: new Date().toISOString()
+        },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
+      return res.json({
+        success: true,
+        message: `Akses upload proposal baru untuk Desa ${desa.nama} berhasil dibuka. ${proposalCount > 0 ? `${proposalCount} proposal yang sudah berjalan TIDAK terpengaruh.` : 'Desa dapat mengupload proposal baru.'}`,
+        data: {
+          desa_id: parseInt(desaId),
+          desa_nama: desa.nama,
+          existing_proposals_preserved: proposalCount
+        }
+      });
+
+    } catch (error) {
+      logger.error('Error reopening desa submission:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Gagal membuka akses upload proposal desa',
         error: error.message
       });
     }

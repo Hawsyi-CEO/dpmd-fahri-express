@@ -1,8 +1,7 @@
 // src/controllers/dashboard/desa.dashboard.controller.js
 const fs = require('fs');
 const path = require('path');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../../config/prisma');
 
 /**
  * Validate desa access from request

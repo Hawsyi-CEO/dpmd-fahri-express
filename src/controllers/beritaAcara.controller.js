@@ -72,7 +72,7 @@ class BeritaAcaraController {
 
       // Get proposal info
       const [proposal] = await sequelize.query(`
-        SELECT bp.*, mk.nama_kegiatan
+        SELECT bp.*, mk.nama_kegiatan, mk.jenis_kegiatan
         FROM bankeu_proposals bp
         LEFT JOIN bankeu_master_kegiatan mk ON bp.kegiatan_id = mk.id
         WHERE bp.id = :proposalId
@@ -113,21 +113,29 @@ class BeritaAcaraController {
         type: sequelize.QueryTypes.SELECT
       });
 
-      // Checklist items with labels
-      const checklistItems = [
+      // Checklist items berbeda berdasarkan jenis kegiatan (sinkron dengan beritaAcaraService & BankeuQuestionnaireForm)
+      const jenisKegiatan = proposal?.jenis_kegiatan || 'infrastruktur';
+      const isInfrastruktur = jenisKegiatan === 'infrastruktur';
+
+      const checklistItems = isInfrastruktur ? [
+        { no: 1, key: 'q1', text: 'Surat Pengantar dari Kepala Desa' },
+        { no: 2, key: 'q2', text: 'Surat Permohonan Bantuan Keuangan' },
+        { no: 3, key: 'q3', text: 'Proposal (Latar Belakang, Maksud dan Tujuan, Bentuk Kegiatan, Jadwal Pelaksanaan)' },
+        { no: 4, key: 'q4', text: 'RPA dan RAB' },
+        { no: 5, key: 'q5', text: 'Surat Pernyataan dari Kepala Desa yang menyatakan bahwa lokasi kegiatan tidak dalam keadaan sengketa/bermasalah apabila merupakan Aset Desa', optional: true },
+        { no: 6, key: 'q6', text: 'Bukti kepemilikan Aset Desa sesuai ketentuan peraturan perundang-undangan, dalam hal usulan kegiatan yang diusulkan berupa Rehab Kantor Desa' },
+        { no: 7, key: 'q7', text: 'Dokumen kesediaan peralihan hak melalui hibah dari warga masyarakat baik perorangan maupun Badan Usaha/Badan Hukum kepada Desa atas lahan/tanah yang menjadi Aset Desa sebagai dampak kegiatan pembangunan infrastruktur desa', optional: true },
+        { no: 8, key: 'q8', text: 'Dokumen pernyataan kesanggupan dari warga masyarakat untuk tidak meminta ganti rugi', optional: true },
+        { no: 9, key: 'q9', text: 'Persetujuan pemanfaatan barang milik Daerah/Negara dalam hal lahan yang akan dipergunakan untuk pembangunan infrastruktur desa', optional: true },
+        { no: 10, key: 'q10', text: 'Foto lokasi rencana pelaksanaan kegiatan' },
+        { no: 11, key: 'q11', text: 'Peta lokasi rencana kegiatan' },
+        { no: 12, key: 'q12', text: 'Berita Acara Musyawarah Desa' },
+      ] : [
         { no: 1, key: 'q1', text: 'Surat Pengantar dari Kepala Desa' },
         { no: 2, key: 'q2', text: 'Surat Permohonan Bantuan Keuangan Khusus Akselerasi Pembangunan Perdesaan' },
-        { no: 3, key: 'q3', text: 'Proposal Bantuan Keuangan Khusus Akselerasi Pembangunan Perdesaan' },
-        { no: 4, key: 'q4', text: 'Rencana Penggunaan Bantuan Keuangan dan RAB' },
-        { no: 5, key: 'q5', text: 'Foto lokasi rencana pelaksanaan kegiatan (0%)', ket: 'Infrastruktur' },
-        { no: 6, key: 'q6', text: 'Peta dan titik lokasi rencana kegiatan', ket: 'Infrastruktur' },
-        { no: 7, key: 'q7', text: 'Berita Acara Hasil Musyawarah Desa' },
-        { no: 8, key: 'q8', text: 'SK Kepala Desa tentang Penetapan Tim Pelaksana Kegiatan (TPK)' },
-        { no: 9, key: 'q9', text: 'Ketersediaan lahan dan kepastian status lahan', ket: 'Infrastruktur' },
-        { no: 10, key: 'q10', text: 'Tidak Duplikasi Anggaran' },
-        { no: 11, key: 'q11', text: 'Kesesuaian antara lokasi dan usulan' },
-        { no: 12, key: 'q12', text: 'Kesesuaian RAB dengan standar harga yang telah ditetapkan di desa' },
-        { no: 13, key: 'q13', text: 'Kesesuaian dengan standar teknis konstruksi', ket: 'Infrastruktur' }
+        { no: 3, key: 'q3', text: 'Proposal Bantuan Keuangan (Latar Belakang, Maksud dan Tujuan, Bentuk Kegiatan, Jadwal Pelaksanaan)' },
+        { no: 4, key: 'q4', text: 'Rencana Anggaran Biaya' },
+        { no: 5, key: 'q5', text: 'Tidak Duplikasi Anggaran' },
       ];
 
       // Map aggregated values to checklist
@@ -248,13 +256,20 @@ class BeritaAcaraController {
       // Generate unique code for tracking
       const codeData = beritaAcaraHelper.generateUniqueCode(desaId, proposalId);
 
+      // Map q1-q13 keys to item_1-item_13 keys (service uses item_X format)
+      const checklistData = {};
+      Object.entries(aggregatedQuestionnaire.items).forEach(([key, value]) => {
+        const num = key.replace('q', '');
+        checklistData[`item_${num}`] = value;
+      });
+
       // Generate PDF with auto-filled checklist
       const filePath = await beritaAcaraService.generateBeritaAcaraVerifikasi({
         desaId,
         kecamatanId: kecamatan_id,
         kegiatanId,
         proposalId,
-        checklistData: aggregatedQuestionnaire.items
+        checklistData
       });
 
       // Get file size

@@ -11,6 +11,9 @@ router.use(checkRole(['kepala_dinas', 'sekretaris_dinas', 'dinas_terkait', 'supe
 // Get all verifikator for a dinas
 router.get('/:dinasId/verifikator', dinasVerifikatorController.getAllVerifikator);
 
+// Get aggregate verification stats for all verifikators of a dinas
+router.get('/:dinasId/verifikator/stats', dinasVerifikatorController.getVerifikatorStats);
+
 // Create new verifikator
 router.post('/:dinasId/verifikator', dinasVerifikatorController.createVerifikator);
 

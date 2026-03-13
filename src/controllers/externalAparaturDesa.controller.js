@@ -4,8 +4,7 @@
  */
 
 const externalApiService = require('../services/externalApiProxy.service');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 
 /**
  * Get all aparatur desa from external API

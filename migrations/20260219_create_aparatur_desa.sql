@@ -1,0 +1,41 @@
+-- Migration: Create aparatur_desa table
+-- Date: 2026-02-19
+-- Description: Tabel data aparatur/perangkat desa lengkap dengan file dokumen
+
+CREATE TABLE IF NOT EXISTS `aparatur_desa` (
+  `id` CHAR(36) NOT NULL,
+  `desa_id` BIGINT UNSIGNED NOT NULL,
+  `nama_lengkap` VARCHAR(255) NOT NULL,
+  `jabatan` VARCHAR(255) NOT NULL,
+  `nipd` VARCHAR(255) NULL,
+  `niap` VARCHAR(255) NULL,
+  `tempat_lahir` VARCHAR(255) NOT NULL,
+  `tanggal_lahir` DATE NOT NULL,
+  `jenis_kelamin` ENUM('Laki-laki', 'Perempuan') NOT NULL,
+  `pendidikan_terakhir` VARCHAR(255) NOT NULL,
+  `agama` VARCHAR(255) NOT NULL,
+  `pangkat_golongan` VARCHAR(255) NULL,
+  `tanggal_pengangkatan` DATE NOT NULL,
+  `nomor_sk_pengangkatan` VARCHAR(255) NOT NULL,
+  `tanggal_pemberhentian` DATE NULL,
+  `nomor_sk_pemberhentian` VARCHAR(255) NULL,
+  `keterangan` VARCHAR(255) NULL,
+  `status` ENUM('Aktif', 'Tidak Aktif') NOT NULL DEFAULT 'Aktif',
+  `produk_hukum_id` CHAR(36) NULL,
+  `bpjs_kesehatan_nomor` VARCHAR(255) NULL,
+  `bpjs_ketenagakerjaan_nomor` VARCHAR(255) NULL,
+  `file_bpjs_kesehatan` VARCHAR(255) NULL,
+  `file_bpjs_ketenagakerjaan` VARCHAR(255) NULL,
+  `file_pas_foto` VARCHAR(255) NULL,
+  `file_ktp` VARCHAR(255) NULL,
+  `file_kk` VARCHAR(255) NULL,
+  `file_akta_kelahiran` VARCHAR(255) NULL,
+  `file_ijazah_terakhir` VARCHAR(255) NULL,
+  `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `aparatur_desa_desa_id_foreign` (`desa_id`),
+  INDEX `aparatur_desa_produk_hukum_id_foreign` (`produk_hukum_id`),
+  CONSTRAINT `aparatur_desa_desa_id_foreign` FOREIGN KEY (`desa_id`) REFERENCES `desas` (`id`) ON DELETE CASCADE ON UPDATE NO ACTION,
+  CONSTRAINT `aparatur_desa_produk_hukum_id_foreign` FOREIGN KEY (`produk_hukum_id`) REFERENCES `produk_hukums` (`id`) ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

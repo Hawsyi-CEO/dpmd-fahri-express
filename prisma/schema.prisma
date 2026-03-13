@@ -8,6 +8,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model activity_logs {
   id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
   user_id     BigInt    @db.UnsignedBigInt
@@ -115,7 +116,6 @@ model bankeu_proposal_kegiatan {
   @@index([proposal_id], map: "idx_proposal_id")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model bankeu_proposals {
   id                                                  BigInt                               @id @default(autoincrement()) @db.UnsignedBigInt
   desa_id                                             BigInt                               @db.UnsignedBigInt
@@ -159,12 +159,16 @@ model bankeu_proposals {
   created_by                                          BigInt                               @db.UnsignedBigInt
   created_at                                          DateTime?                            @default(now()) @db.Timestamp(0)
   updated_at                                          DateTime?                            @default(now()) @db.Timestamp(0)
+  troubleshoot_at                                     DateTime?                            @db.Timestamp(0)
+  troubleshoot_by                                     BigInt?                              @db.UnsignedBigInt
+  troubleshoot_catatan                                String?                              @db.Text
   bankeu_proposal_kegiatan                            bankeu_proposal_kegiatan[]
   users_bankeu_proposals_dpmd_verified_byTousers      users?                               @relation("bankeu_proposals_dpmd_verified_byTousers", fields: [dpmd_verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_dpmd_verified_by")
   users_bankeu_proposals_kecamatan_verified_byTousers users?                               @relation("bankeu_proposals_kecamatan_verified_byTousers", fields: [kecamatan_verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_kecamatan_verified_by")
   users_bankeu_proposals_created_byTousers            users                                @relation("bankeu_proposals_created_byTousers", fields: [created_by], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_bankeu_proposals_created_by")
   desas                                               desas                                @relation(fields: [desa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_bankeu_proposals_desa")
   users_bankeu_proposals_verified_byTousers           users?                               @relation("bankeu_proposals_verified_byTousers", fields: [verified_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_proposals_verified_by")
+  users_bankeu_proposals_troubleshoot_byTousers       users?                               @relation("bankeu_proposals_troubleshoot_byTousers", fields: [troubleshoot_by], references: [id], onUpdate: NoAction, map: "fk_bankeu_troubleshoot_by")
   bankeu_verification_questionnaires                  bankeu_verification_questionnaires[]
   berita_acara_history                                berita_acara_history[]
 
@@ -179,6 +183,7 @@ model bankeu_proposals {
   @@index([status], map: "idx_status")
   @@index([submitted_to_dpmd], map: "idx_submitted_to_dpmd")
   @@index([submitted_to_kecamatan], map: "idx_submitted_to_kecamatan")
+  @@index([troubleshoot_by], map: "idx_troubleshoot_by")
   @@index([verified_by], map: "idx_verified_by")
 }
 
@@ -250,6 +255,24 @@ model berita {
   @@index([slug], map: "idx_slug")
   @@index([status], map: "idx_status")
   @@index([tanggal_publish], map: "idx_tanggal_publish")
+}
+
+model informasi {
+  id         Int       @id @default(autoincrement()) @db.UnsignedInt
+  judul      String    @db.VarChar(255)
+  deskripsi  String?   @db.Text
+  gambar     String    @db.VarChar(255)
+  link       String?   @db.VarChar(500)
+  urutan     Int       @default(1) @db.UnsignedTinyInt
+  is_active  Boolean   @default(true)
+  created_by BigInt?   @db.UnsignedBigInt
+  created_at DateTime? @default(now()) @db.Timestamp(0)
+  updated_at DateTime? @default(now()) @db.Timestamp(0)
+  users      users?    @relation(fields: [created_by], references: [id], map: "fk_informasi_created_by")
+
+  @@index([is_active], map: "idx_is_active")
+  @@index([urutan], map: "idx_urutan")
+  @@index([created_by], map: "idx_created_by")
 }
 
 model bidangs {
@@ -349,7 +372,6 @@ model bumdes {
   @@index([status], map: "idx_status")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model desa_bankeu_surat {
   id                     BigInt                              @id @default(autoincrement()) @db.UnsignedBigInt
   desa_id                BigInt                              @db.UnsignedBigInt
@@ -372,10 +394,11 @@ model desa_bankeu_surat {
   @@index([desa_id], map: "idx_desa_id")
   @@index([kecamatan_status], map: "idx_kecamatan_status")
   @@index([submitted_to_kecamatan], map: "idx_submitted")
-  @@index([submitted_to_kecamatan], map: "idx_submitted_to_kecamatan")
   @@index([tahun], map: "idx_tahun")
+  @@index([submitted_to_kecamatan], map: "idx_submitted_to_kecamatan")
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model desas {
   id                        BigInt                      @id @default(autoincrement()) @db.UnsignedBigInt
   kecamatan_id              BigInt                      @db.UnsignedBigInt
@@ -414,6 +437,17 @@ model dinas {
   nama       String    @db.VarChar(255)
   created_at DateTime? @db.Timestamp(0)
   updated_at DateTime? @db.Timestamp(0)
+}
+
+model dinas_config {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  dinas_id    BigInt    @unique(map: "unique_dinas_id") @db.UnsignedBigInt
+  nama_pic    String?   @db.VarChar(255)
+  nip_pic     String?   @db.VarChar(50)
+  jabatan_pic String?   @db.VarChar(255)
+  ttd_path    String?   @db.VarChar(255)
+  created_at  DateTime? @default(now()) @db.Timestamp(0)
+  updated_at  DateTime? @default(now()) @db.Timestamp(0)
 }
 
 model dinas_verifikator {
@@ -476,6 +510,7 @@ model hero_galleries {
   updated_at DateTime? @db.Timestamp(0)
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model jadwal_kegiatan {
   id                                       BigInt                    @id @default(autoincrement()) @db.UnsignedBigInt
   judul                                    String                    @db.VarChar(255)
@@ -529,20 +564,21 @@ model karang_tarunas {
 }
 
 model kecamatan_bankeu_config {
-  id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  kecamatan_id   BigInt    @unique(map: "kecamatan_id") @db.UnsignedBigInt
-  nama_camat     String    @db.VarChar(255)
-  nip_camat      String?   @db.VarChar(50)
-  logo_path      String?   @db.VarChar(255)
-  alamat         String?   @db.Text
-  telepon        String?   @db.VarChar(50)
-  email          String?   @db.VarChar(100)
-  website        String?   @db.VarChar(150)
-  kode_pos       String?   @db.VarChar(10)
-  ttd_camat_path String?   @db.VarChar(255)
-  stempel_path   String?   @db.VarChar(255)
-  created_at     DateTime? @default(now()) @db.Timestamp(0)
-  updated_at     DateTime? @default(now()) @db.Timestamp(0)
+  id                    BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  kecamatan_id          BigInt    @unique(map: "kecamatan_id") @db.UnsignedBigInt
+  nama_camat            String    @db.VarChar(255)
+  nip_camat             String?   @db.VarChar(50)
+  logo_path             String?   @db.VarChar(255)
+  alamat                String?   @db.Text
+  telepon               String?   @db.VarChar(50)
+  email                 String?   @db.VarChar(100)
+  website               String?   @db.VarChar(150)
+  kode_pos              String?   @db.VarChar(10)
+  ttd_camat_path        String?   @db.VarChar(255)
+  stempel_path          String?   @db.VarChar(255)
+  created_at            DateTime? @default(now()) @db.Timestamp(0)
+  updated_at            DateTime? @default(now()) @db.Timestamp(0)
+  jabatan_penandatangan String    @default("Camat") @db.VarChar(50)
 
   @@index([kecamatan_id], map: "idx_kecamatan")
 }
@@ -682,8 +718,6 @@ model lpms {
   @@index([produk_hukum_id], map: "lpms_produk_hukum_id_foreign")
 }
 
-<<<<<<< Updated upstream
-=======
 model notifications {
   id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
   user_id    BigInt    @db.UnsignedBigInt
@@ -695,7 +729,7 @@ model notifications {
   sent_by    BigInt?   @db.UnsignedBigInt
   created_at DateTime? @default(now()) @db.Timestamp(0)
   read_at    DateTime? @db.Timestamp(0)
-  sender     users?    @relation("notifications_sender", fields: [sent_by], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_notifications_sent_by")
+  sender     users?    @relation("notifications_sender", fields: [sent_by], references: [id], onUpdate: NoAction, map: "fk_notifications_sent_by")
   user       users     @relation("notifications_user", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_notifications_user")
 
   @@index([user_id], map: "idx_notifications_user_id")
@@ -715,13 +749,12 @@ model notification_logs {
   failed_count Int       @default(0)
   sender_id    BigInt    @db.UnsignedBigInt
   created_at   DateTime? @default(now()) @db.Timestamp(0)
-  sender       users     @relation(fields: [sender_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "notification_logs_sender_id_fkey")
+  sender       users     @relation(fields: [sender_id], references: [id], onDelete: Cascade, map: "notification_logs_sender_id_fkey")
 
   @@index([sender_id], map: "notification_logs_sender_id_index")
   @@index([created_at], map: "notification_logs_created_at_index")
 }
 
->>>>>>> Stashed changes
 model master_dinas {
   id                                 Int                                  @id @default(autoincrement())
   kode_dinas                         String                               @unique(map: "kode_dinas") @db.VarChar(50)
@@ -767,6 +800,7 @@ model pejabat_ttd {
   @@index([pejabat_id], map: "idx_pejabat")
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model pengurus {
   id                    String                      @id @db.Char(36)
   desa_id               BigInt                      @db.UnsignedBigInt
@@ -1066,23 +1100,26 @@ model users {
   updated_at                                                     DateTime?                   @db.Timestamp(0)
   is_active                                                      Boolean                     @default(true)
   pegawai_id                                                     BigInt?                     @db.UnsignedBigInt
+  plain_password                                                 String?                     @db.VarChar(255)
   activity_logs                                                  activity_logs[]
   app_settings                                                   app_settings[]
   bankeu_proposals_bankeu_proposals_dpmd_verified_byTousers      bankeu_proposals[]          @relation("bankeu_proposals_dpmd_verified_byTousers")
   bankeu_proposals_bankeu_proposals_kecamatan_verified_byTousers bankeu_proposals[]          @relation("bankeu_proposals_kecamatan_verified_byTousers")
   bankeu_proposals_bankeu_proposals_created_byTousers            bankeu_proposals[]          @relation("bankeu_proposals_created_byTousers")
   bankeu_proposals_bankeu_proposals_verified_byTousers           bankeu_proposals[]          @relation("bankeu_proposals_verified_byTousers")
-<<<<<<< Updated upstream
-=======
   berita_acara_history                                           berita_acara_history[]
->>>>>>> Stashed changes
+  bankeu_proposals_bankeu_proposals_troubleshoot_byTousers       bankeu_proposals[]          @relation("bankeu_proposals_troubleshoot_byTousers")
   desa_bankeu_surat                                              desa_bankeu_surat[]
   disposisi_disposisi_dari_user_idTousers                        disposisi[]                 @relation("disposisi_dari_user_idTousers")
   disposisi_disposisi_ke_user_idTousers                          disposisi[]                 @relation("disposisi_ke_user_idTousers")
+  informasi                                                      informasi[]
   jadwal_kegiatan_jadwal_kegiatan_approved_byTousers             jadwal_kegiatan[]           @relation("jadwal_kegiatan_approved_byTousers")
   jadwal_kegiatan_jadwal_kegiatan_created_byTousers              jadwal_kegiatan[]           @relation("jadwal_kegiatan_created_byTousers")
   kelembagaan_activity_logs                                      kelembagaan_activity_logs[]
   lampiran_surat                                                 lampiran_surat[]
+  notification_logs                                              notification_logs[]
+  notifications_sent                                             notifications[]             @relation("notifications_sender")
+  notifications_received                                         notifications[]             @relation("notifications_user")
   perjadin_grup                                                  perjadin_grup[]
   perjadin_pegawai                                               perjadin_pegawai[]
   push_subscriptions                                             push_subscriptions[]
@@ -1092,7 +1129,6 @@ model users {
   @@index([pegawai_id], map: "users_pegawai_id_index")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model verifikator_akses_desa {
   id                BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
   verifikator_id    BigInt            @db.UnsignedBigInt
@@ -1110,8 +1146,6 @@ model verifikator_akses_desa {
   @@index([verifikator_id], map: "idx_verifikator_id")
 }
 
-<<<<<<< Updated upstream
-=======
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model berita_acara_history {
   id                     BigInt                      @id @default(autoincrement()) @db.UnsignedBigInt
@@ -1182,7 +1216,125 @@ model perjadin_pegawai {
   @@index([tanggal_berangkat, tanggal_kembali], map: "idx_perjadin_tanggal")
 }
 
->>>>>>> Stashed changes
+=======
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model info_banners {
+  id              BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  judul           String    @db.VarChar(255)
+  deskripsi       String?   @db.Text
+  gambar          String    @db.VarChar(500)
+  link            String?   @db.VarChar(500)
+  urutan          Int       @default(0)
+  aktif           Boolean   @default(true)
+  tanggal_mulai   DateTime? @db.DateTime(0)
+  tanggal_selesai DateTime? @db.DateTime(0)
+  created_by      BigInt?   @db.UnsignedBigInt
+  created_at      DateTime? @default(now()) @db.Timestamp(0)
+  updated_at      DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([aktif, urutan], map: "idx_aktif_urutan")
+  @@index([tanggal_mulai, tanggal_selesai], map: "idx_tanggal")
+}
+
+model video_meeting_chats {
+  id                         BigInt                            @id @default(autoincrement()) @db.UnsignedBigInt
+  meeting_id                 BigInt                            @db.UnsignedBigInt
+  participant_id             BigInt                            @db.UnsignedBigInt
+  message                    String                            @db.Text
+  message_type               video_meeting_chats_message_type? @default(text)
+  file_url                   String?                           @db.VarChar(500)
+  created_at                 DateTime?                         @default(now()) @db.Timestamp(0)
+  video_meetings             video_meetings                    @relation(fields: [meeting_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "video_meeting_chats_ibfk_1")
+  video_meeting_participants video_meeting_participants        @relation(fields: [participant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "video_meeting_chats_ibfk_2")
+
+  @@index([meeting_id], map: "idx_meeting_id")
+  @@index([participant_id], map: "participant_id")
+}
+
+model video_meeting_invitations {
+  id             BigInt                            @id @default(autoincrement()) @db.UnsignedBigInt
+  meeting_id     BigInt                            @db.UnsignedBigInt
+  user_id        BigInt?                           @db.UnsignedBigInt
+  email          String?                           @db.VarChar(255)
+  status         video_meeting_invitations_status? @default(pending)
+  invited_at     DateTime?                         @default(now()) @db.Timestamp(0)
+  responded_at   DateTime?                         @db.DateTime(0)
+  video_meetings video_meetings                    @relation(fields: [meeting_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "video_meeting_invitations_ibfk_1")
+
+  @@index([meeting_id], map: "idx_meeting_id")
+  @@index([user_id], map: "idx_user_id")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model video_meeting_participants {
+  id                  BigInt                           @id @default(autoincrement()) @db.UnsignedBigInt
+  meeting_id          BigInt                           @db.UnsignedBigInt
+  user_id             BigInt?                          @db.UnsignedBigInt
+  guest_name          String?                          @db.VarChar(255)
+  role                video_meeting_participants_role? @default(participant)
+  joined_at           DateTime?                        @db.DateTime(0)
+  left_at             DateTime?                        @db.DateTime(0)
+  is_muted            Boolean?                         @default(false)
+  is_video_on         Boolean?                         @default(true)
+  is_screen_sharing   Boolean?                         @default(false)
+  created_at          DateTime?                        @default(now()) @db.Timestamp(0)
+  video_meeting_chats video_meeting_chats[]
+  video_meetings      video_meetings                   @relation(fields: [meeting_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "video_meeting_participants_ibfk_1")
+
+  @@index([meeting_id], map: "idx_meeting_id")
+  @@index([user_id], map: "idx_user_id")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model video_meeting_recordings {
+  id             BigInt                           @id @default(autoincrement()) @db.UnsignedBigInt
+  meeting_id     BigInt                           @db.UnsignedBigInt
+  file_path      String                           @db.VarChar(500)
+  file_size      BigInt?
+  duration       Int?
+  status         video_meeting_recordings_status? @default(recording)
+  started_at     DateTime                         @db.DateTime(0)
+  ended_at       DateTime?                        @db.DateTime(0)
+  created_at     DateTime?                        @default(now()) @db.Timestamp(0)
+  video_meetings video_meetings                   @relation(fields: [meeting_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "video_meeting_recordings_ibfk_1")
+
+  @@index([meeting_id], map: "idx_meeting_id")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model video_meetings {
+  id                         BigInt                       @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid                       String                       @unique(map: "uuid") @db.VarChar(36)
+  room_id                    String                       @unique(map: "room_id") @db.VarChar(100)
+  title                      String                       @db.VarChar(255)
+  description                String?                      @db.Text
+  host_id                    BigInt                       @db.UnsignedBigInt
+  bidang_id                  BigInt?                      @db.UnsignedBigInt
+  status                     video_meetings_status?       @default(scheduled)
+  scheduled_start            DateTime?                    @db.DateTime(0)
+  scheduled_end              DateTime?                    @db.DateTime(0)
+  actual_start               DateTime?                    @db.DateTime(0)
+  actual_end                 DateTime?                    @db.DateTime(0)
+  max_participants           Int?                         @default(50)
+  is_recording_enabled       Boolean?                     @default(false)
+  is_screen_share_enabled    Boolean?                     @default(true)
+  is_chat_enabled            Boolean?                     @default(true)
+  password                   String?                      @db.VarChar(100)
+  waiting_room_enabled       Boolean?                     @default(false)
+  created_at                 DateTime?                    @default(now()) @db.Timestamp(0)
+  updated_at                 DateTime?                    @default(now()) @db.Timestamp(0)
+  video_meeting_chats        video_meeting_chats[]
+  video_meeting_invitations  video_meeting_invitations[]
+  video_meeting_participants video_meeting_participants[]
+  video_meeting_recordings   video_meeting_recordings[]
+
+  @@index([bidang_id], map: "idx_bidang_id")
+  @@index([host_id], map: "idx_host_id")
+  @@index([room_id], map: "idx_room_id")
+  @@index([scheduled_start], map: "idx_scheduled_start")
+  @@index([status], map: "idx_status")
+}
+
 enum bankeu_master_kegiatan_jenis_kegiatan {
   infrastruktur
   non_infrastruktur
@@ -1460,8 +1612,6 @@ enum bankeu_verification_questionnaires_status {
   draft
   submitted
 }
-<<<<<<< Updated upstream
-=======
 
 enum perjadin_pegawai_status {
   draft
@@ -1476,4 +1626,36 @@ enum berita_acara_history_status {
   superseded
   revoked
 }
->>>>>>> Stashed changes
+
+enum video_meeting_chats_message_type {
+  text
+  file
+  system
+}
+
+enum video_meeting_invitations_status {
+  pending
+  accepted
+  declined
+}
+
+enum video_meeting_participants_role {
+  host
+  co_host     @map("co-host")
+  participant
+}
+
+enum video_meeting_recordings_status {
+  recording
+  processing
+  ready
+  failed
+}
+
+enum video_meetings_status {
+  scheduled
+  active
+  ended
+  cancelled
+}
+

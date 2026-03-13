@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 const fs = require('fs');
 const path = require('path');
 
@@ -117,7 +116,9 @@ class BidangController {
           };
           
         case 4: // Kekayaan Keuangan Desa (KKD - ADD, DD, BHPRD)
-          const totalDesa = await prisma.desas.count();
+          const totalDesa = await prisma.desas.count({
+            where: { status_pemerintahan: 'desa' }
+          });
           
           return {
             total_desa: totalDesa,
@@ -199,32 +200,35 @@ class BidangController {
       const { bidangId } = req.params;
       const { limit = 50, module, action } = req.query;
       
-      let query = `
-        SELECT 
-          id,
-          user_name,
-          user_role,
-          module,
-          action,
-          entity_type,
-          entity_name,
-          description,
-          created_at
-        FROM activity_logs
-        WHERE bidang_id = ${parseInt(bidangId)}
-      `;
+      // Build where clause safely with Prisma
+      const where = {
+        bidang_id: parseInt(bidangId)
+      };
       
       if (module) {
-        query += ` AND module = '${module}'`;
+        where.module = module;
       }
       
       if (action) {
-        query += ` AND action = '${action}'`;
+        where.action = action;
       }
       
-      query += ` ORDER BY created_at DESC LIMIT ${parseInt(limit)}`;
-      
-      const logs = await prisma.$queryRawUnsafe(query);
+      const logs = await prisma.activity_logs.findMany({
+        where,
+        orderBy: { created_at: 'desc' },
+        take: parseInt(limit),
+        select: {
+          id: true,
+          user_name: true,
+          user_role: true,
+          module: true,
+          action: true,
+          entity_type: true,
+          entity_name: true,
+          description: true,
+          created_at: true
+        }
+      });
       
       res.json({
         success: true,

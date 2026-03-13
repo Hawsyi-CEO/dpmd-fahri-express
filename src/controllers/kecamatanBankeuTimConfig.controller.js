@@ -160,7 +160,7 @@ class KecamatanBankeuTimConfigController {
   async upsertTimMemberConfig(req, res) {
     try {
       const { kecamatanId, posisi } = req.params;
-      const { nama, nip, jabatan, proposalId } = req.body;
+      const { nama, nip, jabatan, proposalId, sourceTtdPath } = req.body;
 
       if (!nama || !jabatan) {
         return res.status(400).json({
@@ -227,9 +227,34 @@ class KecamatanBankeuTimConfigController {
           proposalId: effectiveProposalId
         };
 
+        // If sourceTtdPath provided, copy the TTD file for the new member
+        let copiedTtdPath = null;
+        if (sourceTtdPath) {
+          try {
+            const sourceFullPath = path.join(__dirname, '../../storage/uploads', sourceTtdPath);
+            if (fs.existsSync(sourceFullPath)) {
+              const uploadDir = path.join(__dirname, '../../storage/uploads/kecamatan_bankeu_ttd');
+              if (!fs.existsSync(uploadDir)) {
+                fs.mkdirSync(uploadDir, { recursive: true });
+              }
+              const fileSuffix = isAnggota && proposalId ? `${posisi}_p${proposalId}` : posisi;
+              const ext = path.extname(sourceTtdPath);
+              const newFileName = `kecamatan_${kecamatanId}_${fileSuffix}_${Date.now()}${ext}`;
+              const destFullPath = path.join(uploadDir, newFileName);
+              fs.copyFileSync(sourceFullPath, destFullPath);
+              copiedTtdPath = `kecamatan_bankeu_ttd/${newFileName}`;
+            }
+          } catch (copyErr) {
+            console.error('Error copying TTD file:', copyErr);
+            // Non-fatal, continue without TTD
+          }
+        }
+
+        insertReplacements.ttdPath = copiedTtdPath;
+
         const [result] = await sequelize.query(`
-          INSERT INTO tim_verifikasi_kecamatan (kecamatan_id, proposal_id, jabatan, nama, nip, jabatan_label, is_active)
-          VALUES (:kecamatanId, :proposalId, :posisi, :nama, :nip, :jabatan, 1)
+          INSERT INTO tim_verifikasi_kecamatan (kecamatan_id, proposal_id, jabatan, nama, nip, jabatan_label, ttd_path, is_active)
+          VALUES (:kecamatanId, :proposalId, :posisi, :nama, :nip, :jabatan, :ttdPath, 1)
         `, {
           replacements: insertReplacements
         });
@@ -237,7 +262,7 @@ class KecamatanBankeuTimConfigController {
         res.status(201).json({
           success: true,
           message: 'Konfigurasi anggota tim berhasil dibuat',
-          data: { id: result.insertId, kecamatan_id: kecamatanId, proposal_id: effectiveProposalId, posisi, nama, nip, jabatan }
+          data: { id: result.insertId, kecamatan_id: kecamatanId, proposal_id: effectiveProposalId, posisi, nama, nip, jabatan, ttd_path: copiedTtdPath }
         });
       }
     } catch (error) {
@@ -484,6 +509,54 @@ class KecamatanBankeuTimConfigController {
       res.status(500).json({
         success: false,
         message: 'Gagal menghapus anggota tim',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get distinct anggota yang pernah ditambahkan di kecamatan ini
+   * GET /api/kecamatan/:kecamatanId/bankeu/tim-config/anggota-list
+   * Returns unique (nama, nip, jabatan_label) combinations
+   */
+  async getAnggotaList(req, res) {
+    try {
+      const { kecamatanId } = req.params;
+
+      const query = `
+        SELECT t.nama, t.nip, t.jabatan_label as jabatan, t.ttd_path
+        FROM tim_verifikasi_kecamatan t
+        WHERE t.kecamatan_id = :kecamatanId
+          AND t.jabatan LIKE 'anggota_%'
+          AND t.is_active = 1
+          AND t.nama IS NOT NULL
+          AND t.nama != ''
+        ORDER BY t.ttd_path DESC, t.nama ASC
+      `;
+
+      const results = await sequelize.query(query, {
+        replacements: { kecamatanId },
+        type: sequelize.QueryTypes.SELECT
+      });
+
+      // Deduplicate by nama (case-insensitive), prefer one with ttd_path
+      const seen = new Set();
+      const unique = results.filter(r => {
+        const key = r.nama.toLowerCase().trim();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      res.json({
+        success: true,
+        data: unique
+      });
+    } catch (error) {
+      console.error('Error getting anggota list:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Gagal mengambil daftar anggota',
         error: error.message
       });
     }

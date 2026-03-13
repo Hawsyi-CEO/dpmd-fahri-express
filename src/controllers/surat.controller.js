@@ -1,7 +1,29 @@
 const prisma = require('../config/prisma');
 const path = require('path');
 const fs = require('fs').promises;
-const { sendDisposisiNotification } = require('./pushNotifications.controller');
+const PushNotificationService = require('../services/pushNotificationService');
+const ActivityLogger = require('../utils/activityLogger');
+
+// Wrapper to match old interface
+const sendDisposisiNotification = async (disposisi) => {
+  const dariUser = disposisi.users_disposisi_dari_user_idTousers;
+  const keUser = disposisi.users_disposisi_ke_user_idTousers;
+  const surat = disposisi.surat_masuk;
+
+  if (!keUser?.id) return;
+
+  const disposisiData = {
+    id: disposisi.id,
+    perihal: surat?.perihal || 'Disposisi baru',
+    dari_user: dariUser?.name || 'Unknown',
+    nomor_surat: surat?.nomor_surat || ''
+  };
+
+  await PushNotificationService.notifyNewDisposisi(
+    disposisiData,
+    [parseInt(keUser.id)]
+  );
+};
 
 /**
  * @route POST /api/surat-masuk
@@ -50,6 +72,23 @@ exports.createSuratMasuk = async (req, res, next) => {
           select: { id: true, name: true, email: true, role: true },
         },
       },
+    });
+
+    // Log activity
+    await ActivityLogger.log({
+      userId: req.user.id,
+      userName: req.user.nama || req.user.name || req.user.email,
+      userRole: req.user.role,
+      bidangId: 2, // Sekretariat
+      module: 'surat_masuk',
+      action: 'create',
+      entityType: 'surat_masuk',
+      entityId: Number(surat.id),
+      entityName: perihal,
+      description: `${req.user.nama || req.user.name || req.user.email} membuat surat masuk: ${perihal} (No: ${nomor_surat})`,
+      newValue: { nomor_surat, pengirim, perihal },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
     });
 
     res.status(201).json({
@@ -105,6 +144,23 @@ exports.uploadFileSurat = async (req, res, next) => {
       data: {
         file_path: req.file.path.replace(/\\/g, '/'),
       },
+    });
+
+    // Log activity
+    await ActivityLogger.log({
+      userId: req.user.id,
+      userName: req.user.nama || req.user.name || req.user.email,
+      userRole: req.user.role,
+      bidangId: 2, // Sekretariat
+      module: 'surat_masuk',
+      action: 'upload',
+      entityType: 'surat_masuk',
+      entityId: Number(updatedSurat.id),
+      entityName: surat.perihal || `Surat #${id}`,
+      description: `${req.user.nama || req.user.name || req.user.email} mengupload file untuk surat: ${surat.perihal || surat.nomor_surat}`,
+      newValue: { filename: req.file.originalname, size: req.file.size },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
     });
 
     res.json({
@@ -259,6 +315,23 @@ exports.updateSuratMasuk = async (req, res, next) => {
       data: updateData,
     });
 
+    // Log activity
+    await ActivityLogger.log({
+      userId: req.user.id,
+      userName: req.user.nama || req.user.name || req.user.email,
+      userRole: req.user.role,
+      bidangId: 2, // Sekretariat
+      module: 'surat_masuk',
+      action: 'update',
+      entityType: 'surat_masuk',
+      entityId: Number(surat.id),
+      entityName: surat.perihal || `Surat #${id}`,
+      description: `${req.user.nama || req.user.name || req.user.email} memperbarui surat masuk: ${surat.perihal || surat.nomor_surat}`,
+      newValue: updateData,
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
+    });
+
     res.json({
       success: true,
       message: 'Surat berhasil diupdate',
@@ -296,6 +369,23 @@ exports.deleteSuratMasuk = async (req, res, next) => {
 
     await prisma.surat_masuk.delete({
       where: { id: BigInt(id) },
+    });
+
+    // Log activity
+    await ActivityLogger.log({
+      userId: req.user.id,
+      userName: req.user.nama || req.user.name || req.user.email,
+      userRole: req.user.role,
+      bidangId: 2, // Sekretariat
+      module: 'surat_masuk',
+      action: 'delete',
+      entityType: 'surat_masuk',
+      entityId: Number(id),
+      entityName: surat.perihal || `Surat #${id}`,
+      description: `${req.user.nama || req.user.name || req.user.email} menghapus surat masuk: ${surat.perihal} (No: ${surat.nomor_surat})`,
+      oldValue: { nomor_surat: surat.nomor_surat, perihal: surat.perihal, pengirim: surat.pengirim },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
     });
 
     res.json({
@@ -389,6 +479,23 @@ exports.kirimKeKepalaDinas = async (req, res, next) => {
       console.error('[SURAT] Error stack:', notifError.stack);
       // Don't fail the request if notification fails
     }
+
+    // Log activity
+    await ActivityLogger.log({
+      userId: req.user.id,
+      userName: req.user.nama || req.user.name || req.user.email,
+      userRole: req.user.role,
+      bidangId: 2, // Sekretariat
+      module: 'surat_masuk',
+      action: 'send',
+      entityType: 'disposisi',
+      entityId: Number(disposisi.id),
+      entityName: disposisi.surat_masuk?.perihal || `Surat #${id}`,
+      description: `${req.user.nama || req.user.name || req.user.email} mengirim surat ke Kepala Dinas: ${disposisi.surat_masuk?.perihal || 'Surat'}`,
+      newValue: { kepala_dinas: kepalaDinas.name, instruksi, catatan },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
+    });
 
     res.status(201).json({
       success: true,

@@ -1,8 +1,7 @@
-const { PrismaClient } = require('@prisma/client');
+const { Prisma } = require('@prisma/client');
+const prisma = require('../config/prisma');
 const bcrypt = require('bcrypt');
 const logger = require('../utils/logger');
-
-const prisma = new PrismaClient();
 
 /**
  * Get all verifikator for a dinas
@@ -38,7 +37,8 @@ exports.getAllVerifikator = async (req, res) => {
         dv.is_active,
         dv.created_at,
         u.name as username,
-        u.email as user_email
+        u.email as user_email,
+        u.plain_password
       FROM dinas_verifikator dv
       JOIN users u ON dv.user_id = u.id
       WHERE dv.dinas_id = ${dinasIdInt}
@@ -98,6 +98,7 @@ exports.createVerifikator = async (req, res) => {
         name: nama,
         email,
         password: hashedPassword,
+        plain_password: password,
         role: 'verifikator_dinas',
         dinas_id: dinasIdInt,
         is_active: true
@@ -297,7 +298,10 @@ exports.resetVerifikatorPassword = async (req, res) => {
     // Update password
     await prisma.users.update({
       where: { id: userId },
-      data: { password: hashedPassword }
+      data: { 
+        password: hashedPassword,
+        plain_password: new_password
+      }
     });
 
     logger.info(`Verifikator password created: ID ${verifikatorId}`);
@@ -363,6 +367,215 @@ exports.deleteVerifikator = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Gagal menghapus verifikator',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get aggregate verification statistics for all verifikators of a dinas
+ * Returns per-verifikator stats and overall totals
+ */
+exports.getVerifikatorStats = async (req, res) => {
+  try {
+    const { dinasId } = req.params;
+    const dinasIdInt = parseInt(dinasId);
+    const { tahun } = req.query;
+    const tahunFilter = tahun ? parseInt(tahun) : null;
+
+    // Get the dinas info for kode_dinas matching
+    const dinas = await prisma.master_dinas.findUnique({
+      where: { id: dinasIdInt }
+    });
+
+    if (!dinas) {
+      return res.status(404).json({
+        success: false,
+        message: 'Dinas tidak ditemukan'
+      });
+    }
+
+    const kodeDinasForMatch = dinas.kode_dinas.replace(/_/g, ' ');
+
+    // Get all verifikators for this dinas
+    const verifikators = await prisma.dinas_verifikator.findMany({
+      where: { dinas_id: dinasIdInt },
+      orderBy: { created_at: 'desc' }
+    });
+
+    if (verifikators.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          aggregate: { total: 0, pending: 0, in_review: 0, approved: 0, rejected: 0, revision: 0 },
+          per_verifikator: [],
+          unassigned: { total: 0, pending: 0, in_review: 0, approved: 0, rejected: 0, revision: 0 }
+        }
+      });
+    }
+
+    // Get all verifikator akses desa mappings
+    const verifikatorIds = verifikators.map(v => v.id);
+    const allAksesDesa = await prisma.verifikator_akses_desa.findMany({
+      where: { verifikator_id: { in: verifikatorIds } },
+      select: { verifikator_id: true, desa_id: true }
+    });
+
+    // Group desa_ids by verifikator
+    const desaByVerifikator = {};
+    const allAssignedDesaIds = new Set();
+    for (const akses of allAksesDesa) {
+      const vId = akses.verifikator_id.toString();
+      if (!desaByVerifikator[vId]) desaByVerifikator[vId] = [];
+      desaByVerifikator[vId].push(akses.desa_id);
+      allAssignedDesaIds.add(akses.desa_id);
+    }
+
+    // Build per-verifikator stats
+    const perVerifikatorStats = [];
+
+    for (const v of verifikators) {
+      const vDesaIds = desaByVerifikator[v.id.toString()] || [];
+      
+      let stats = { total: 0, pending: 0, in_review: 0, approved: 0, rejected: 0, revision: 0 };
+      
+      if (vDesaIds.length > 0) {
+        const result = await prisma.$queryRaw`
+          SELECT 
+            COUNT(DISTINCT bp.id) as total,
+            SUM(CASE WHEN bp.dinas_status IS NULL OR bp.dinas_status = 'pending' THEN 1 ELSE 0 END) as pending,
+            SUM(CASE WHEN bp.dinas_status = 'in_review' THEN 1 ELSE 0 END) as in_review,
+            SUM(CASE WHEN bp.dinas_status = 'approved' THEN 1 ELSE 0 END) as approved,
+            SUM(CASE WHEN bp.dinas_status = 'rejected' THEN 1 ELSE 0 END) as rejected,
+            SUM(CASE WHEN bp.dinas_status = 'revision' THEN 1 ELSE 0 END) as revision
+          FROM bankeu_proposals bp
+          INNER JOIN desas d ON bp.desa_id = d.id
+          INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
+          INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
+          WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
+            AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IN ('rejected', 'revision') OR bp.kecamatan_status IN ('rejected', 'revision'))
+            AND d.status_pemerintahan = 'desa'
+            AND bp.desa_id IN (${Prisma.join(vDesaIds)})
+            AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
+        `;
+        
+        if (result[0]) {
+          stats = {
+            total: Number(result[0].total || 0),
+            pending: Number(result[0].pending || 0),
+            in_review: Number(result[0].in_review || 0),
+            approved: Number(result[0].approved || 0),
+            rejected: Number(result[0].rejected || 0),
+            revision: Number(result[0].revision || 0)
+          };
+        }
+      }
+
+      perVerifikatorStats.push({
+        id: v.id,
+        nama: v.nama,
+        jabatan: v.jabatan,
+        is_active: v.is_active,
+        jumlah_desa: vDesaIds.length,
+        stats
+      });
+    }
+
+    // Get stats for unassigned desa (proposals not covered by any verifikator)
+    let unassignedStats = { total: 0, pending: 0, in_review: 0, approved: 0, rejected: 0, revision: 0 };
+    const allAssignedDesaArray = Array.from(allAssignedDesaIds);
+
+    if (allAssignedDesaArray.length > 0) {
+      const unassignedResult = await prisma.$queryRaw`
+        SELECT 
+          COUNT(DISTINCT bp.id) as total,
+          SUM(CASE WHEN bp.dinas_status IS NULL OR bp.dinas_status = 'pending' THEN 1 ELSE 0 END) as pending,
+          SUM(CASE WHEN bp.dinas_status = 'in_review' THEN 1 ELSE 0 END) as in_review,
+          SUM(CASE WHEN bp.dinas_status = 'approved' THEN 1 ELSE 0 END) as approved,
+          SUM(CASE WHEN bp.dinas_status = 'rejected' THEN 1 ELSE 0 END) as rejected,
+          SUM(CASE WHEN bp.dinas_status = 'revision' THEN 1 ELSE 0 END) as revision
+        FROM bankeu_proposals bp
+        INNER JOIN desas d ON bp.desa_id = d.id
+        INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
+        INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
+        WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
+          AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IN ('rejected', 'revision') OR bp.kecamatan_status IN ('rejected', 'revision'))
+          AND d.status_pemerintahan = 'desa'
+          AND bp.desa_id NOT IN (${Prisma.join(allAssignedDesaArray)})
+          AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
+      `;
+      if (unassignedResult[0]) {
+        unassignedStats = {
+          total: Number(unassignedResult[0].total || 0),
+          pending: Number(unassignedResult[0].pending || 0),
+          in_review: Number(unassignedResult[0].in_review || 0),
+          approved: Number(unassignedResult[0].approved || 0),
+          rejected: Number(unassignedResult[0].rejected || 0),
+          revision: Number(unassignedResult[0].revision || 0)
+        };
+      }
+    } else {
+      // No assigned desa at all → all proposals are "unassigned"
+      const allResult = await prisma.$queryRaw`
+        SELECT 
+          COUNT(DISTINCT bp.id) as total,
+          SUM(CASE WHEN bp.dinas_status IS NULL OR bp.dinas_status = 'pending' THEN 1 ELSE 0 END) as pending,
+          SUM(CASE WHEN bp.dinas_status = 'in_review' THEN 1 ELSE 0 END) as in_review,
+          SUM(CASE WHEN bp.dinas_status = 'approved' THEN 1 ELSE 0 END) as approved,
+          SUM(CASE WHEN bp.dinas_status = 'rejected' THEN 1 ELSE 0 END) as rejected,
+          SUM(CASE WHEN bp.dinas_status = 'revision' THEN 1 ELSE 0 END) as revision
+        FROM bankeu_proposals bp
+        INNER JOIN desas d ON bp.desa_id = d.id
+        INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
+        INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
+        WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
+          AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IN ('rejected', 'revision') OR bp.kecamatan_status IN ('rejected', 'revision'))
+          AND d.status_pemerintahan = 'desa'
+          AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
+      `;
+      if (allResult[0]) {
+        unassignedStats = {
+          total: Number(allResult[0].total || 0),
+          pending: Number(allResult[0].pending || 0),
+          in_review: Number(allResult[0].in_review || 0),
+          approved: Number(allResult[0].approved || 0),
+          rejected: Number(allResult[0].rejected || 0),
+          revision: Number(allResult[0].revision || 0)
+        };
+      }
+    }
+
+    // Aggregate: sum of all verifikators + unassigned
+    const aggregate = {
+      total: unassignedStats.total,
+      pending: unassignedStats.pending,
+      in_review: unassignedStats.in_review,
+      approved: unassignedStats.approved,
+      rejected: unassignedStats.rejected,
+      revision: unassignedStats.revision
+    };
+    for (const pv of perVerifikatorStats) {
+      aggregate.total += pv.stats.total;
+      aggregate.pending += pv.stats.pending;
+      aggregate.in_review += pv.stats.in_review;
+      aggregate.approved += pv.stats.approved;
+      aggregate.rejected += pv.stats.rejected;
+      aggregate.revision += pv.stats.revision;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        aggregate,
+        per_verifikator: perVerifikatorStats,
+        unassigned: unassignedStats
+      }
+    });
+  } catch (error) {
+    logger.error('Error getting verifikator stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Gagal mengambil statistik verifikator',
       error: error.message
     });
   }

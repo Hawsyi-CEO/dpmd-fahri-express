@@ -4,6 +4,7 @@
  */
 
 const prisma = require('../config/prisma');
+const ActivityLogger = require('../utils/activityLogger');
 
 class PerjadinController {
   /**
@@ -312,6 +313,23 @@ class PerjadinController {
 
       console.log('   ✅ Transaction completed successfully');
 
+      // Log activity
+      await ActivityLogger.log({
+        userId: req.user.id,
+        userName: req.user.nama || req.user.email,
+        userRole: req.user.role,
+        bidangId: 2, // Sekretariat
+        module: 'perjadin',
+        action: 'create',
+        entityType: 'kegiatan',
+        entityId: Number(result.id_kegiatan),
+        entityName: nama_kegiatan,
+        description: `${req.user.nama || req.user.email} membuat kegiatan perjalanan dinas: ${nama_kegiatan}`,
+        newValue: { nama_kegiatan, nomor_sp, tanggal_mulai, tanggal_selesai, lokasi, bidang_count: bidang.length },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
       res.status(201).json({
         success: true,
         message: 'Kegiatan perjadin berhasil dibuat',
@@ -433,6 +451,24 @@ class PerjadinController {
 
       console.log('   ✅ Update completed successfully');
 
+      // Log activity
+      await ActivityLogger.log({
+        userId: req.user.id,
+        userName: req.user.nama || req.user.email,
+        userRole: req.user.role,
+        bidangId: 2, // Sekretariat
+        module: 'perjadin',
+        action: 'update',
+        entityType: 'kegiatan',
+        entityId: parseInt(id),
+        entityName: nama_kegiatan,
+        description: `${req.user.nama || req.user.email} memperbarui kegiatan perjalanan dinas: ${nama_kegiatan}`,
+        oldValue: { nama_kegiatan: existing.nama_kegiatan, nomor_sp: existing.nomor_sp },
+        newValue: { nama_kegiatan, nomor_sp, tanggal_mulai, tanggal_selesai, lokasi },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
       res.json({
         success: true,
         message: 'Kegiatan perjadin berhasil diperbarui',
@@ -476,6 +512,23 @@ class PerjadinController {
       });
 
       console.log('   ✅ Kegiatan deleted successfully');
+
+      // Log activity
+      await ActivityLogger.log({
+        userId: req.user.id,
+        userName: req.user.nama || req.user.email,
+        userRole: req.user.role,
+        bidangId: 2, // Sekretariat
+        module: 'perjadin',
+        action: 'delete',
+        entityType: 'kegiatan',
+        entityId: parseInt(id),
+        entityName: existing.nama_kegiatan,
+        description: `${req.user.nama || req.user.email} menghapus kegiatan perjalanan dinas: ${existing.nama_kegiatan}`,
+        oldValue: { nama_kegiatan: existing.nama_kegiatan, nomor_sp: existing.nomor_sp, lokasi: existing.lokasi },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
 
       res.json({
         success: true,

@@ -31,9 +31,9 @@ class CronSchedulerService {
 			timezone: 'Asia/Jakarta'
 		});
 
-		// Evening reminder: 9:00 PM (Tomorrow's schedule)
-		this.jobs.eveningReminder = cron.schedule('0 21 * * *', async () => {
-			console.log('\n⏰ Running evening schedule reminder (9:00 PM)...');
+		// Evening reminder: 10:00 PM (Tomorrow's schedule)
+		this.jobs.eveningReminder = cron.schedule('0 22 * * *', async () => {
+			console.log('\n⏰ Running evening schedule reminder (10:00 PM)...');
 			try {
 				const result = await pushNotificationService.sendTomorrowScheduleReminder();
 				console.log('✅ Evening reminder completed:', result);
@@ -47,7 +47,7 @@ class CronSchedulerService {
 
 		console.log('✅ Cron jobs initialized:');
 		console.log('   - Morning reminder (Today\'s schedule): Every day at 07:00 WIB');
-		console.log('   - Evening reminder (Tomorrow\'s schedule): Every day at 21:00 WIB');
+		console.log('   - Evening reminder (Tomorrow\'s schedule): Every day at 22:00 WIB');
 	}
 
 	/**

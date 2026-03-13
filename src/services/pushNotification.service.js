@@ -27,18 +27,17 @@ class PushNotificationService {
 	 * @param {string} path - Relative path (e.g., 'jadwal-kegiatan')
 	 */
 	getRoleBasedUrl(role, path) {
+		// Semua DPMD staff menggunakan prefix /dpmd
+		const dpmfStaffRoles = ['superadmin', 'kepala_dinas', 'sekretaris_dinas', 'kepala_bidang', 'ketua_tim', 'pegawai'];
+		if (dpmfStaffRoles.includes(role)) {
+			return `/dpmd/${path}`;
+		}
 		const roleRouteMap = {
-			'superadmin': '/admin',
-			'kepala_dinas': '/kepala-dinas',
-			'sekretaris_dinas': '/sekretaris-dinas',
-			'kepala_bidang': '/kepala-bidang',
-			'ketua_tim': '/ketua-tim',
-			'pegawai': '/pegawai',
 			'kecamatan': '/kecamatan',
+			'desa': '/desa',
 			'bankeu': '/bankeu'
 		};
-		
-		const rolePrefix = roleRouteMap[role] || '/pegawai';
+		const rolePrefix = roleRouteMap[role] || '/dpmd';
 		return `${rolePrefix}/${path}`;
 	}
 
@@ -59,7 +58,10 @@ class PushNotificationService {
 					}
 				},
 				include: {
-					push_subscriptions: true
+					push_subscriptions: {
+						orderBy: { created_at: 'desc' },
+						take: 1 // Only get the latest subscription per user
+					}
 				}
 			});
 
@@ -68,47 +70,49 @@ class PushNotificationService {
 			const sendPromises = [];
 
 			for (const user of users) {
-				for (const subscription of user.push_subscriptions) {
-					try {
-						// subscription.subscription could be string (JSON) or object (from Prisma)
-						const pushSubscription = typeof subscription.subscription === 'string' 
-							? JSON.parse(subscription.subscription)
-							: subscription.subscription;
-						
-						// Generate role-specific URL if path is provided
-						const notificationData = { ...notification.data };
-						if (notification.path) {
-							notificationData.url = this.getRoleBasedUrl(user.role, notification.path);
-						}
-						
-						const payload = JSON.stringify({
-							title: notification.title,
-							body: notification.body,
-							icon: notification.icon || '/logo-192.png',
-							badge: notification.badge || '/logo-96.png',
-							data: notificationData,
-							actions: notification.actions || []
+				// Only use the first (latest) subscription per user to avoid duplicates
+				const subscription = user.push_subscriptions[0];
+				if (!subscription) continue;
+
+				try {
+					// subscription.subscription could be string (JSON) or object (from Prisma)
+					const pushSubscription = typeof subscription.subscription === 'string' 
+						? JSON.parse(subscription.subscription)
+						: subscription.subscription;
+					
+					// Generate role-specific URL if path is provided
+					const notificationData = { ...notification.data };
+					if (notification.path) {
+						notificationData.url = this.getRoleBasedUrl(user.role, notification.path);
+					}
+					
+					const payload = JSON.stringify({
+						title: notification.title,
+						body: notification.body,
+						icon: notification.icon || '/logo-192.png',
+						badge: notification.badge || '/logo-96.png',
+						data: notificationData,
+						actions: notification.actions || []
+					});
+
+					const promise = webpush.sendNotification(pushSubscription, payload)
+						.then(() => {
+							console.log(`✅ Notification sent to user ${user.name} (${user.email})`);
+						})
+						.catch((error) => {
+							console.error(`❌ Failed to send to user ${user.name}:`, error.message);
+							
+							// If subscription is invalid, remove it
+							if (error.statusCode === 410 || error.statusCode === 404) {
+								return prisma.push_subscriptions.delete({
+									where: { id: subscription.id }
+								});
+							}
 						});
 
-						const promise = webpush.sendNotification(pushSubscription, payload)
-							.then(() => {
-								console.log(`✅ Notification sent to user ${user.name} (${user.email})`);
-							})
-							.catch((error) => {
-								console.error(`❌ Failed to send to user ${user.name}:`, error.message);
-								
-								// If subscription is invalid, remove it
-								if (error.statusCode === 410 || error.statusCode === 404) {
-									return prisma.push_subscriptions.delete({
-										where: { id: subscription.id }
-									});
-								}
-							});
-
-						sendPromises.push(promise);
-					} catch (error) {
-						console.error(`Error processing subscription for user ${user.name}:`, error.message);
-					}
+					sendPromises.push(promise);
+				} catch (error) {
+					console.error(`Error processing subscription for user ${user.name}:`, error.message);
 				}
 			}
 
@@ -157,14 +161,16 @@ class PushNotificationService {
 				return { success: true, schedulesCount: 0 };
 			}
 
+			const todayStr = today.toISOString().split('T')[0];
 			const notification = {
 				title: '📅 Jadwal Kegiatan Hari Ini',
 				body: `Ada ${todaySchedules.length} kegiatan hari ini. Tap untuk melihat detail.`,
 				icon: '/logo-192.png',
 				badge: '/logo-96.png',
+				path: 'jadwal-kegiatan',
 				data: {
-					url: '/jadwal-kegiatan',
 					type: 'today_schedule',
+					targetDate: todayStr,
 					schedules: todaySchedules
 				},
 				actions: [
@@ -222,14 +228,16 @@ class PushNotificationService {
 				return { success: true, schedulesCount: 0 };
 			}
 
+			const tomorrowStr = tomorrow.toISOString().split('T')[0];
 			const notification = {
 				title: '📅 Jadwal Kegiatan Besok',
 				body: `Ada ${tomorrowSchedules.length} kegiatan besok. Tap untuk melihat detail.`,
 				icon: '/logo-192.png',
 				badge: '/logo-96.png',
+				path: 'jadwal-kegiatan',
 				data: {
-					url: '/jadwal-kegiatan',
 					type: 'tomorrow_schedule',
+					targetDate: tomorrowStr,
 					schedules: tomorrowSchedules
 				},
 				actions: [
@@ -351,8 +359,8 @@ class PushNotificationService {
 				body: `${jadwal.judul} akan dimulai dalam 1 jam di ${jadwal.lokasi || 'lokasi belum ditentukan'}`,
 				icon: '/logo-192.png',
 				badge: '/logo-96.png',
+				path: 'jadwal-kegiatan',
 				data: {
-					url: '/jadwal-kegiatan',
 					type: 'upcoming_jadwal',
 					jadwal_id: jadwal.id,
 					prioritas: jadwal.prioritas

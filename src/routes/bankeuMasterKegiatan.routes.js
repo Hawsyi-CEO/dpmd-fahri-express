@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 
 // Get all master kegiatan
 router.get('/', async (req, res) => {
@@ -136,6 +135,34 @@ router.put('/:id', async (req, res) => {
       where: { id: parseInt(id) },
       data: updateData
     });
+
+    // Cascade update: jika nama_kegiatan berubah, update judul_proposal di semua proposal terkait
+    if (nama_kegiatan !== undefined && nama_kegiatan !== existing.nama_kegiatan) {
+      // Cari semua proposal yang terkait via pivot table
+      const linkedProposals = await prisma.bankeu_proposal_kegiatan.findMany({
+        where: { kegiatan_id: parseInt(id) },
+        select: { proposal_id: true }
+      });
+
+      if (linkedProposals.length > 0) {
+        const proposalIds = linkedProposals.map(lp => lp.proposal_id);
+
+        // Update judul_proposal untuk proposal yang masih menggunakan nama lama
+        // Hanya update jika judul_proposal = nama lama (bukan custom title dari user)
+        const updated = await prisma.bankeu_proposals.updateMany({
+          where: {
+            id: { in: proposalIds },
+            judul_proposal: existing.nama_kegiatan
+          },
+          data: {
+            judul_proposal: nama_kegiatan,
+            updated_at: new Date()
+          }
+        });
+
+        console.log(`Cascade update: ${updated.count} proposals updated with new kegiatan name`);
+      }
+    }
 
     res.json({
       success: true,

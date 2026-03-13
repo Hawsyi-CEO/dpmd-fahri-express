@@ -7,10 +7,11 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "test": "jest",
-    "db:generate": "node scripts/generate-from-db.js",
-    "db:migrate": "node scripts/run-migrations.js",
+    "db:generate": "npx prisma generate",
+    "db:push": "npx prisma db push",
     "db:seed": "node scripts/run-seeders.js",
-    "db:setup": "npm run db:migrate && npm run db:seed"
+    "db:setup": "npm run db:push && npm run db:generate && npm run db:seed",
+    "postinstall": "npx prisma generate"
   },
   "keywords": [
     "express",
@@ -33,6 +34,8 @@
     "helmet": "^7.1.0",
     "joi": "^17.11.0",
     "jsonwebtoken": "^9.0.2",
+    "mediasoup": "^3.19.17",
+    "mediasoup-client": "^3.18.7",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "mysql2": "^3.6.5",
@@ -41,6 +44,8 @@
     "qrcode": "^1.5.4",
     "sequelize": "^6.35.2",
     "sharp": "^0.34.5",
+    "socket.io": "^4.8.3",
+    "uuid": "^13.0.0",
     "web-push": "^3.6.7",
     "winston": "^3.11.0",
     "xlsx": "^0.18.5"

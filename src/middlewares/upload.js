@@ -408,6 +408,75 @@ const uploadBankeuProposal = multer({
   }
 });
 
+// Storage: Contoh Proposal (format surat)
+const storageContohProposal = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, '../../public/contoh-proposal');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    // Temporary name — will be renamed in controller
+    const tempName = `temp_${Date.now()}_${file.originalname}`;
+    cb(null, tempName);
+  }
+});
+
+// Storage configuration for INFORMASI (banner images)
+const storageInformasi = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const dir = 'storage/uploads/informasi';
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: function (req, file, cb) {
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    const nameWithoutExt = path.basename(file.originalname, ext);
+    const sanitizedName = nameWithoutExt.replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `${timestamp}_${sanitizedName}${ext}`;
+    
+    cb(null, filename);
+  }
+});
+
+const uploadInformasi = multer({
+  storage: storageInformasi,
+  fileFilter: imageFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB for images
+  }
+});
+
+const contohProposalFileFilter = (req, file, cb) => {
+  const allowedTypes = [
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+    'application/msword', // .doc
+    'application/pdf',
+    'image/png',
+    'image/jpeg',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+    'application/vnd.ms-excel', // .xls
+  ];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Format file tidak didukung. Gunakan: .docx, .doc, .pdf, .png, .jpg, .xlsx'));
+  }
+};
+
+const uploadContohProposal = multer({
+  storage: storageContohProposal,
+  fileFilter: contohProposalFileFilter,
+  limits: {
+    fileSize: 15 * 1024 * 1024 // 15MB
+  }
+});
+
 module.exports = {
   uploadBumdes,
   uploadMusdesus,
@@ -419,5 +488,7 @@ module.exports = {
   uploadAparaturDesa,
   uploadPengurus,
   uploadProfilDesa,
-  bankeuProposal: uploadBankeuProposal.single('file')
+  uploadInformasi,
+  bankeuProposal: uploadBankeuProposal.single('file'),
+  contohProposalUpload: uploadContohProposal.single('file')
 };

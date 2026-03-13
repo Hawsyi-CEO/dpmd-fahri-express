@@ -1,14 +1,21 @@
 const express = require('express');
 const router = express.Router();
 const bankeuVerificationController = require('../controllers/bankeuVerification.controller');
+const dinasVerificationController = require('../controllers/dinasVerification.controller');
 const { auth } = require('../middlewares/auth');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
 // Configure multer for signature uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../../storage/uploads/signatures'));
+    const uploadDir = path.join(__dirname, '../../storage/uploads/signatures');
+    // Ensure directory exists
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -37,6 +44,12 @@ router.get('/proposals', bankeuVerificationController.getProposalsByKecamatan);
 
 // Verify (approve/reject) proposal
 router.patch('/proposals/:id/verify', bankeuVerificationController.verifyProposal);
+
+// Cancel approval - Batalkan persetujuan proposal yang belum dikirim ke DPMD
+router.patch('/proposals/:id/cancel-approval', bankeuVerificationController.cancelApproval);
+
+// Get proposal verification history (reuse from dinas controller - same activity_logs table)
+router.get('/proposals/:proposalId/history', dinasVerificationController.getProposalVerificationHistory);
 
 // Get statistics
 router.get('/statistics', bankeuVerificationController.getStatistics);

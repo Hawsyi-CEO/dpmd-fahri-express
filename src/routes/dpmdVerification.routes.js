@@ -34,6 +34,11 @@ router.patch('/proposals/:id/verify', dpmdVerificationController.verifyProposal)
 // Get statistics
 router.get('/statistics', dpmdVerificationController.getStatistics);
 
+// Troubleshoot: Force revision proposal stuck at any stage
+// Only SPKED staff (pegawai, kepala_bidang, ketua_tim, etc.) can use
+// Body: { catatan: string (required) }
+router.patch('/proposals/:id/troubleshoot-revision', dpmdVerificationController.troubleshootRevision);
+
 // Delete single proposal (DPMD troubleshooting)
 router.delete('/proposals/:id', dpmdVerificationController.deleteProposal);
 
@@ -43,5 +48,10 @@ router.delete('/desa/:desaId/proposals', dpmdVerificationController.deleteDesaPr
 
 // Delete surat (pengantar & permohonan) from a desa
 router.delete('/desa/:desaId/surat', dpmdVerificationController.deleteDesaSurat);
+
+// Reopen submission for a specific desa
+// Allow desa to upload new proposals again
+// Body: { catatan: string (optional) }
+router.patch('/desa/:desaId/reopen-submission', dpmdVerificationController.reopenDesaSubmission);
 
 module.exports = router;

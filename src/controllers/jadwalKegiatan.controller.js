@@ -5,6 +5,7 @@
 
 const prisma = require('../config/prisma');
 const pushNotificationService = require('../services/pushNotification.service');
+const ActivityLogger = require('../utils/activityLogger');
 
 class JadwalKegiatanController {
   /**
@@ -197,11 +198,14 @@ class JadwalKegiatanController {
     try {
       const {
         judul,
+        deskripsi,
         bidang_id,
         tanggal_mulai,
         tanggal_selesai,
         lokasi,
         asal_kegiatan,
+        prioritas,
+        kategori,
         pic_name,
         pic_contact
       } = req.body;
@@ -233,27 +237,21 @@ class JadwalKegiatanController {
       console.log('   ✓ Authorization passed: User can create jadwal');
 
       // Determine bidang_id for jadwal
-      // Use specified bidang_id if provided, otherwise use user's bidang_id
+      // null = untuk semua pegawai (lintas bidang)
       let finalBidangId = null;
       
       if (bidang_id) {
-        // User explicitly specified a bidang
         finalBidangId = Number(bidang_id);
         console.log('   ✓ Using specified bidang_id:', finalBidangId);
-      } else if (req.user.bidang_id) {
-        // Use creator's bidang_id as default
-        finalBidangId = Number(req.user.bidang_id);
-        console.log('   ✓ Using creator\'s bidang_id:', finalBidangId);
       } else {
-        // No bidang specified (e.g., for cross-bidang activities)
-        console.log('   ✓ No bidang_id specified - this is a general activity');
+        console.log('   ✓ No bidang_id - kegiatan untuk semua pegawai');
       }
 
       // Create jadwal
       const jadwal = await prisma.jadwal_kegiatan.create({
         data: {
           judul,
-          deskripsi: '-', // Default value
+          deskripsi: deskripsi || '-',
           bidang_id: finalBidangId,
           tanggal_mulai: new Date(tanggal_mulai),
           tanggal_selesai: new Date(tanggal_selesai),
@@ -262,23 +260,32 @@ class JadwalKegiatanController {
           pic_name: pic_name || '-',
           pic_contact: pic_contact || '-',
           status: 'draft',
-          prioritas: 'sedang',
-          kategori: 'lainnya',
+          prioritas: prioritas || 'sedang',
+          kategori: kategori || 'lainnya',
           created_by: req.user.id
         }
       });
 
       console.log('   ✅ Jadwal created with ID:', jadwal.id, '- Bidang:', finalBidangId || 'ALL');
 
-      // Send push notification to all users
-      try {
-        console.log('   📨 Sending push notification for new jadwal...');
-        await pushNotificationService.notifyNewJadwalKegiatan(jadwal);
-        console.log('   ✅ Push notification sent successfully');
-      } catch (notifError) {
-        console.error('   ⚠️ Failed to send push notification:', notifError.message);
-        // Don't fail the request if notification fails
-      }
+      // Activity Log
+      await ActivityLogger.log({
+        userId: req.user.id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        bidangId: 2, // Sekretariat
+        module: 'jadwal_kegiatan',
+        action: 'create',
+        entityType: 'jadwal_kegiatan',
+        entityId: jadwal.id,
+        entityName: judul,
+        description: `${req.user.name} menambahkan jadwal kegiatan baru: ${judul}`,
+        newValue: { judul, lokasi, asal_kegiatan, tanggal_mulai, tanggal_selesai },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
+      // Push notification dikirim per hari via cron scheduler, bukan per kegiatan
 
       res.status(201).json({
         success: true,
@@ -370,17 +377,25 @@ class JadwalKegiatanController {
 
       console.log('   ✅ Jadwal updated');
 
-      // Send push notification if there are significant changes
-      if (Object.keys(changes).length > 0) {
-        try {
-          console.log('   📨 Sending push notification for jadwal update...');
-          await pushNotificationService.notifyJadwalKegiatanUpdate(updated, changes);
-          console.log('   ✅ Push notification sent successfully');
-        } catch (notifError) {
-          console.error('   ⚠️ Failed to send push notification:', notifError.message);
-          // Don't fail the request if notification fails
-        }
-      }
+      // Activity Log
+      await ActivityLogger.log({
+        userId: req.user.id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        bidangId: 2, // Sekretariat
+        module: 'jadwal_kegiatan',
+        action: 'update',
+        entityType: 'jadwal_kegiatan',
+        entityId: parseInt(id),
+        entityName: updated.judul,
+        description: `${req.user.name} memperbarui jadwal kegiatan: ${updated.judul}`,
+        oldValue: { judul: existing.judul, lokasi: existing.lokasi, status: existing.status },
+        newValue: { judul: updated.judul, lokasi: updated.lokasi, status: updated.status },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
+      });
+
+      // Push notification dikirim per hari via cron scheduler, bukan per perubahan
 
       res.json({
         success: true,
@@ -436,6 +451,23 @@ class JadwalKegiatanController {
 
       await prisma.jadwal_kegiatan.delete({
         where: { id: parseInt(id) }
+      });
+
+      // Activity Log
+      await ActivityLogger.log({
+        userId: req.user.id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        bidangId: 2, // Sekretariat
+        module: 'jadwal_kegiatan',
+        action: 'delete',
+        entityType: 'jadwal_kegiatan',
+        entityId: parseInt(id),
+        entityName: existing.judul,
+        description: `${req.user.name} menghapus jadwal kegiatan: ${existing.judul}`,
+        oldValue: { judul: existing.judul, lokasi: existing.lokasi },
+        ipAddress: ActivityLogger.getIpFromRequest(req),
+        userAgent: ActivityLogger.getUserAgentFromRequest(req)
       });
 
       console.log('   ✅ Jadwal deleted');

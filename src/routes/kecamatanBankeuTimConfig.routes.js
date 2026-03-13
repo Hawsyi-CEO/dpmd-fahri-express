@@ -36,6 +36,9 @@ const upload = multer({
 // Get all tim config
 router.get('/:kecamatanId/bankeu/tim-config', auth, kecamatanBankeuTimConfigController.getAllTimConfig);
 
+// Get distinct anggota list (must be before :posisi route)
+router.get('/:kecamatanId/bankeu/tim-config/anggota-list', auth, kecamatanBankeuTimConfigController.getAnggotaList);
+
 // Get specific tim member config
 router.get('/:kecamatanId/bankeu/tim-config/:posisi', auth, kecamatanBankeuTimConfigController.getTimMemberConfig);
 

@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../config/prisma');
 const bcrypt = require('bcryptjs');
-const prisma = new PrismaClient();
 
 // Helper function to generate random password
 const generatePassword = (length = 8) => {
@@ -34,6 +33,7 @@ router.get('/', async (req, res) => {
             id: true,
             name: true,
             email: true,
+            plain_password: true,
             is_active: true,
             created_at: true
           }
@@ -338,6 +338,7 @@ router.post('/:id/reset-password', async (req, res) => {
       where: { id: userAccount.id },
       data: { 
         password: hashedPassword,
+        plain_password: password.trim(),
         updated_at: new Date()
       }
     });
@@ -480,6 +481,7 @@ router.post('/:id/create-account', async (req, res) => {
         name: dinas.nama_dinas,
         email: email,
         password: hashedPassword,
+        plain_password: accountPassword,
         role: 'dinas_terkait',
         dinas_id: parseInt(id),
         is_active: true,

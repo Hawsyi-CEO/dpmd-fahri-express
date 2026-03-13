@@ -3,9 +3,8 @@ const router = express.Router();
 const { vapidKeys } = require('../config/push-notification');
 const PushSubscription = require('../models/pushSubscription');
 const PushNotificationService = require('../services/pushNotification.service');
-const { auth } = require('../middlewares/auth');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { auth, checkRole } = require('../middlewares/auth');
+const prisma = require('../config/prisma');
 
 /**
  * GET /api/push-notification/vapid-public-key
@@ -135,9 +134,6 @@ router.get('/check', auth, async (req, res) => {
  */
 router.get('/statistics', auth, async (req, res) => {
   try {
-    const { PrismaClient } = require('@prisma/client');
-    const prisma = new PrismaClient();
-
     // Count total subscriptions
     const totalSubscribers = await prisma.push_subscriptions.count();
 
@@ -169,11 +165,17 @@ router.get('/statistics', auth, async (req, res) => {
       }
     });
 
+    // Count unique subscribed users
+    const subscribedUsers = await prisma.push_subscriptions.groupBy({
+      by: ['user_id'],
+    });
+
     res.json({
       success: true,
       data: {
-        totalSent: 0, // TODO: Implement notification log
+        totalSent: 0,
         totalSubscribers,
+        uniqueSubscribedUsers: subscribedUsers.length,
         todaySchedules,
         tomorrowSchedules
       }
@@ -190,21 +192,82 @@ router.get('/statistics', auth, async (req, res) => {
 
 /**
  * GET /api/push-notification/history
- * Get notification history
+ * Notification history (disabled - no notification_logs table)
  */
 router.get('/history', auth, async (req, res) => {
+  res.json({
+    success: true,
+    data: [],
+    pagination: { page: 1, limit: 20, total: 0, totalPages: 0 }
+  });
+});
+
+/**
+ * GET /api/push-notification/users-list
+ * Get list of users with subscription status for employee picker
+ */
+router.get('/users-list', auth, async (req, res) => {
   try {
-    // TODO: Implement notification history from database
-    // For now, return empty array
+    const { search = '', role = '' } = req.query;
+
+    const where = {
+      is_active: true,
+      role: { notIn: ['desa', 'kecamatan', 'dinas_terkait'] }
+    };
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { email: { contains: search } }
+      ];
+    }
+
+    if (role) {
+      where.role = role;
+    }
+
+    const users = await prisma.users.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        bidang_id: true,
+        _count: {
+          select: { push_subscriptions: true }
+        }
+      },
+      orderBy: [
+        { role: 'asc' },
+        { name: 'asc' }
+      ]
+    });
+
+    // Also get bidang names
+    const bidangs = await prisma.bidangs.findMany({
+      select: { id: true, nama: true }
+    });
+    const bidangMap = Object.fromEntries(bidangs.map(b => [b.id, b.nama]));
+
+    const data = users.map(u => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      bidang: bidangMap[u.bidang_id] || null,
+      subscribed: u._count.push_subscriptions > 0
+    }));
+
     res.json({
       success: true,
-      data: []
+      data
     });
   } catch (error) {
-    console.error('Error getting history:', error);
+    console.error('Error getting users list:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get history',
+      message: 'Failed to get users list',
       error: error.message
     });
   }
@@ -219,30 +282,30 @@ router.post('/send', auth, async (req, res) => {
   try {
     console.log('\n📨 [Push] Send notification request');
     console.log('   User:', req.user.name, '- Role:', req.user.role, '- Bidang:', req.user.bidang_id);
-    console.log('   Request body:', JSON.stringify(req.body, null, 2));
     
     // Check if user has permission
-    // Only superadmin and pegawai with Sekretariat bidang (bidang_id = 2) can send notifications
     const SEKRETARIAT_BIDANG_ID = 2;
     const isSuperadmin = req.user.role === 'superadmin';
     const isSekretariatPegawai = req.user.bidang_id === SEKRETARIAT_BIDANG_ID;
     
     if (!isSuperadmin && !isSekretariatPegawai) {
-      console.log('   ❌ Permission denied');
       return res.status(403).json({
         success: false,
         message: 'Unauthorized: Hanya Superadmin dan Pegawai Sekretariat yang dapat mengirim notifikasi'
       });
     }
-    
-    console.log('   ✅ Permission granted');
 
     const { userId, userIds, broadcast, roles, title, body, data, payload } = req.body;
 
     let result;
+    let logTargetType = 'broadcast';
+    let logTargetValue = null;
     
     if (roles && Array.isArray(roles) && roles.length > 0) {
-      // Send to specific roles using title, body, data
+      // Send to specific roles
+      logTargetType = 'roles';
+      logTargetValue = JSON.stringify(roles);
+
       const notification = {
         title: title || payload?.title,
         body: body || payload?.body,
@@ -252,39 +315,76 @@ router.post('/send', auth, async (req, res) => {
         actions: payload?.actions || []
       };
       
-      console.log('   📝 Notification object:', JSON.stringify(notification, null, 2));
-      
-      // Extract path from URL if present (e.g., '/pegawai/jadwal-kegiatan' -> 'jadwal-kegiatan')
-      // This makes the URL role-aware
+      // Extract path from URL if present for role-aware routing
       if (notification.data && notification.data.url && !notification.path) {
-        console.log('   🔗 Processing URL:', notification.data.url);
-        const urlPath = notification.data.url.replace(/^\/[^/]+\//, ''); // Remove role prefix
+        const urlPath = notification.data.url.replace(/^\/[^/]+\//, '');
         if (urlPath !== notification.data.url) {
-          // URL had a role prefix, use the path for role-aware routing
           notification.path = urlPath;
-          delete notification.data.url; // Remove fixed URL, will be generated per-role
-          console.log('   ✅ Converted to path:', notification.path);
-        }
-        // If URL doesn't have role prefix (like '/jadwal-kegiatan'), treat it as a path
-        else if (notification.data.url.startsWith('/') && !notification.data.url.includes('//')) {
-          notification.path = notification.data.url.replace(/^\//, ''); // Remove leading slash
           delete notification.data.url;
-          console.log('   ✅ Converted simple URL to path:', notification.path);
+        } else if (notification.data.url.startsWith('/') && !notification.data.url.includes('//')) {
+          notification.path = notification.data.url.replace(/^\//, '');
+          delete notification.data.url;
         }
       }
       
-      console.log('   📤 Sending to roles:', roles.join(', '));
       result = await PushNotificationService.sendToRoles(roles, notification);
-      console.log('   ✅ Send result:', result);
-    } else if (broadcast) {
-      // Broadcast ke semua users
-      result = await PushNotificationService.sendToAll(payload);
-    } else if (userIds && Array.isArray(userIds)) {
-      // Send ke multiple users
-      result = await PushNotificationService.sendToMultipleUsers(userIds, payload);
+
+    } else if (userIds && Array.isArray(userIds) && userIds.length > 0) {
+      // Send to specific users by ID
+      logTargetType = 'users';
+      logTargetValue = JSON.stringify(userIds);
+
+      const notifPayload = payload || {
+        title: title,
+        body: body,
+        icon: '/logo-192.png',
+        badge: '/logo-96.png',
+        tag: `manual-${Date.now()}`,
+        data: data || { type: 'manual', timestamp: Date.now() },
+        vibrate: [200, 100, 200]
+      };
+
+      const StaticPushService = require('../services/pushNotificationService');
+      const sendResult = await StaticPushService.sendToMultipleUsers(
+        userIds.map(id => parseInt(id)),
+        notifPayload
+      );
+      result = {
+        success: true,
+        sentTo: sendResult.sent || sendResult.sentTo || 0,
+        failed: sendResult.failed || 0
+      };
+
     } else if (userId) {
-      // Send ke single user
-      result = await PushNotificationService.sendToUser(userId, payload);
+      // Send to single user
+      logTargetType = 'users';
+      logTargetValue = JSON.stringify([userId]);
+
+      const StaticPushService = require('../services/pushNotificationService');
+      const sendResult = await StaticPushService.sendToUser(
+        parseInt(userId),
+        payload || { title, body, icon: '/logo-192.png', badge: '/logo-96.png', data: data || {} }
+      );
+      result = {
+        success: true,
+        sentTo: sendResult.sent || 1,
+        failed: sendResult.failed || 0
+      };
+
+    } else if (broadcast) {
+      // Broadcast to all users
+      logTargetType = 'broadcast';
+
+      const StaticPushService = require('../services/pushNotificationService');
+      const sendResult = await StaticPushService.sendToAll(
+        payload || { title, body, icon: '/logo-192.png', badge: '/logo-96.png', data: data || {} }
+      );
+      result = {
+        success: true,
+        sentTo: sendResult.sent || sendResult.sentTo || 0,
+        failed: sendResult.failed || 0
+      };
+
     } else {
       return res.status(400).json({
         success: false,
@@ -292,7 +392,44 @@ router.post('/send', auth, async (req, res) => {
       });
     }
 
-    console.log('   ✅ Notification sent successfully to', result.sentTo || 0, 'users');
+    console.log('   ✅ Notification sent to', result.sentTo || 0, 'users');
+
+    // Store notification records in DB for target users
+    try {
+      const notifPayload = {
+        title: title || payload?.title || 'Notifikasi',
+        body: body || payload?.body || '',
+        data: data || payload?.data || {}
+      };
+
+      let targetIds = [];
+      if (userId) {
+        targetIds = [parseInt(userId)];
+      } else if (userIds && Array.isArray(userIds)) {
+        targetIds = userIds.map(id => parseInt(id));
+      } else if (roles && Array.isArray(roles)) {
+        // Get user IDs by roles
+        const roleUsers = await prisma.users.findMany({
+          where: { role: { in: roles }, is_active: true },
+          select: { id: true }
+        });
+        targetIds = roleUsers.map(u => Number(u.id));
+      } else if (broadcast) {
+        // Get all active user IDs
+        const allUsers = await prisma.users.findMany({
+          where: { is_active: true },
+          select: { id: true }
+        });
+        targetIds = allUsers.map(u => Number(u.id));
+      }
+
+      if (targetIds.length > 0) {
+        const StaticPushService = require('../services/pushNotificationService');
+        await StaticPushService.storeNotifications(targetIds, notifPayload, req.user.id);
+      }
+    } catch (storeErr) {
+      console.error('   ⚠️ Failed to store notification records:', storeErr.message);
+    }
 
     res.json({
       success: true,
@@ -318,7 +455,7 @@ router.post('/test', auth, async (req, res) => {
   try {
     const userId = req.user.id;
     
-    const payload = {
+    const testPayload = {
       title: '🎉 Test Notification',
       body: 'Push notification berhasil! Sistem bekerja dengan baik.',
       icon: '/logo-192.png',
@@ -333,7 +470,8 @@ router.post('/test', auth, async (req, res) => {
       requireInteraction: false
     };
 
-    const result = await PushNotificationService.sendToUser(userId, payload);
+    const StaticPushService = require('../services/pushNotificationService');
+    const result = await StaticPushService.sendToUser(parseInt(userId), testPayload);
 
     res.json({
       success: true,
@@ -352,104 +490,44 @@ router.post('/test', auth, async (req, res) => {
 
 /**
  * GET /api/push-notification/notifications
- * Get notifications for current user (based on activity logs)
+ * Get notifications for current user from notifications table
  */
 router.get('/notifications', auth, async (req, res) => {
   try {
     const userId = req.user.id;
-    const userRole = req.user.role;
-    const { limit = 10 } = req.query;
-    
-    let notifications = [];
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
-    try {
-      // For superadmin: get recent activity logs from all bidang
-      if (userRole === 'superadmin') {
-        const activityLogs = await prisma.activity_logs.findMany({
-          where: {
-            created_at: { gte: sevenDaysAgo }
-          },
-          include: {
-            users: { select: { name: true } },
-            bidangs: { select: { nama: true } }
-          },
-          orderBy: { created_at: 'desc' },
-          take: parseInt(limit)
-        });
-        
-        notifications = activityLogs.map(log => ({
-          id: log.id,
-          title: `${log.action_type || 'Activity'} - ${log.bidangs?.nama || 'System'}`,
-          message: log.description || `${log.users?.name} melakukan aktivitas`,
-          time: formatTimeAgo(log.created_at),
-          read: false,
-          type: log.action_type || 'activity',
-          timestamp: log.created_at
-        }));
-      } 
-      // For bidang users: get activity logs from their bidang
-      else if (['kepala_bidang', 'ketua_tim', 'pegawai'].includes(userRole)) {
-        const user = await prisma.users.findUnique({
-          where: { id: parseInt(userId) },
-          select: { bidang_id: true }
-        });
-        
-        if (user?.bidang_id) {
-          const activityLogs = await prisma.activity_logs.findMany({
-            where: {
-              bidang_id: user.bidang_id,
-              created_at: { gte: sevenDaysAgo }
-            },
-            include: {
-              users: { select: { name: true } }
-            },
-            orderBy: { created_at: 'desc' },
-            take: parseInt(limit)
-          });
-          
-          notifications = activityLogs.map(log => ({
-            id: log.id,
-            title: log.action_type || 'Activity',
-            message: log.description || `${log.users?.name} melakukan aktivitas`,
-            time: formatTimeAgo(log.created_at),
-            read: false,
-            type: log.action_type || 'activity',
-            timestamp: log.created_at
-          }));
+    const { limit = 20, offset = 0 } = req.query;
+
+    const [notifications, unreadCount] = await Promise.all([
+      prisma.notifications.findMany({
+        where: { user_id: BigInt(userId) },
+        orderBy: { created_at: 'desc' },
+        take: parseInt(limit),
+        skip: parseInt(offset),
+        include: {
+          sender: { select: { name: true } }
         }
-      }
-      // For kepala_dinas and sekretaris_dinas: get from disposisi
-      else if (['kepala_dinas', 'sekretaris_dinas'].includes(userRole)) {
-        const disposisi = await prisma.surat_masuk.findMany({
-          where: {
-            created_at: { gte: sevenDaysAgo }
-          },
-          orderBy: { created_at: 'desc' },
-          take: Math.floor(parseInt(limit) / 2)
-        });
-        
-        notifications = disposisi.map(d => ({
-          id: `disposisi-${d.id}`,
-          title: 'Disposisi Baru',
-          message: `${d.nomor_surat || ''} - ${d.perihal || ''}`,
-          time: formatTimeAgo(d.created_at),
-          read: false,
-          type: 'disposisi',
-          timestamp: d.created_at
-        }));
-      }
-    } catch (dbError) {
-      console.error('Database query error:', dbError);
-      // Return empty notifications if table doesn't exist or query fails
-      notifications = [];
-    }
+      }),
+      prisma.notifications.count({
+        where: { user_id: BigInt(userId), is_read: false }
+      })
+    ]);
+
+    const formattedNotifications = notifications.map(n => ({
+      id: n.id,
+      title: n.title,
+      message: n.message,
+      type: n.type,
+      read: n.is_read,
+      data: n.data,
+      sent_by_name: n.sender?.name || null,
+      time: formatTimeAgo(n.created_at),
+      timestamp: n.created_at
+    }));
 
     res.json({
       success: true,
-      data: notifications,
-      unreadCount: notifications.length
+      data: formattedNotifications,
+      unreadCount
     });
   } catch (error) {
     console.error('Error getting notifications:', error);
@@ -458,6 +536,40 @@ router.get('/notifications', auth, async (req, res) => {
       message: 'Failed to get notifications',
       error: error.message
     });
+  }
+});
+
+/**
+ * POST /api/push-notification/notifications/mark-read
+ * Mark specific notifications as read
+ * Body: { ids: [1, 2, 3] } or { all: true }
+ */
+router.post('/notifications/mark-read', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { ids, all } = req.body;
+
+    if (all) {
+      await prisma.notifications.updateMany({
+        where: { user_id: BigInt(userId), is_read: false },
+        data: { is_read: true, read_at: new Date() }
+      });
+    } else if (ids && Array.isArray(ids) && ids.length > 0) {
+      await prisma.notifications.updateMany({
+        where: {
+          id: { in: ids.map(id => BigInt(id)) },
+          user_id: BigInt(userId)
+        },
+        data: { is_read: true, read_at: new Date() }
+      });
+    } else {
+      return res.status(400).json({ success: false, message: 'ids array or all:true required' });
+    }
+
+    res.json({ success: true, message: 'Notifications marked as read' });
+  } catch (error) {
+    console.error('Error marking notifications as read:', error);
+    res.status(500).json({ success: false, message: 'Failed to mark as read', error: error.message });
   }
 });
 

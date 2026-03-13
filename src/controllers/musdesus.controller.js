@@ -1,5 +1,6 @@
 const Musdesus = require('../models/Musdesus');
 const logger = require('../utils/logger');
+const ActivityLogger = require('../utils/activityLogger');
 const fs = require('fs').promises;
 const path = require('path');
 
@@ -167,6 +168,23 @@ exports.uploadMusdesusFile = async (req, res, next) => {
       desa_id: desaId
     });
 
+    // Log activity
+    await ActivityLogger.log({
+      userId: req.user.id,
+      userName: nama_pengupload || req.user.nama || req.user.email,
+      userRole: req.user.role,
+      bidangId: 5, // PMD
+      module: 'musdesus',
+      action: 'upload',
+      entityType: 'musdesus',
+      entityId: musdesus.id,
+      entityName: file.originalname,
+      description: `${nama_pengupload || req.user.nama || req.user.email} mengupload dokumen Musdesus: ${file.originalname}`,
+      newValue: { filename: file.filename, size: file.size, tanggal_musdesus },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
+    });
+
     res.status(201).json({
       success: true,
       message: 'File berhasil diupload',
@@ -226,6 +244,24 @@ exports.updateStatus = async (req, res, next) => {
       petugas_id: req.user.id
     });
 
+    // Log activity
+    await ActivityLogger.log({
+      userId: req.user.id,
+      userName: req.user.nama || req.user.email,
+      userRole: req.user.role,
+      bidangId: 5, // PMD
+      module: 'musdesus',
+      action: status === 'approved' ? 'approve' : status === 'rejected' ? 'reject' : 'update',
+      entityType: 'musdesus',
+      entityId: musdesus.id,
+      entityName: musdesus.nama_file_asli,
+      description: `${req.user.nama || req.user.email} ${status === 'approved' ? 'menyetujui' : status === 'rejected' ? 'menolak' : 'mengubah status'} dokumen Musdesus: ${musdesus.nama_file_asli}`,
+      oldValue: { status: musdesus.status },
+      newValue: { status, catatan_admin },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
+    });
+
     res.json({
       success: true,
       message: 'Status berhasil diupdate',
@@ -278,6 +314,23 @@ exports.deleteMusdesus = async (req, res, next) => {
       musdesus_id: id,
       deleted_by: req.user.id,
       role: req.user.role
+    });
+
+    // Log activity
+    await ActivityLogger.log({
+      userId: req.user.id,
+      userName: req.user.nama || req.user.email,
+      userRole: req.user.role,
+      bidangId: 5, // PMD
+      module: 'musdesus',
+      action: 'delete',
+      entityType: 'musdesus',
+      entityId: parseInt(id),
+      entityName: musdesus.nama_file_asli,
+      description: `${req.user.nama || req.user.email} menghapus dokumen Musdesus: ${musdesus.nama_file_asli}`,
+      oldValue: { filename: musdesus.nama_file, nama_pengupload: musdesus.nama_pengupload },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
     });
 
     res.json({

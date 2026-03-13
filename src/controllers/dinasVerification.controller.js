@@ -1,6 +1,7 @@
 const prisma = require('../config/prisma');
 const { Prisma } = require('@prisma/client');
 const { copyFileToReference } = require('../utils/fileHelper');
+const ActivityLogger = require('../utils/activityLogger');
 
 /**
  * Get all proposals for a specific dinas
@@ -115,7 +116,8 @@ const getDinasProposals = async (req, res) => {
         LEFT JOIN dinas_verifikator dv ON u_verifier.id = dv.user_id AND u_verifier.dinas_id = dv.dinas_id
         LEFT JOIN dinas_config dc ON u_verifier.dinas_id = dc.dinas_id
         WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
-          AND bp.submitted_to_dinas_at IS NOT NULL
+          AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IS NOT NULL OR bp.kecamatan_status IN ('rejected', 'revision'))
+          AND d.status_pemerintahan = 'desa'
           AND bp.desa_id IN (${Prisma.join(accessibleDesaIds)})
           AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
         ORDER BY bp.created_at DESC
@@ -177,7 +179,8 @@ const getDinasProposals = async (req, res) => {
           LEFT JOIN dinas_verifikator dv ON u_verifier.id = dv.user_id AND u_verifier.dinas_id = dv.dinas_id
           LEFT JOIN dinas_config dc ON u_verifier.dinas_id = dc.dinas_id
           WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
-            AND bp.submitted_to_dinas_at IS NOT NULL
+            AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IS NOT NULL OR bp.kecamatan_status IN ('rejected', 'revision'))
+            AND d.status_pemerintahan = 'desa'
             AND bp.desa_id NOT IN (${Prisma.join(excludedDesaIds)})
             AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
           ORDER BY bp.created_at DESC
@@ -207,7 +210,8 @@ const getDinasProposals = async (req, res) => {
           LEFT JOIN dinas_verifikator dv ON u_verifier.id = dv.user_id AND u_verifier.dinas_id = dv.dinas_id
           LEFT JOIN dinas_config dc ON u_verifier.dinas_id = dc.dinas_id
           WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
-            AND bp.submitted_to_dinas_at IS NOT NULL
+            AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IS NOT NULL OR bp.kecamatan_status IN ('rejected', 'revision'))
+            AND d.status_pemerintahan = 'desa'
             AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
           ORDER BY bp.created_at DESC
         `;
@@ -704,6 +708,70 @@ const submitVerification = async (req, res) => {
       message = 'Verifikasi perlu revisi. Proposal dikembalikan ke Desa.';
     }
 
+    // Activity Log - deduplicate: if same user did same action on same proposal, update instead of creating new
+    const actionMap = { approved: 'approve', rejected: 'reject', revision: 'revision' };
+    const logAction = actionMap[action] || action;
+    const logUserId = parseInt(user_id);
+    const logEntityId = parseInt(proposalId);
+    
+    try {
+      // Check for existing log with same action by same user on same proposal
+      const existingLog = await prisma.activity_logs.findFirst({
+        where: {
+          entity_type: 'bankeu_proposal',
+          entity_id: BigInt(logEntityId),
+          module: 'bankeu',
+          action: logAction,
+          user_id: logUserId
+        },
+        orderBy: { created_at: 'desc' }
+      });
+
+      const newLogValue = { dinas_status: action, catatan_umum: catatan_umum || null, forwarded_to: action === 'approved' ? 'kecamatan' : 'desa', file_proposal: proposal.file_proposal || null };
+      const logDescription = `Dinas (${req.user.name || 'User'}) ${action === 'approved' ? 'menyetujui' : action === 'rejected' ? 'menolak' : 'meminta revisi'} proposal #${proposalId} (Desa ID: ${proposal.desa_id})`;
+
+      // Only dedup if proposal status hasn't been reset (desa hasn't resubmitted)
+      // If proposal.dinas_status is still 'rejected'/'revision' (same as current action), it means
+      // dinas is re-editing catatan. If it's 'pending'/'in_review', desa already resubmitted → new cycle.
+      const shouldDedup = existingLog && (proposal.dinas_status === 'rejected' || proposal.dinas_status === 'revision');
+
+      if (shouldDedup) {
+        // Update existing log entry (same review session, just editing catatan)
+        await prisma.activity_logs.update({
+          where: { id: existingLog.id },
+          data: {
+            description: logDescription,
+            old_value: JSON.stringify({ dinas_status: proposal.dinas_status }),
+            new_value: JSON.stringify(newLogValue),
+            ip_address: ActivityLogger.getIpFromRequest(req),
+            user_agent: ActivityLogger.getUserAgentFromRequest(req),
+            created_at: new Date()
+          }
+        });
+        console.log(`[ActivityLog] Updated existing log #${existingLog.id} for proposal #${proposalId}`);
+      } else {
+        // Create new log entry
+        ActivityLogger.log({
+          userId: logUserId,
+          userName: req.user.name || `User ${user_id}`,
+          userRole: role,
+          bidangId: 3,
+          module: 'bankeu',
+          action: logAction,
+          entityType: 'bankeu_proposal',
+          entityId: logEntityId,
+          entityName: `Proposal #${proposalId}`,
+          description: logDescription,
+          oldValue: { dinas_status: proposal.dinas_status },
+          newValue: newLogValue,
+          ipAddress: ActivityLogger.getIpFromRequest(req),
+          userAgent: ActivityLogger.getUserAgentFromRequest(req)
+        });
+      }
+    } catch (logError) {
+      console.error('[ActivityLog] Error handling dedup log:', logError);
+    }
+
     // Serialize BigInt fields to string for JSON response
     const serializedProposal = {
       ...updatedProposal,
@@ -893,10 +961,12 @@ const getDinasStatistics = async (req, res) => {
           SUM(CASE WHEN bp.dinas_status = 'rejected' THEN 1 ELSE 0 END) as rejected,
           SUM(CASE WHEN bp.dinas_status = 'revision' THEN 1 ELSE 0 END) as revision
         FROM bankeu_proposals bp
+        INNER JOIN desas d ON bp.desa_id = d.id
         INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
         INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
         WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
-          AND bp.submitted_to_dinas_at IS NOT NULL
+          AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IS NOT NULL OR bp.kecamatan_status IN ('rejected', 'revision'))
+          AND d.status_pemerintahan = 'desa'
           AND bp.desa_id IN (${Prisma.join(accessibleDesaIds)})
           AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
       `;
@@ -931,10 +1001,12 @@ const getDinasStatistics = async (req, res) => {
             SUM(CASE WHEN bp.dinas_status = 'rejected' THEN 1 ELSE 0 END) as rejected,
             SUM(CASE WHEN bp.dinas_status = 'revision' THEN 1 ELSE 0 END) as revision
           FROM bankeu_proposals bp
+          INNER JOIN desas d ON bp.desa_id = d.id
           INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
           INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
           WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
-            AND bp.submitted_to_dinas_at IS NOT NULL
+            AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IS NOT NULL OR bp.kecamatan_status IN ('rejected', 'revision'))
+            AND d.status_pemerintahan = 'desa'
             AND bp.desa_id NOT IN (${Prisma.join(excludedDesaIds)})
             AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
         `;
@@ -949,10 +1021,12 @@ const getDinasStatistics = async (req, res) => {
             SUM(CASE WHEN bp.dinas_status = 'rejected' THEN 1 ELSE 0 END) as rejected,
             SUM(CASE WHEN bp.dinas_status = 'revision' THEN 1 ELSE 0 END) as revision
           FROM bankeu_proposals bp
+          INNER JOIN desas d ON bp.desa_id = d.id
           INNER JOIN bankeu_proposal_kegiatan bpk ON bp.id = bpk.proposal_id
           INNER JOIN bankeu_master_kegiatan bmk ON bpk.kegiatan_id = bmk.id
           WHERE (FIND_IN_SET(${kodeDinasForMatch}, bmk.dinas_terkait) > 0 OR FIND_IN_SET(${dinas.kode_dinas}, bmk.dinas_terkait) > 0)
-            AND bp.submitted_to_dinas_at IS NOT NULL
+            AND (bp.submitted_to_dinas_at IS NOT NULL OR bp.dinas_status IS NOT NULL OR bp.kecamatan_status IN ('rejected', 'revision'))
+            AND d.status_pemerintahan = 'desa'
             AND (${tahunFilter} IS NULL OR bp.tahun_anggaran = ${tahunFilter})
         `;
       }
@@ -1002,6 +1076,42 @@ const getDinasList = async (req, res) => {
   }
 };
 
+/**
+ * Get verification history (activity logs) for a proposal
+ */
+const getProposalVerificationHistory = async (req, res) => {
+  try {
+    const { proposalId } = req.params;
+
+    const activities = await prisma.activity_logs.findMany({
+      where: {
+        entity_type: 'bankeu_proposal',
+        entity_id: BigInt(proposalId),
+        module: 'bankeu',
+        action: { in: ['approve', 'reject', 'revision'] }
+      },
+      orderBy: { created_at: 'desc' },
+      take: 20
+    });
+
+    const serialized = activities.map(a => ({
+      id: a.id.toString(),
+      user_name: a.user_name,
+      user_role: a.user_role,
+      action: a.action,
+      description: a.description,
+      old_value: a.old_value ? JSON.parse(a.old_value) : null,
+      new_value: a.new_value ? JSON.parse(a.new_value) : null,
+      created_at: a.created_at
+    }));
+
+    return res.json({ success: true, data: serialized });
+  } catch (error) {
+    console.error('Error fetching proposal history:', error);
+    return res.status(500).json({ success: false, message: 'Gagal mengambil riwayat verifikasi' });
+  }
+};
+
 module.exports = {
   getDinasProposals,
   getDinasProposalDetail,
@@ -1009,5 +1119,6 @@ module.exports = {
   submitVerification,
   getQuestionnaire,
   getDinasStatistics,
-  getDinasList
+  getDinasList,
+  getProposalVerificationHistory
 };

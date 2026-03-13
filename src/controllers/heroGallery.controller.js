@@ -2,6 +2,7 @@ const sequelize = require('../config/database');
 const logger = require('../utils/logger');
 const path = require('path');
 const fs = require('fs');
+const ActivityLogger = require('../utils/activityLogger');
 
 // Get all gallery items (admin)
 exports.getAllGallery = async (req, res) => {
@@ -89,6 +90,23 @@ exports.createGallery = async (req, res) => {
 
     logger.info(`✅ Hero gallery created: ${title}`);
 
+    // Activity Log
+    await ActivityLogger.log({
+      userId: req.user?.id,
+      userName: req.user?.name || 'Admin',
+      userRole: req.user?.role || 'admin',
+      bidangId: 2, // Sekretariat
+      module: 'hero_gallery',
+      action: 'create',
+      entityType: 'hero_gallery',
+      entityId: result,
+      entityName: title,
+      description: `${req.user?.name || 'Admin'} menambahkan hero gallery: ${title}`,
+      newValue: { title, display_order },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
+    });
+
     res.status(201).json({
       success: true,
       message: 'Hero gallery created successfully',
@@ -163,6 +181,24 @@ exports.updateGallery = async (req, res) => {
 
     logger.info(`✅ Hero gallery updated: ${id}`);
 
+    // Activity Log
+    await ActivityLogger.log({
+      userId: req.user?.id,
+      userName: req.user?.name || 'Admin',
+      userRole: req.user?.role || 'admin',
+      bidangId: 2, // Sekretariat
+      module: 'hero_gallery',
+      action: 'update',
+      entityType: 'hero_gallery',
+      entityId: parseInt(id),
+      entityName: title || existing[0].title,
+      description: `${req.user?.name || 'Admin'} memperbarui hero gallery: ${title || existing[0].title}`,
+      oldValue: { title: existing[0].title },
+      newValue: { title, display_order },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
+    });
+
     res.json({
       success: true,
       message: 'Hero gallery updated successfully',
@@ -223,6 +259,23 @@ exports.deleteGallery = async (req, res) => {
 
     logger.info(`✅ Hero gallery deleted: ${id}`);
 
+    // Activity Log
+    await ActivityLogger.log({
+      userId: req.user?.id,
+      userName: req.user?.name || 'Admin',
+      userRole: req.user?.role || 'admin',
+      bidangId: 2, // Sekretariat
+      module: 'hero_gallery',
+      action: 'delete',
+      entityType: 'hero_gallery',
+      entityId: parseInt(id),
+      entityName: gallery[0].title,
+      description: `${req.user?.name || 'Admin'} menghapus hero gallery: ${gallery[0].title}`,
+      oldValue: { title: gallery[0].title },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
+    });
+
     res.json({
       success: true,
       message: 'Hero gallery deleted successfully'
@@ -264,6 +317,23 @@ exports.toggleStatus = async (req, res) => {
     }
 
     logger.info(`✅ Hero gallery status toggled: ${id}`);
+
+    // Activity Log
+    await ActivityLogger.log({
+      userId: req.user?.id,
+      userName: req.user?.name || 'Admin',
+      userRole: req.user?.role || 'admin',
+      bidangId: 2, // Sekretariat
+      module: 'hero_gallery',
+      action: 'update',
+      entityType: 'hero_gallery',
+      entityId: parseInt(id),
+      entityName: updated[0].title,
+      description: `${req.user?.name || 'Admin'} ${updated[0].is_active ? 'mengaktifkan' : 'menonaktifkan'} hero gallery: ${updated[0].title}`,
+      newValue: { is_active: updated[0].is_active },
+      ipAddress: ActivityLogger.getIpFromRequest(req),
+      userAgent: ActivityLogger.getUserAgentFromRequest(req)
+    });
 
     res.json({
       success: true,

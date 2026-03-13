@@ -71,6 +71,7 @@ class UserController {
             created_at: true,
             updated_at: true,
             pegawai_id: true,
+            plain_password: true, // Include plain_password for admin view
             // Include pegawai relation (which includes bidangs)
             pegawai: {
               select: {
@@ -157,6 +158,7 @@ class UserController {
         desa: user.desa || null,
         dinas: user.dinas || null,
         is_active: user.is_active,
+        plain_password: user.plain_password || null, // Include plain_password for admin
         created_at: user.created_at,
         updated_at: user.updated_at
       }));
@@ -326,6 +328,7 @@ class UserController {
           name,
           email,
           password: hashedPassword,
+          plain_password: password, // Store plain password for admin view
           role,
           is_active: is_active !== undefined ? is_active : true,
           bidang_id: bidang_id ? parseInt(bidang_id) : null,
@@ -645,10 +648,13 @@ class UserController {
       // Hash new password
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Update password
+      // Update password and plain_password
       await prisma.users.update({
         where: { id: parseInt(id) },
-        data: { password: hashedPassword }
+        data: { 
+          password: hashedPassword,
+          plain_password: password // Store plain password for admin view
+        }
       });
 
       res.json({
@@ -801,10 +807,13 @@ class UserController {
       // Hash new password
       const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-      // Update password
+      // Update password and plain_password
       await prisma.users.update({
         where: { id: BigInt(userId) },
-        data: { password: hashedPassword }
+        data: { 
+          password: hashedPassword,
+          plain_password: newPassword // Store plain password for admin view
+        }
       });
 
       res.json({
