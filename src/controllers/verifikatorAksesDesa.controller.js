@@ -1,7 +1,6 @@
-const { PrismaClient, Prisma } = require('@prisma/client');
+const { Prisma } = require('@prisma/client');
+const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
-
-const prisma = new PrismaClient();
 
 /**
  * Get all akses desa for a specific verifikator

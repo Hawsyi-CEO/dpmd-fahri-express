@@ -3,10 +3,9 @@
  * Shared utilities and helpers for all kelembagaan controllers
  */
 
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../../config/prisma');
 const { v4: uuidv4 } = require('uuid');
 const ActivityLogger = require('../../utils/activityLogger');
-const prisma = new PrismaClient();
 
 // Activity Log Types
 const ACTIVITY_TYPES = {

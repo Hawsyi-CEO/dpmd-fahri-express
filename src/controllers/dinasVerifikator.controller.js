@@ -1,8 +1,7 @@
-const { PrismaClient, Prisma } = require('@prisma/client');
+const { Prisma } = require('@prisma/client');
+const prisma = require('../config/prisma');
 const bcrypt = require('bcrypt');
 const logger = require('../utils/logger');
-
-const prisma = new PrismaClient();
 
 /**
  * Get all verifikator for a dinas

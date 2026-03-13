@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../config/prisma');
 const bcrypt = require('bcryptjs');
-const prisma = new PrismaClient();
 
 // Helper function to generate random password
 const generatePassword = (length = 8) => {

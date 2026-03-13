@@ -1,9 +1,7 @@
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../config/prisma');
 const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
-
-const prisma = new PrismaClient();
 
 /**
  * Get current verifikator's profile

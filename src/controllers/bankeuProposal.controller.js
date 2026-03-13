@@ -2,6 +2,7 @@ const prisma = require('../config/prisma');
 const sequelize = require('../config/database');
 const logger = require('../utils/logger');
 const ActivityLogger = require('../utils/activityLogger');
+const { copyFileToReference } = require('../utils/fileHelper');
 const path = require('path');
 const fs = require('fs'); 
 
@@ -552,17 +553,22 @@ class BankeuProposalController {
         updates.push('file_proposal = ?', 'file_size = ?');
         replacements.push(filePath, fileSize);
 
-        // Delete old file from bankeu folder (keep reference copy from Dinas approval)
-        // NOTE: dinas_reviewed_file sudah di-set saat Dinas approve (dinasVerification.controller.js)
-        // File referensi sudah ada di bankeu_reference/, jadi file lama di bankeu/ bisa dihapus
+        // Copy old file to bankeu_reference/ before deleting, as safety net for history
         const oldFilePath = proposal.file_proposal;
         if (oldFilePath) {
           const fullOldPath = path.join(__dirname, '../../storage/uploads/bankeu', oldFilePath);
           
           if (fs.existsSync(fullOldPath)) {
-            // Delete old file (reference copy already exists from Dinas approval)
+            // Copy to reference first (ignore errors - file might already exist there)
+            try {
+              await copyFileToReference(oldFilePath);
+              logger.info(`📋 Copied old file to reference: ${oldFilePath}`);
+            } catch (copyErr) {
+              logger.warn(`⚠️ Could not copy to reference (may already exist): ${copyErr.message}`);
+            }
+            // Now safe to delete from bankeu/
             fs.unlinkSync(fullOldPath);
-            logger.info(`🗑️ Deleted old file: ${oldFilePath} (reference copy preserved from Dinas approval)`);
+            logger.info(`🗑️ Deleted old file from bankeu/: ${oldFilePath}`);
           }
         }
       }
@@ -773,16 +779,21 @@ class BankeuProposalController {
       const fileSize = req.file.size;
       const oldFilePath = proposal.file_proposal;
 
-      // Delete old file from bankeu folder (keep reference copy from Dinas approval)
-      // NOTE: dinas_reviewed_file sudah di-set saat Dinas approve (dinasVerification.controller.js)
-      // File referensi sudah ada di bankeu_reference/, jadi file lama di bankeu/ bisa dihapus
+      // Copy old file to bankeu_reference/ before deleting, as safety net for history
       if (oldFilePath) {
         const fullPath = path.join(__dirname, '../../storage/uploads/bankeu', oldFilePath);
         
         if (fs.existsSync(fullPath)) {
-          // Delete old file (reference copy already exists from Dinas approval)
+          // Copy to reference first (ignore errors - file might already exist there)
+          try {
+            await copyFileToReference(oldFilePath);
+            logger.info(`📋 Copied old file to reference: ${oldFilePath}`);
+          } catch (copyErr) {
+            logger.warn(`⚠️ Could not copy to reference (may already exist): ${copyErr.message}`);
+          }
+          // Now safe to delete from bankeu/
           fs.unlinkSync(fullPath);
-          logger.info(`🗑️ Deleted old file: ${oldFilePath} (reference copy preserved from Dinas approval)`);
+          logger.info(`🗑️ Deleted old file from bankeu/: ${oldFilePath}`);
         }
       }
 
