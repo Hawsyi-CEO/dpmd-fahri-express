@@ -842,13 +842,8 @@ class DPMDVerificationController {
         });
       }
 
-      // Don't allow troubleshoot on already-approved proposals
-      if (proposal.dpmd_status === 'approved' || proposal.status === 'verified') {
-        return res.status(400).json({
-          success: false,
-          message: 'Proposal yang sudah disetujui (verified) tidak dapat di-troubleshoot'
-        });
-      }
+      // Allow troubleshoot on any proposal, including already-approved ones
+      // DPMD can troubleshoot to send back for revision even after final approval
 
       // Determine current stage for logging
       let currentStage = 'di_desa';
