@@ -173,6 +173,16 @@ class PengurusController {
       // Handle avatar upload if exists
       const avatarPath = req.file ? `uploads/pengurus_files/${req.file.filename}` : null;
 
+      // Map jenis_kelamin to Prisma enum format (handle hyphen to underscore)
+      let jenisKelaminEnum = null;
+      if (jenis_kelamin) {
+        if (jenis_kelamin === "Laki-laki") {
+          jenisKelaminEnum = "Laki_laki";
+        } else if (jenis_kelamin === "Perempuan") {
+          jenisKelaminEnum = "Perempuan";
+        }
+      }
+
       const pengurus = await prisma.pengurus.create({
         data: {
           id: uuidv4(),
@@ -185,7 +195,7 @@ class PengurusController {
           nik: nik || null,
           tempat_lahir: tempat_lahir || null,
           tanggal_lahir: tanggal_lahir ? new Date(tanggal_lahir) : null,
-          jenis_kelamin: jenis_kelamin || null,
+          jenis_kelamin: jenisKelaminEnum,
           status_perkawinan: status_perkawinan || null,
           pendidikan: pendidikan || null,
           tanggal_mulai_jabatan: tanggal_mulai_jabatan ? new Date(tanggal_mulai_jabatan) : null,
@@ -249,16 +259,59 @@ class PengurusController {
         return res.status(404).json({ success: false, message: 'Pengurus tidak ditemukan' });
       }
 
-      const { nama, jabatan, no_hp, alamat } = req.body;
+      const { 
+        nama_lengkap, 
+        jabatan, 
+        no_telepon, 
+        alamat,
+        nik,
+        tempat_lahir,
+        tanggal_lahir,
+        jenis_kelamin,
+        status_perkawinan,
+        pendidikan,
+        tanggal_mulai_jabatan,
+        tanggal_akhir_jabatan,
+        status_jabatan,
+        produk_hukum_id
+      } = req.body;
+
+      // Handle avatar upload if exists
+      const avatarPath = req.file ? `uploads/pengurus_files/${req.file.filename}` : undefined;
+
+      // Map jenis_kelamin to Prisma enum format (handle hyphen to underscore)
+      let jenisKelaminEnum = undefined;
+      if (jenis_kelamin !== undefined) {
+        if (jenis_kelamin === "Laki-laki") {
+          jenisKelaminEnum = "Laki_laki";
+        } else if (jenis_kelamin === "Perempuan") {
+          jenisKelaminEnum = "Perempuan";
+        } else {
+          jenisKelaminEnum = null;
+        }
+      }
+
+      // Build update data object - only include fields that are provided
+      const updateData = {};
+      if (nama_lengkap !== undefined) updateData.nama_lengkap = nama_lengkap;
+      if (jabatan !== undefined) updateData.jabatan = jabatan;
+      if (no_telepon !== undefined) updateData.no_telepon = no_telepon || null;
+      if (alamat !== undefined) updateData.alamat = alamat || null;
+      if (nik !== undefined) updateData.nik = nik || null;
+      if (tempat_lahir !== undefined) updateData.tempat_lahir = tempat_lahir || null;
+      if (tanggal_lahir !== undefined) updateData.tanggal_lahir = tanggal_lahir ? new Date(tanggal_lahir) : null;
+      if (jenisKelaminEnum !== undefined) updateData.jenis_kelamin = jenisKelaminEnum;
+      if (status_perkawinan !== undefined) updateData.status_perkawinan = status_perkawinan || null;
+      if (pendidikan !== undefined) updateData.pendidikan = pendidikan || null;
+      if (tanggal_mulai_jabatan !== undefined) updateData.tanggal_mulai_jabatan = tanggal_mulai_jabatan ? new Date(tanggal_mulai_jabatan) : null;
+      if (tanggal_akhir_jabatan !== undefined) updateData.tanggal_akhir_jabatan = tanggal_akhir_jabatan ? new Date(tanggal_akhir_jabatan) : null;
+      if (status_jabatan !== undefined) updateData.status_jabatan = status_jabatan;
+      if (produk_hukum_id !== undefined) updateData.produk_hukum_id = produk_hukum_id || null;
+      if (avatarPath !== undefined) updateData.avatar = avatarPath;
 
       const updated = await prisma.pengurus.update({
         where: { id: String(req.params.id) },
-        data: {
-          nama: nama || existing.nama,
-          jabatan: jabatan || existing.jabatan,
-          no_hp: no_hp !== undefined ? no_hp : existing.no_hp,
-          alamat: alamat !== undefined ? alamat : existing.alamat
-        }
+        data: updateData
       });
 
       // Get kelembagaan display name for logging
@@ -273,9 +326,9 @@ class PengurusController {
         activityType: ACTIVITY_TYPES.UPDATE,
         entityType: ENTITY_TYPES.PENGURUS,
         entityId: updated.id,
-        entityName: `${updated.nama} (${updated.jabatan})`,
-        oldValue: { nama: existing.nama, jabatan: existing.jabatan },
-        newValue: { nama: updated.nama, jabatan: updated.jabatan },
+        entityName: `${updated.nama_lengkap} (${updated.jabatan})`,
+        oldValue: { nama_lengkap: existing.nama_lengkap, jabatan: existing.jabatan },
+        newValue: { nama_lengkap: updated.nama_lengkap, jabatan: updated.jabatan },
         userId: user.id,
         userName: user.name,
         userRole: user.role,
