@@ -120,7 +120,7 @@ class RTController {
       const desaId = validateDesaAccess(req, res);
       if (!desaId) return;
 
-      const { nomor, rw_id, alamat, produk_hukum_id } = req.body;
+      const { nomor, rw_id, alamat, produk_hukum_id, jumlah_jiwa, jumlah_kk } = req.body;
 
       // Validate RW exists and belongs to same desa
       const rw = await prisma.rws.findFirst({
@@ -148,6 +148,8 @@ class RTController {
           desa_id: desaId,
           alamat: alamat || rw.alamat || '',
           produk_hukum_id: produk_hukum_id || null,
+          jumlah_jiwa: jumlah_jiwa ? parseInt(jumlah_jiwa) : null,
+          jumlah_kk: jumlah_kk ? parseInt(jumlah_kk) : null,
           status_kelembagaan: 'aktif',
           status_verifikasi: 'unverified'
         }
@@ -211,14 +213,16 @@ class RTController {
         return res.status(404).json({ success: false, message: 'RT tidak ditemukan' });
       }
 
-      const { nomor, alamat, produk_hukum_id } = req.body;
+      const { nomor, alamat, produk_hukum_id, jumlah_jiwa, jumlah_kk } = req.body;
 
       const updated = await prisma.rts.update({
         where: { id: String(req.params.id) },
         data: {
           nomor: nomor || item.nomor,
           alamat: alamat !== undefined ? alamat : item.alamat,
-          produk_hukum_id: produk_hukum_id !== undefined ? (produk_hukum_id || null) : item.produk_hukum_id
+          produk_hukum_id: produk_hukum_id !== undefined ? (produk_hukum_id || null) : item.produk_hukum_id,
+          jumlah_jiwa: jumlah_jiwa !== undefined ? (jumlah_jiwa ? parseInt(jumlah_jiwa) : null) : item.jumlah_jiwa,
+          jumlah_kk: jumlah_kk !== undefined ? (jumlah_kk ? parseInt(jumlah_kk) : null) : item.jumlah_kk
         }
       });
 

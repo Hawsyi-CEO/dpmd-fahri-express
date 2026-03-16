@@ -94,7 +94,9 @@ class RWController {
             select: { 
               id: true, 
               nomor: true,
-              alamat: true 
+              alamat: true,
+              jumlah_jiwa: true,
+              jumlah_kk: true
             },
             orderBy: { nomor: 'asc' }
           }
@@ -505,7 +507,9 @@ class RWController {
               id: true, 
               nomor: true, 
               alamat: true,
-              status_kelembagaan: true 
+              status_kelembagaan: true,
+              jumlah_jiwa: true,
+              jumlah_kk: true
             },
             orderBy: { nomor: 'asc' }
           }
