@@ -120,7 +120,7 @@ class RTController {
       const desaId = validateDesaAccess(req, res);
       if (!desaId) return;
 
-      const { nomor, rw_id, alamat, produk_hukum_id } = req.body;
+      const { nomor, rw_id, alamat, produk_hukum_id, jumlah_jiwa, jumlah_kk } = req.body;
 
       // Validate RW exists and belongs to same desa
       const rw = await prisma.rws.findFirst({
@@ -148,6 +148,8 @@ class RTController {
           desa_id: desaId,
           alamat: alamat || rw.alamat || '',
           produk_hukum_id: produk_hukum_id || null,
+          jumlah_jiwa: jumlah_jiwa ? parseInt(jumlah_jiwa) : null,
+          jumlah_kk: jumlah_kk ? parseInt(jumlah_kk) : null,
           status_kelembagaan: 'aktif',
           status_verifikasi: 'unverified'
         }
@@ -211,14 +213,16 @@ class RTController {
         return res.status(404).json({ success: false, message: 'RT tidak ditemukan' });
       }
 
-      const { nomor, alamat, produk_hukum_id } = req.body;
+      const { nomor, alamat, produk_hukum_id, jumlah_jiwa, jumlah_kk } = req.body;
 
       const updated = await prisma.rts.update({
         where: { id: String(req.params.id) },
         data: {
           nomor: nomor || item.nomor,
           alamat: alamat !== undefined ? alamat : item.alamat,
-          produk_hukum_id: produk_hukum_id !== undefined ? (produk_hukum_id || null) : item.produk_hukum_id
+          produk_hukum_id: produk_hukum_id !== undefined ? (produk_hukum_id || null) : item.produk_hukum_id,
+          jumlah_jiwa: jumlah_jiwa !== undefined ? (jumlah_jiwa ? parseInt(jumlah_jiwa) : null) : item.jumlah_jiwa,
+          jumlah_kk: jumlah_kk !== undefined ? (jumlah_kk ? parseInt(jumlah_kk) : null) : item.jumlah_kk
         }
       });
 
@@ -268,15 +272,26 @@ class RTController {
       }
 
       // For desa users, validate they have access to this desa
-      if (user.role === 'desa' && user.desa_id !== item.desa_id) {
+      if (user.role === 'desa' && Number(user.desa_id) !== Number(item.desa_id)) {
         return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
       }
 
-      const { status_kelembagaan } = req.body;
+      const { status_kelembagaan, produk_hukum_penonaktifan_id } = req.body;
+
+      const updateData = { status_kelembagaan };
+      if (status_kelembagaan === 'nonaktif') {
+        updateData.nonaktif_at = new Date();
+        if (produk_hukum_penonaktifan_id) {
+          updateData.produk_hukum_penonaktifan_id = produk_hukum_penonaktifan_id;
+        }
+      } else if (status_kelembagaan === 'aktif') {
+        updateData.produk_hukum_penonaktifan_id = null;
+        updateData.nonaktif_at = null;
+      }
 
       const updated = await prisma.rts.update({
         where: { id: String(req.params.id) },
-        data: { status_kelembagaan }
+        data: updateData
       });
 
       // Log activity
@@ -325,15 +340,27 @@ class RTController {
       }
 
       // For desa users, validate they have access to this desa
-      if (user.role === 'desa' && user.desa_id !== item.desa_id) {
+      if (user.role === 'desa' && Number(user.desa_id) !== Number(item.desa_id)) {
         return res.status(403).json({ success: false, message: 'User tidak memiliki akses desa' });
       }
 
-      const { status_verifikasi } = req.body;
+      const { status_verifikasi, catatan_verifikasi } = req.body;
+
+      const updateData = { 
+        status_verifikasi,
+        verifikator_nama: user.name || user.username || null,
+        verified_at: new Date(),
+      };
+
+      if (status_verifikasi === 'unverified' && catatan_verifikasi) {
+        updateData.catatan_verifikasi = catatan_verifikasi;
+      } else if (status_verifikasi === 'verified') {
+        updateData.catatan_verifikasi = null;
+      }
 
       const updated = await prisma.rts.update({
         where: { id: String(req.params.id) },
-        data: { status_verifikasi }
+        data: updateData
       });
 
       // Log activity
@@ -347,7 +374,7 @@ class RTController {
         entityId: updated.id,
         entityName: `RT ${updated.nomor}`,
         oldValue: { status_verifikasi: item.status_verifikasi },
-        newValue: { status_verifikasi: updated.status_verifikasi },
+        newValue: { status_verifikasi: updated.status_verifikasi, catatan_verifikasi: updated.catatan_verifikasi || null },
         userId: user.id,
         userName: user.name,
         userRole: user.role,
